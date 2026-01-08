@@ -347,10 +347,10 @@ foreach ($t in $targets) {
       if ($null -ne $certSubject) { $certSubjectLine = $certSubject }
       $certModLine = ""
       if ($null -ne $certMod) { $certModLine = $certMod }
-      $lines.Add("--- 証明書情報 ---")
-      $lines.Add("Subject:")
+      $lines.Add((T "VerifyMatch.Detail.CertInfo"))
+      $lines.Add((T "VerifyMatch.Detail.Subject"))
       $lines.Add($certSubjectLine)
-      $lines.Add("Modulus:")
+      $lines.Add((T "VerifyMatch.Detail.Modulus"))
       $lines.Add(("Modulus={0}" -f $certModLine))
       $lines.Add("")
     }
@@ -358,8 +358,8 @@ foreach ($t in $targets) {
     if ($keyFound) {
       $keyModLine = ""
       if ($null -ne $keyMod) { $keyModLine = $keyMod }
-      $lines.Add("--- 秘密鍵情報 ---")
-      $lines.Add("Modulus:")
+      $lines.Add((T "VerifyMatch.Detail.KeyInfo"))
+      $lines.Add((T "VerifyMatch.Detail.Modulus"))
       $lines.Add(("Modulus={0}" -f $keyModLine))
       $lines.Add("")
     }
@@ -370,10 +370,10 @@ foreach ($t in $targets) {
       if ($null -ne $csrSubject) { $csrSubjectLine = $csrSubject }
       $csrModLine = ""
       if ($null -ne $csrMod) { $csrModLine = $csrMod }
-      $lines.Add("--- CSR 情報 ---")
-      $lines.Add("Subject:")
+      $lines.Add((T "VerifyMatch.Detail.CsrInfo"))
+      $lines.Add((T "VerifyMatch.Detail.Subject"))
       $lines.Add($csrSubjectLine)
-      $lines.Add("Modulus:")
+      $lines.Add((T "VerifyMatch.Detail.Modulus"))
       $lines.Add(("Modulus={0}" -f $csrModLine))
       $lines.Add("")
     }

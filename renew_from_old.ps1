@@ -430,10 +430,10 @@ Assert-ExistsFile $OpenSsl "OpenSSL"
 Ensure-Dir $NewDir
 
 if ($ShowInfo) {
-  Write-Host ("OpenSSL: {0}" -f $OpenSsl)
-  Write-Host ("OldDir : {0}" -f (Resolve-Path -LiteralPath $OldDir))
-  Write-Host ("NewDir : {0}" -f (Resolve-Path -LiteralPath $NewDir))
-  Write-Host ("OpenSSL version: {0}" -f ((Run-OpenSsl @("version")) -join " "))
+  Write-Host (T "Renew.ShowInfo.OpenSsl" @($OpenSsl))
+  Write-Host (T "Renew.ShowInfo.OldDir" @((Resolve-Path -LiteralPath $OldDir)))
+  Write-Host (T "Renew.ShowInfo.NewDir" @((Resolve-Path -LiteralPath $NewDir)))
+  Write-Host (T "Renew.ShowInfo.Version" @(((Run-OpenSsl @("version")) -join " ")))
   Write-Host ""
   exit 0
 }
@@ -640,11 +640,11 @@ Write-Host (T "Renew.DoneTitle")
 $generated |
   Sort-Object Org,CN |
   Select-Object `
-    @{Name="機関"; Expression = { $_.Org }}, `
-    @{Name="CN"; Expression = { $_.CN }}, `
-    @{Name="鍵長"; Expression = { $_.RsaBits }}, `
-    @{Name="SAN"; Expression = { $_.SANs }}, `
-    @{Name="出力先"; Expression = { $_.OutDir }} |
+    @{Name=(T "Renew.Table.Org"); Expression = { $_.Org }}, `
+    @{Name=(T "Renew.Table.Cn"); Expression = { $_.CN }}, `
+    @{Name=(T "Renew.Table.RsaBits"); Expression = { $_.RsaBits }}, `
+    @{Name=(T "Renew.Table.San"); Expression = { $_.SANs }}, `
+    @{Name=(T "Renew.Table.OutDir"); Expression = { $_.OutDir }} |
   Format-Table -AutoSize
 
 

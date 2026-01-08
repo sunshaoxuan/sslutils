@@ -129,7 +129,7 @@ function Assert-ExistsFile([string]$p, [string]$label) {
 function Run-OpenSsl([string[]]$OpenSslArgs) {
   $out = & $OpenSsl @OpenSslArgs 2>&1 | ForEach-Object { $_.ToString() }
   if ($LASTEXITCODE -ne 0) {
-    throw ("OpenSSL コマンド失敗: {0}`n{1}" -f ($OpenSslArgs -join " "), (($out | Where-Object { $_ -ne "" }) -join "`n"))
+    throw (T "Common.OpenSslCmdFailed" @(($OpenSslArgs -join " "), (($out | Where-Object { $_ -ne "" }) -join "`n")))
   }
   return $out
 }
@@ -493,7 +493,7 @@ function Show-OneFile {
       if (-not [string]::IsNullOrWhiteSpace($env:PASS_FILE)) {
         $envPassExists = Test-Path -LiteralPath $env:PASS_FILE -PathType Leaf
         $envPassName = [IO.Path]::GetFileName($env:PASS_FILE)
-        $envPassExistText = if ($envPassExists) { "存在" } else { "未存在" }
+        $envPassExistText = if ($envPassExists) { (T "Common.Exists") } else { (T "Common.NotExists") }
         Write-Host ("[KEY] 環境変数 PASS_FILE: 設定あり（{0} / {1}）" -f $envPassName, $envPassExistText)
       } else {
         Write-Host "[KEY] 環境変数 PASS_FILE: 未設定"
@@ -516,7 +516,7 @@ function Show-OneFile {
 
 function Show-Folder([string]$folderPath, [string]$label, [string]$oldRootForNew = "") {
   if (-not (Test-Path -LiteralPath $folderPath -PathType Container)) {
-    Write-Host ("[情報] {0} フォルダがありません: {1}" -f $label, $folderPath)
+    Write-Host (T "Common.FolderNotFound" @($label, $folderPath))
     Write-Host ""
     return
   }
@@ -532,7 +532,7 @@ function Show-Folder([string]$folderPath, [string]$label, [string]$oldRootForNew
     $orgDirs = @([PSCustomObject]@{ FullName = $folderPath; Name="(root)" }) + $orgDirs
   }
   if ($orgDirs.Count -eq 0) {
-    Write-Host "[情報] 対象ファイルが見つかりません"
+    Write-Host (T "Common.NoTargetFiles")
     Write-Host ""
     return
   }
@@ -578,7 +578,7 @@ function Show-Folder([string]$folderPath, [string]$label, [string]$oldRootForNew
       if (-not [string]::IsNullOrWhiteSpace($env:PASS_FILE)) {
         $envPassExists = Test-Path -LiteralPath $env:PASS_FILE -PathType Leaf
         $envPassName = [IO.Path]::GetFileName($env:PASS_FILE)
-        $envPassExistText = if ($envPassExists) { "存在" } else { "未存在" }
+        $envPassExistText = if ($envPassExists) { (T "Common.Exists") } else { (T "Common.NotExists") }
         Write-Host ("[PASS] 環境変数 PASS_FILE: 設定あり（{0} / {1}）" -f $envPassName, $envPassExistText)
       } else {
         Write-Host "[PASS] 環境変数 PASS_FILE: 未設定"
@@ -601,7 +601,7 @@ function Show-Folder([string]$folderPath, [string]$label, [string]$oldRootForNew
       if (-not [string]::IsNullOrWhiteSpace($env:PASS_FILE)) {
         $envPassExists = Test-Path -LiteralPath $env:PASS_FILE -PathType Leaf
         $envPassName = [IO.Path]::GetFileName($env:PASS_FILE)
-        $envPassExistText = if ($envPassExists) { "存在" } else { "未存在" }
+        $envPassExistText = if ($envPassExists) { (T "Common.Exists") } else { (T "Common.NotExists") }
         Write-Host ("[PASS] 環境変数 PASS_FILE: 設定あり（{0} / {1}）" -f $envPassName, $envPassExistText)
       } else {
         Write-Host "[PASS] 環境変数 PASS_FILE: 未設定"
@@ -679,7 +679,7 @@ function Show-Folder([string]$folderPath, [string]$label, [string]$oldRootForNew
     if ($Table) {
       # 表形式
       if ($certRows.Count -eq 0) {
-        Write-Host "[情報] 証明書ファイル(.cer/.crt/.pem) がありません（中間証明書同梱チェックは実行されません）"
+        Write-Host (T "Common.NoCertFiles")
       }
       if ($certRows.Count -gt 0) {
         Write-Host "[証明書]"

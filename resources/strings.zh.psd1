@@ -203,5 +203,27 @@
   "Renew.BackupCsrFail" = "无法备份既存 server.csr: {0}"
   "Renew.OutExistsNoOverwrite" = "输出已存在（防止覆盖）: {0}`n如需重新生成请指定 -Overwrite。"
   "Renew.DoneTitle" = "生成完成:"
+  "Renew.ShowInfo.OpenSsl" = "OpenSSL: {0}"
+  "Renew.ShowInfo.OldDir" = "OldDir : {0}"
+  "Renew.ShowInfo.NewDir" = "NewDir : {0}"
+  "Renew.ShowInfo.Version" = "OpenSSL version: {0}"
+  "Renew.Table.Org" = "机构"
+  "Renew.Table.Cn" = "CN"
+  "Renew.Table.RsaBits" = "密钥长度"
+  "Renew.Table.San" = "SAN"
+  "Renew.Table.OutDir" = "输出目录"
+
+  # Common error messages
+  "Common.FolderNotFound" = "[信息] {0} 文件夹不存在: {1}"
+  "Common.NoTargetFiles" = "[信息] 未找到目标文件"
+  "Common.NoCertFiles" = "[信息] 未找到证书文件(.cer/.crt/.pem)（将不执行中间证书合并检查）"
+  "Common.ErrorNg" = "[失败] {0}"
+
+  # verify_certificate_key_match.ps1 detail sections
+  "VerifyMatch.Detail.CertInfo" = "--- 证书信息 ---"
+  "VerifyMatch.Detail.KeyInfo" = "--- 私钥信息 ---"
+  "VerifyMatch.Detail.CsrInfo" = "--- CSR 信息 ---"
+  "VerifyMatch.Detail.Subject" = "Subject:"
+  "VerifyMatch.Detail.Modulus" = "Modulus:"
 }
 

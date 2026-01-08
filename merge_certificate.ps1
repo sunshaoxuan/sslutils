@@ -346,8 +346,8 @@ if ([string]::IsNullOrWhiteSpace($ClientCert)) {
     try {
       Merge-One $t
     } catch {
-      Write-Host ("[NG] {0}" -f $t)
-      Write-Host ("[NG] {0}" -f ($_.Exception.Message))
+      Write-Host (T "Common.ErrorNg" @($t))
+      Write-Host (T "Common.ErrorNg" @($_.Exception.Message))
     }
   }
   exit 0

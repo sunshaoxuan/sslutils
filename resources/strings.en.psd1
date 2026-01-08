@@ -203,5 +203,27 @@
   "Renew.BackupCsrFail" = "Cannot backup existing server.csr: {0}"
   "Renew.OutExistsNoOverwrite" = "Output already exists (overwrite blocked): {0}`nSpecify -Overwrite to regenerate."
   "Renew.DoneTitle" = "Generated:"
+  "Renew.ShowInfo.OpenSsl" = "OpenSSL: {0}"
+  "Renew.ShowInfo.OldDir" = "OldDir : {0}"
+  "Renew.ShowInfo.NewDir" = "NewDir : {0}"
+  "Renew.ShowInfo.Version" = "OpenSSL version: {0}"
+  "Renew.Table.Org" = "Organization"
+  "Renew.Table.Cn" = "CN"
+  "Renew.Table.RsaBits" = "Key Length"
+  "Renew.Table.San" = "SAN"
+  "Renew.Table.OutDir" = "Output"
+
+  # Common error messages
+  "Common.FolderNotFound" = "[INFO] Folder not found: {0}: {1}"
+  "Common.NoTargetFiles" = "[INFO] No target files found"
+  "Common.NoCertFiles" = "[INFO] No certificate files (.cer/.crt/.pem) found (chain check will be skipped)"
+  "Common.ErrorNg" = "[NG] {0}"
+
+  # verify_certificate_key_match.ps1 detail sections
+  "VerifyMatch.Detail.CertInfo" = "--- Certificate Info ---"
+  "VerifyMatch.Detail.KeyInfo" = "--- Private Key Info ---"
+  "VerifyMatch.Detail.CsrInfo" = "--- CSR Info ---"
+  "VerifyMatch.Detail.Subject" = "Subject:"
+  "VerifyMatch.Detail.Modulus" = "Modulus:"
 }
 

@@ -201,5 +201,27 @@
   "Renew.BackupCsrFail" = "既存の server.csr をバックアップできません: {0}"
   "Renew.OutExistsNoOverwrite" = "出力先に既にファイルが存在します（上書き防止）: {0}`n再生成する場合は -Overwrite を指定してください。"
   "Renew.DoneTitle" = "生成完了:"
+  "Renew.ShowInfo.OpenSsl" = "OpenSSL: {0}"
+  "Renew.ShowInfo.OldDir" = "OldDir : {0}"
+  "Renew.ShowInfo.NewDir" = "NewDir : {0}"
+  "Renew.ShowInfo.Version" = "OpenSSL version: {0}"
+  "Renew.Table.Org" = "機関"
+  "Renew.Table.Cn" = "CN"
+  "Renew.Table.RsaBits" = "鍵長"
+  "Renew.Table.San" = "SAN"
+  "Renew.Table.OutDir" = "出力先"
+
+  # Common error messages
+  "Common.FolderNotFound" = "[情報] {0} フォルダがありません: {1}"
+  "Common.NoTargetFiles" = "[情報] 対象ファイルが見つかりません"
+  "Common.NoCertFiles" = "[情報] 証明書ファイル(.cer/.crt/.pem) がありません（中間証明書同梱チェックは実行されません）"
+  "Common.ErrorNg" = "[NG] {0}"
+
+  # verify_certificate_key_match.ps1 detail sections
+  "VerifyMatch.Detail.CertInfo" = "--- 証明書情報 ---"
+  "VerifyMatch.Detail.KeyInfo" = "--- 秘密鍵情報 ---"
+  "VerifyMatch.Detail.CsrInfo" = "--- CSR 情報 ---"
+  "VerifyMatch.Detail.Subject" = "Subject:"
+  "VerifyMatch.Detail.Modulus" = "Modulus:"
 }
 
