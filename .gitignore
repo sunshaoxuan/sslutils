@@ -1,0 +1,37 @@
+# 证书文件
+*.cer
+*.crt
+*.pem
+
+# 私钥文件
+*.key
+
+# 证书签名请求
+*.csr
+
+# 密码文件
+passphrase.txt
+*.pass
+*.pwd
+
+# 备份文件
+*.bak_*
+
+# 报告文件（可能包含敏感信息）
+*.txt
+!README.txt
+!CHANGELOG.txt
+
+# 临时文件
+tmp_*
+test_*
+
+# Windows 系统文件
+Thumbs.db
+Desktop.ini
+
+# IDE 文件
+.vscode/
+.idea/
+*.swp
+*.swo
