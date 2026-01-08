@@ -41,11 +41,11 @@ OpenSSL 実行ファイルのパス
 出力言語（既定: ja）
 
 .EXAMPLE
-.\merge_certificate.ps1
+.\Merge-CertificateChain.ps1
 old\ と new\ 配下のすべての証明書を自動結合
 
 .EXAMPLE
-.\merge_certificate.ps1 -ClientCert .\client.cer -IntermediateCert .\intermediate.cer
+.\Merge-CertificateChain.ps1 -ClientCert .\client.cer -IntermediateCert .\intermediate.cer
 指定した証明書を結合
 
 .NOTES

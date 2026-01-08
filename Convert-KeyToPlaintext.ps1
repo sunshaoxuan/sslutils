@@ -38,15 +38,15 @@ OpenSSL 実行ファイルのパス
 出力言語（既定: ja）
 
 .EXAMPLE
-.\decrypt_key.ps1 -Path .\new\example.com\server.key
+.\Convert-KeyToPlaintext.ps1 -Path .\new\example.com\server.key
 指定した鍵ファイルを復号化
 
 .EXAMPLE
-.\decrypt_key.ps1 -Path .\new -Recurse -Overwrite
+.\Convert-KeyToPlaintext.ps1 -Path .\new -Recurse -Overwrite
 new\ 配下のすべての .key を再帰的に復号化
 
 .EXAMPLE
-.\decrypt_key.ps1 -Path .\encrypted.key -InPlace -Overwrite
+.\Convert-KeyToPlaintext.ps1 -Path .\encrypted.key -InPlace -Overwrite
 暗号化鍵を平文化して上書き（元ファイルはバックアップ）
 
 .NOTES

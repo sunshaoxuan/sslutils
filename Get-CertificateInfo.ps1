@@ -35,15 +35,15 @@ OpenSSL 実行ファイルのパス（既定: C:\Program Files\Git\usr\bin\opens
 出力言語（既定: ja / 選択肢: ja, zh, en）
 
 .EXAMPLE
-.\check_basic_info.ps1
+.\Get-CertificateInfo.ps1
 old\ と new\ 配下を走査して、すべての証明書・鍵・CSR の情報を表示
 
 .EXAMPLE
-.\check_basic_info.ps1 -Path .\new\example.com\example.com.cer
+.\Get-CertificateInfo.ps1 -Path .\new\example.com\example.com.cer
 指定した証明書ファイルのみ表示
 
 .EXAMPLE
-.\check_basic_info.ps1 -Lang en -Table
+.\Get-CertificateInfo.ps1 -Lang en -Table
 英語で表形式表示
 
 .NOTES

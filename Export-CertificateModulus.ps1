@@ -32,11 +32,11 @@ OpenSSL 実行ファイルのパス
 出力言語（既定: ja）
 
 .EXAMPLE
-.\show_all_modulus.ps1 -RootDir .\old
+.\Export-CertificateModulus.ps1 -RootDir .\old
 old\ 配下のすべての証明書・鍵の Modulus を抽出
 
 .EXAMPLE
-.\show_all_modulus.ps1 -RootDir . -PassFile .\passphrase.txt
+.\Export-CertificateModulus.ps1 -RootDir . -PassFile .\passphrase.txt
 パスワードファイルを指定して暗号化鍵も処理
 
 .NOTES

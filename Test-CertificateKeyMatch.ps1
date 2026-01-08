@@ -35,11 +35,11 @@ OpenSSL 実行ファイルのパス
 出力言語（既定: ja）
 
 .EXAMPLE
-.\verify_certificate_key_match.ps1 -Mode both
+.\Test-CertificateKeyMatch.ps1 -Mode both
 old\ と new\ の両方を確認
 
 .EXAMPLE
-.\verify_certificate_key_match.ps1 -Mode old -PassFile .\passphrase.txt
+.\Test-CertificateKeyMatch.ps1 -Mode old -PassFile .\passphrase.txt
 old\ のみ確認（パスワードファイル指定）
 
 .NOTES

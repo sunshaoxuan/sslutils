@@ -53,15 +53,15 @@ OpenSSL 実行ファイルのパス
 出力言語（既定: ja）
 
 .EXAMPLE
-.\make_csr_generic.ps1 -CN example.com -Subject "/C=JP/ST=Tokyo/L=Tokyo/O=Example Corp/CN=example.com"
+.\New-CertificateSigningRequest.ps1 -CN example.com -Subject "/C=JP/ST=Tokyo/L=Tokyo/O=Example Corp/CN=example.com"
 Subject を明示指定して CSR 生成
 
 .EXAMPLE
-.\make_csr_generic.ps1 -CN example.com -C JP -ST Tokyo -L Tokyo -O "Example Corp"
+.\New-CertificateSigningRequest.ps1 -CN example.com -C JP -ST Tokyo -L Tokyo -O "Example Corp"
 個別パラメータで CSR 生成
 
 .EXAMPLE
-.\make_csr_generic.ps1 -CN example.com -PassFile .\passphrase.txt -Overwrite
+.\New-CertificateSigningRequest.ps1 -CN example.com -PassFile .\passphrase.txt -Overwrite
 暗号化鍵で CSR 生成（既存ファイルはバックアップ）
 
 .NOTES

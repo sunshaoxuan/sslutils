@@ -21,9 +21,9 @@ SSL/TLS 証明書・秘密鍵・CSR（証明書署名要求）を管理するた
 `-Lang` パラメータで言語を指定できます（既定: 日本語）。
 
 ```powershell
-.\check_basic_info.ps1 -Lang ja  # 日本語
-.\check_basic_info.ps1 -Lang zh  # 中国語
-.\check_basic_info.ps1 -Lang en  # 英語
+.\Get-CertificateInfo.ps1 -Lang ja  # 日本語
+.\Get-CertificateInfo.ps1 -Lang zh  # 中国語
+.\Get-CertificateInfo.ps1 -Lang en  # 英語
 ```
 
 ### 多機関対応
@@ -67,7 +67,7 @@ cd C:\path\to\ssl_maker
 
 ## スクリプト一覧
 
-### 1. check_basic_info.ps1
+### 1. Get-CertificateInfo.ps1
 
 証明書・秘密鍵・CSR の基本情報を表示します。
 
@@ -80,16 +80,16 @@ cd C:\path\to\ssl_maker
 **使用例:**
 ```powershell
 # old\ と new\ 配下を走査
-.\check_basic_info.ps1
+.\Get-CertificateInfo.ps1
 
 # 特定ファイルのみ表示
-.\check_basic_info.ps1 -Path .\new\example.com\example.com.cer
+.\Get-CertificateInfo.ps1 -Path .\new\example.com\example.com.cer
 
 # 表形式で表示
-.\check_basic_info.ps1 -Table
+.\Get-CertificateInfo.ps1 -Table
 ```
 
-### 2. merge_certificate.ps1
+### 2. Merge-CertificateChain.ps1
 
 クライアント証明書と中間証明書を結合してフルチェーンを作成します。
 
@@ -102,13 +102,13 @@ cd C:\path\to\ssl_maker
 **使用例:**
 ```powershell
 # 一括処理（old\ と new\ 配下を自動走査）
-.\merge_certificate.ps1
+.\Merge-CertificateChain.ps1
 
 # 特定の証明書を結合
-.\merge_certificate.ps1 -ClientCert .\client.cer -IntermediateCert .\intermediate.cer
+.\Merge-CertificateChain.ps1 -ClientCert .\client.cer -IntermediateCert .\intermediate.cer
 ```
 
-### 3. decrypt_key.ps1
+### 3. Convert-KeyToPlaintext.ps1
 
 暗号化された秘密鍵ファイルを復号化して平文鍵を作成します。
 
@@ -121,16 +121,16 @@ cd C:\path\to\ssl_maker
 **使用例:**
 ```powershell
 # 特定の鍵ファイルを復号化
-.\decrypt_key.ps1 -Path .\new\example.com\server.key
+.\Convert-KeyToPlaintext.ps1 -Path .\new\example.com\server.key
 
 # ディレクトリ配下を再帰的に処理
-.\decrypt_key.ps1 -Path .\new -Recurse -Overwrite
+.\Convert-KeyToPlaintext.ps1 -Path .\new -Recurse -Overwrite
 
 # インプレース復号化（元ファイルを上書き）
-.\decrypt_key.ps1 -Path .\encrypted.key -InPlace -Overwrite
+.\Convert-KeyToPlaintext.ps1 -Path .\encrypted.key -InPlace -Overwrite
 ```
 
-### 4. make_csr_generic.ps1
+### 4. New-CertificateSigningRequest.ps1
 
 汎用的な CSR と秘密鍵を生成します。
 
@@ -142,16 +142,16 @@ cd C:\path\to\ssl_maker
 **使用例:**
 ```powershell
 # Subject を明示指定
-.\make_csr_generic.ps1 -CN example.com -Subject "/C=JP/ST=Tokyo/L=Tokyo/O=Example Corp/CN=example.com"
+.\New-CertificateSigningRequest.ps1 -CN example.com -Subject "/C=JP/ST=Tokyo/L=Tokyo/O=Example Corp/CN=example.com"
 
 # 個別パラメータで指定
-.\make_csr_generic.ps1 -CN example.com -C JP -ST Tokyo -L Tokyo -O "Example Corp"
+.\New-CertificateSigningRequest.ps1 -CN example.com -C JP -ST Tokyo -L Tokyo -O "Example Corp"
 
 # 暗号化鍵で生成
-.\make_csr_generic.ps1 -CN example.com -PassFile .\passphrase.txt -Overwrite
+.\New-CertificateSigningRequest.ps1 -CN example.com -PassFile .\passphrase.txt -Overwrite
 ```
 
-### 5. show_all_modulus.ps1
+### 5. Export-CertificateModulus.ps1
 
 すべての証明書と秘密鍵の Modulus 値を一覧表示します。
 
@@ -163,13 +163,13 @@ cd C:\path\to\ssl_maker
 **使用例:**
 ```powershell
 # 指定ディレクトリ配下を処理
-.\show_all_modulus.ps1 -RootDir .\old
+.\Export-CertificateModulus.ps1 -RootDir .\old
 
 # パスワードファイルを指定
-.\show_all_modulus.ps1 -RootDir . -PassFile .\passphrase.txt
+.\Export-CertificateModulus.ps1 -RootDir . -PassFile .\passphrase.txt
 ```
 
-### 6. verify_certificate_key_match.ps1
+### 6. Test-CertificateKeyMatch.ps1
 
 証明書・秘密鍵・CSR の Modulus 一致確認レポートを生成します。
 
@@ -182,13 +182,13 @@ cd C:\path\to\ssl_maker
 **使用例:**
 ```powershell
 # old\ と new\ の両方を確認
-.\verify_certificate_key_match.ps1 -Mode both
+.\Test-CertificateKeyMatch.ps1 -Mode both
 
 # old\ のみ確認
-.\verify_certificate_key_match.ps1 -Mode old -PassFile .\passphrase.txt
+.\Test-CertificateKeyMatch.ps1 -Mode old -PassFile .\passphrase.txt
 ```
 
-### 7. renew_from_old.ps1
+### 7. New-CertificateSigningRequestFromOld.ps1
 
 旧証明書情報から新しい CSR と秘密鍵を生成します。
 
@@ -201,13 +201,13 @@ cd C:\path\to\ssl_maker
 **使用例:**
 ```powershell
 # 対話式メニューで機関を選択
-.\renew_from_old.ps1
+.\New-CertificateSigningRequestFromOld.ps1
 
 # 指定機関のみ処理
-.\renew_from_old.ps1 -Org example.com -Overwrite
+.\New-CertificateSigningRequestFromOld.ps1 -Org example.com -Overwrite
 
 # すべての機関を処理
-.\renew_from_old.ps1 -All -PassFile .\passphrase.txt
+.\New-CertificateSigningRequestFromOld.ps1 -All -PassFile .\passphrase.txt
 ```
 
 ## パスワードファイル
@@ -245,7 +245,7 @@ cd C:\path\to\ssl_maker
 `-OpenSsl` パラメータで OpenSSL のパスを明示指定してください。
 
 ```powershell
-.\check_basic_info.ps1 -OpenSsl "C:\path\to\openssl.exe"
+.\Get-CertificateInfo.ps1 -OpenSsl "C:\path\to\openssl.exe"
 ```
 
 ### 暗号化鍵が読み取れない

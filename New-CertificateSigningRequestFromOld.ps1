@@ -47,15 +47,15 @@ OpenSSL とディレクトリ情報を表示して終了
 出力言語（既定: ja）
 
 .EXAMPLE
-.\renew_from_old.ps1
+.\New-CertificateSigningRequestFromOld.ps1
 対話式メニューで機関を選択して CSR 生成
 
 .EXAMPLE
-.\renew_from_old.ps1 -Org example.com -Overwrite
+.\New-CertificateSigningRequestFromOld.ps1 -Org example.com -Overwrite
 指定機関のみ処理（既存ファイルはバックアップ）
 
 .EXAMPLE
-.\renew_from_old.ps1 -All -PassFile .\passphrase.txt
+.\New-CertificateSigningRequestFromOld.ps1 -All -PassFile .\passphrase.txt
 すべての機関を処理（暗号化鍵で生成）
 
 .NOTES
