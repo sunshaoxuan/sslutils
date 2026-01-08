@@ -1,3 +1,53 @@
+<#
+.SYNOPSIS
+証明書・秘密鍵・CSR の Modulus 一致確認レポートを生成するスクリプト
+
+.DESCRIPTION
+このスクリプトは、old\ と new\ 配下の証明書・秘密鍵・CSR ファイルの
+Modulus 値を比較し、ペアの一致/不一致を判定します。
+
+主な機能:
+- 証明書と秘密鍵の Modulus 一致確認
+- 証明書と CSR の Modulus 一致確認
+- 秘密鍵と CSR の Modulus 一致確認
+- 多機関対応（階層構造の自動認識）
+- 詳細レポートの生成（certificate_verification_report.txt）
+
+.PARAMETER Mode
+処理モード（既定: both / 選択肢: both, old, new）
+
+.PARAMETER OldDir
+old ディレクトリのパス（既定: .\old）
+
+.PARAMETER NewDir
+new ディレクトリのパス（既定: .\new）
+
+.PARAMETER ReportFile
+レポートファイルのパス（既定: certificate_verification_report.txt）
+
+.PARAMETER OpenSsl
+OpenSSL 実行ファイルのパス
+
+.PARAMETER PassFile
+暗号化鍵用のパスフレーズファイル
+
+.PARAMETER Lang
+出力言語（既定: ja）
+
+.EXAMPLE
+.\verify_certificate_key_match.ps1 -Mode both
+old\ と new\ の両方を確認
+
+.EXAMPLE
+.\verify_certificate_key_match.ps1 -Mode old -PassFile .\passphrase.txt
+old\ のみ確認（パスワードファイル指定）
+
+.NOTES
+- 暗号化された秘密鍵は、passphrase.txt または環境変数 PASS_FILE から自動的にパスワードを読み取ります
+- レポートファイルは既存の場合、自動的にバックアップされます
+- 機関（第一階層）とサーバ（第二階層）の階層構造を自動認識します
+#>
+
 param(
   # both / old / new
   [Parameter(Mandatory = $false, Position = 0)]

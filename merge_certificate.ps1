@@ -1,3 +1,59 @@
+<#
+.SYNOPSIS
+クライアント証明書と中間証明書を結合してフルチェーンを作成するスクリプト
+
+.DESCRIPTION
+このスクリプトは、クライアント証明書（サーバ証明書）と中間証明書（CA証明書）を
+結合して、完全な証明書チェーンを作成します。
+
+主な機能:
+- クライアント証明書と中間証明書の自動結合
+- 中間証明書の自動選択（issuer/subject による一致判定）
+- 既に結合済みの証明書の検出とスキップ
+- 一括処理モード（old/ と new/ 配下を自動走査）
+- 改行コードの正規化（LF統一）
+
+.PARAMETER ClientCert
+クライアント証明書のパス（省略時：一括処理モード）
+
+.PARAMETER IntermediateCert
+中間証明書のパス（省略時：ルート直下から自動選択）
+
+.PARAMETER OutFile
+出力ファイルのパス（省略時：OutDir 配下に自動配置）
+
+.PARAMETER OutDir
+出力ディレクトリ（既定: .\merged）
+
+.PARAMETER RootDir
+一括処理時の探索ルート（未指定ならスクリプト配下）
+
+.PARAMETER OpenSsl
+OpenSSL 実行ファイルのパス
+
+.PARAMETER SkipIfAlreadyMerged
+既にフルチェーン（複数 CERT ブロック）ならスキップ（既定: true）
+
+.PARAMETER Force
+自動判定を無視して強制結合
+
+.PARAMETER Lang
+出力言語（既定: ja）
+
+.EXAMPLE
+.\merge_certificate.ps1
+old\ と new\ 配下のすべての証明書を自動結合
+
+.EXAMPLE
+.\merge_certificate.ps1 -ClientCert .\client.cer -IntermediateCert .\intermediate.cer
+指定した証明書を結合
+
+.NOTES
+- 中間証明書の自動選択は、クライアント証明書の issuer と中間証明書の subject が一致するものを探します
+- 既存の出力ファイルと内容が同一の場合は、バックアップせずにスキップします
+- 誤結合防止のため、複数候補がある場合は自動選択しません
+#>
+
 param(
   # 省略した場合：old\ と new\ を走査して一括処理します
   [Parameter(Mandatory = $false, Position = 0)]

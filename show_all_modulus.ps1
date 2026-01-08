@@ -1,3 +1,50 @@
+<#
+.SYNOPSIS
+すべての証明書と秘密鍵の Modulus 値を一覧表示するスクリプト
+
+.DESCRIPTION
+このスクリプトは、指定ディレクトリ配下のすべての証明書（.cer/.crt/.pem）と
+秘密鍵（.key）から Modulus 値を抽出し、テキストファイルに一覧出力します。
+
+主な機能:
+- 証明書と秘密鍵の Modulus 値の抽出
+- 暗号化鍵の自動処理（パスワードファイル対応）
+- 一覧レポートの生成（modulus_list.txt）
+
+用途:
+- 証明書と秘密鍵のペア確認（Modulus が一致すればペア）
+- 証明書と CSR の一致確認
+- 鍵の重複チェック
+
+.PARAMETER RootDir
+探索ルートディレクトリ（既定: .）
+
+.PARAMETER OutFile
+出力ファイル名（既定: modulus_list.txt）
+
+.PARAMETER OpenSsl
+OpenSSL 実行ファイルのパス
+
+.PARAMETER PassFile
+暗号化鍵用のパスフレーズファイル（指定しない場合はパスフレーズ無しで試行）
+
+.PARAMETER Lang
+出力言語（既定: ja）
+
+.EXAMPLE
+.\show_all_modulus.ps1 -RootDir .\old
+old\ 配下のすべての証明書・鍵の Modulus を抽出
+
+.EXAMPLE
+.\show_all_modulus.ps1 -RootDir . -PassFile .\passphrase.txt
+パスワードファイルを指定して暗号化鍵も処理
+
+.NOTES
+- 暗号化された秘密鍵は、-PassFile または環境変数 PASS_FILE が必要です
+- 無効な証明書や複数証明書を含むファイルは "[無効な証明書...]" と表示されます
+- 出力ファイルは既存の場合、自動的にバックアップされます
+#>
+
 param(
   [Parameter(Mandatory = $false)]
   [string]$RootDir = ".",

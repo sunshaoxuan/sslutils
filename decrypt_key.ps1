@@ -1,3 +1,60 @@
+<#
+.SYNOPSIS
+暗号化された秘密鍵ファイルを復号化して平文鍵を作成するスクリプト
+
+.DESCRIPTION
+このスクリプトは、AES-256 等で暗号化された秘密鍵（.key）を復号化して、
+平文（暗号化なし）の秘密鍵ファイルを作成します。
+
+主な機能:
+- 暗号化鍵の自動検出と復号化
+- パスワードファイル（passphrase.txt）の自動探索
+- 一括処理（ディレクトリ指定時の再帰処理）
+- インプレース復号化（-InPlace オプション）
+- 上書き前の自動バックアップ
+
+.PARAMETER Path
+処理対象の .key ファイルまたはディレクトリ（省略時：new\ を走査）
+
+.PARAMETER OpenSsl
+OpenSSL 実行ファイルのパス
+
+.PARAMETER PassFile
+パスフレーズファイルの明示指定（優先）
+
+.PARAMETER OutPath
+出力ファイルのパス（省略時：<元ファイル名>.decrypted.key）
+
+.PARAMETER Overwrite
+出力先が存在する場合に、バックアップして上書き
+
+.PARAMETER InPlace
+既存の暗号化鍵をそのまま平文化して上書き（危険：バックアップは行う）
+
+.PARAMETER Recurse
+ディレクトリ指定時に再帰処理
+
+.PARAMETER Lang
+出力言語（既定: ja）
+
+.EXAMPLE
+.\decrypt_key.ps1 -Path .\new\example.com\server.key
+指定した鍵ファイルを復号化
+
+.EXAMPLE
+.\decrypt_key.ps1 -Path .\new -Recurse -Overwrite
+new\ 配下のすべての .key を再帰的に復号化
+
+.EXAMPLE
+.\decrypt_key.ps1 -Path .\encrypted.key -InPlace -Overwrite
+暗号化鍵を平文化して上書き（元ファイルはバックアップ）
+
+.NOTES
+- パスワードファイルは、鍵ファイルのディレクトリから上位階層を自動探索します
+- 対話入力は行いません。passphrase.txt または PASS_FILE 環境変数が必要です
+- -InPlace は危険な操作のため、必ず -Overwrite と併用してください
+#>
+
 param(
   # 指定した場合：そのファイル（.key）またはそのフォルダ配下の .key を処理
   # 省略した場合：new\ を走査（存在しなければカレント配下）

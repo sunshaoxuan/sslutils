@@ -1,3 +1,75 @@
+<#
+.SYNOPSIS
+汎用的な CSR（証明書署名要求）と秘密鍵を生成するスクリプト
+
+.DESCRIPTION
+このスクリプトは、指定した CN（Common Name）と Subject 情報から、
+CSR と秘密鍵のペアを生成します。
+
+主な機能:
+- RSA 鍵の生成（鍵長指定可能、既定: 2048bit）
+- CSR の生成（Subject と SAN 対応）
+- 秘密鍵の暗号化オプション（AES-256）
+- 既存ファイルの自動バックアップ（-Overwrite 時）
+
+.PARAMETER CN
+必須：対象 FQDN（Common Name）
+
+.PARAMETER Subject
+明示的な Subject（推奨）
+例: "/C=JP/ST=Hyogo/L=Kato-city/O=Org Name/CN=example.domain.tld"
+
+.PARAMETER C
+国コード（Subject 未指定時のみ使用）
+
+.PARAMETER ST
+都道府県（Subject 未指定時のみ使用）
+
+.PARAMETER L
+市区町村（Subject 未指定時のみ使用）
+
+.PARAMETER O
+組織名（Subject 未指定時のみ使用）
+
+.PARAMETER WithSAN
+SAN（Subject Alternative Name）を CSR に含める（既定: true / DNS:CN）
+
+.PARAMETER PassFile
+パスフレーズファイル（指定すると秘密鍵を AES-256 で暗号化）
+
+.PARAMETER OutDir
+出力ディレクトリ（既定: カレント）
+
+.PARAMETER Overwrite
+既存の <CN>.key / <CN>.csr が存在する場合に、バックアップして再生成
+
+.PARAMETER RsaBits
+RSA 鍵長（既定: 2048）
+
+.PARAMETER OpenSsl
+OpenSSL 実行ファイルのパス
+
+.PARAMETER Lang
+出力言語（既定: ja）
+
+.EXAMPLE
+.\make_csr_generic.ps1 -CN example.com -Subject "/C=JP/ST=Tokyo/L=Tokyo/O=Example Corp/CN=example.com"
+Subject を明示指定して CSR 生成
+
+.EXAMPLE
+.\make_csr_generic.ps1 -CN example.com -C JP -ST Tokyo -L Tokyo -O "Example Corp"
+個別パラメータで CSR 生成
+
+.EXAMPLE
+.\make_csr_generic.ps1 -CN example.com -PassFile .\passphrase.txt -Overwrite
+暗号化鍵で CSR 生成（既存ファイルはバックアップ）
+
+.NOTES
+- Subject が未指定の場合は、-C/-ST/-L/-O を全て指定する必要があります
+- OpenSSL 3.x 対応：暗号化鍵生成時は genpkey + req を使用します
+- 既存ファイルの上書きは、-Overwrite を指定しない限り行いません
+#>
+
 param(
   # 必須：対象FQDN（CN）
   [Parameter(Mandatory = $true, Position = 0)]

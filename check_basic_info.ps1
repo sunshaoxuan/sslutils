@@ -1,3 +1,57 @@
+<#
+.SYNOPSIS
+証明書・秘密鍵・CSR ファイルの基本情報を表示するスクリプト
+
+.DESCRIPTION
+このスクリプトは、SSL/TLS 証明書（.cer/.crt/.pem）、秘密鍵（.key）、
+証明書署名要求（.csr）の基本情報を確認・表示します。
+
+主な機能:
+- 証明書の有効期限、発行者、サブジェクトの表示
+- 証明書チェーン（中間証明書同梱）の確認
+- 秘密鍵の暗号化状態と無人運用可能性の判定
+- CSR のサブジェクト情報表示
+- 多機関対応（old/ と new/ の階層構造を自動認識）
+
+出力形式:
+- 既定: ツリー形式（フォルダ→ファイルの階層表示）
+- -Table: 表形式（従来の形式）
+- -Detail: 詳細表示（OpenSSL の生出力）
+
+.PARAMETER Path
+指定した場合：そのファイルだけを表示
+省略した場合：old\ と new\ をそれぞれ走査して表示
+
+.PARAMETER OpenSsl
+OpenSSL 実行ファイルのパス（既定: C:\Program Files\Git\usr\bin\openssl.exe）
+
+.PARAMETER Detail
+詳細表示モード（OpenSSL の生出力をそのまま表示）
+
+.PARAMETER Table
+旧来の表形式で表示（既定はツリー表示）
+
+.PARAMETER Lang
+出力言語（既定: ja / 選択肢: ja, zh, en）
+
+.EXAMPLE
+.\check_basic_info.ps1
+old\ と new\ 配下を走査して、すべての証明書・鍵・CSR の情報を表示
+
+.EXAMPLE
+.\check_basic_info.ps1 -Path .\new\example.com\example.com.cer
+指定した証明書ファイルのみ表示
+
+.EXAMPLE
+.\check_basic_info.ps1 -Lang en -Table
+英語で表形式表示
+
+.NOTES
+- 暗号化された秘密鍵は、passphrase.txt または環境変数 PASS_FILE から自動的にパスワードを読み取ります
+- 証明書チェーンの判定は、PEM 形式の BEGIN CERTIFICATE ブロック数をカウントします
+- 中間証明書の候補は、ルート直下の nii*.cer, gs*.cer 等を自動検出します
+#>
+
 param(
   # 指定した場合：そのファイルだけを表示
   # 省略した場合：old\ と new\ をそれぞれ走査して表示

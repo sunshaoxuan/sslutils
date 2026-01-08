@@ -1,3 +1,71 @@
+<#
+.SYNOPSIS
+旧証明書情報から新しい CSR と秘密鍵を生成するスクリプト
+
+.DESCRIPTION
+このスクリプトは、old\ 配下の既存証明書・CSR・秘密鍵の情報を読み取り、
+同じ Subject と SAN で新しい CSR と秘密鍵のペアを new\ 配下に生成します。
+
+主な機能:
+- 旧証明書からの Subject と SAN の自動抽出
+- 旧秘密鍵からの鍵長（RSA bits）の自動検出
+- 多機関対応（機関ごとの処理）
+- 対話式メニュー（複数機関がある場合）
+- 既存ファイルの自動バックアップ（-Overwrite 時）
+
+.PARAMETER OldDir
+old ディレクトリのパス（既定: .\old）
+
+.PARAMETER NewDir
+new ディレクトリのパス（既定: .\new）
+
+.PARAMETER OpenSsl
+OpenSSL 実行ファイルのパス
+
+.PARAMETER PassFile
+パスフレーズファイル（指定すると生成する秘密鍵を AES-256 で暗号化）
+
+.PARAMETER DefaultRsaBits
+旧秘密鍵が見つからない/解析できない場合のデフォルト鍵長（既定: 2048）
+
+.PARAMETER ShowInfo
+OpenSSL とディレクトリ情報を表示して終了
+
+.PARAMETER Overwrite
+出力先（new\<CN>\server.key/server.csr）が既に存在する場合に、バックアップして再生成
+
+.PARAMETER Org
+機関ディレクトリ名（指定した場合はその機関のみ処理）
+
+.PARAMETER All
+すべての機関を処理（未指定の場合、複数機関があるとメニューで選択）
+
+.PARAMETER NonInteractive
+非対話モード（複数機関がある場合は -Org か -All が必須）
+
+.PARAMETER Lang
+出力言語（既定: ja）
+
+.EXAMPLE
+.\renew_from_old.ps1
+対話式メニューで機関を選択して CSR 生成
+
+.EXAMPLE
+.\renew_from_old.ps1 -Org example.com -Overwrite
+指定機関のみ処理（既存ファイルはバックアップ）
+
+.EXAMPLE
+.\renew_from_old.ps1 -All -PassFile .\passphrase.txt
+すべての機関を処理（暗号化鍵で生成）
+
+.NOTES
+- 旧証明書から Subject と SAN を自動抽出します
+- 旧秘密鍵から鍵長を自動検出します（暗号化鍵の場合はパスワードが必要）
+- 複数機関がある場合は、対話式メニューで選択します（-Org または -All で回避可能）
+- -Overwrite と複数機関の組み合わせは、安全のため "YES" の入力が必要です
+- 出力先は new\<機関名>\<CN>\server.key と server.csr です
+#>
+
 param(
   [Parameter(Mandatory = $false)]
   [string]$OldDir = "",
