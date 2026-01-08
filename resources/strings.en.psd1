@@ -21,7 +21,7 @@
   "Label.Csr" = "CSR"
   "Label.Key" = "Private key"
 
-  # check_basic_info.ps1
+  # Get-CertificateInfo.ps1
   "CheckBasic.Header" = "========== {0} =========="
   "CheckBasic.Dir" = "[DIR] {0}"
   "CheckBasic.PassFilePresent" = "pass:{0}"
@@ -49,7 +49,7 @@
   "CheckBasic.Key.SkipNoPass" = "skip(no pass)"
   "CheckBasic.Key.SkipNoPassLong" = "skip (no pass)"
 
-  # Detail mode labels (check_basic_info.ps1)
+  # Detail mode labels (Get-CertificateInfo.ps1)
   "CheckBasic.Detail.File" = "[FILE] {0}"
   "CheckBasic.Detail.Key" = "[KEY]"
   "CheckBasic.Detail.Key.Encrypted" = "[KEY] Encrypted: {0}"
@@ -62,9 +62,9 @@
   "CheckBasic.Detail.Key.CannotRead" = "[WARN] Cannot read key"
   "CheckBasic.Detail.UnsupportedExt" = "Unsupported extension: {0}"
   "CheckBasic.Detail.Cert.HasPrivateKey" = "[WARN] Certificate file contains what appears to be a private key block"
-  "CheckBasic.Detail.Cert.NoChainHint" = "[CERT] Note: Intermediate certificate is not included. Use merge_certificate.ps1 if needed."
+  "CheckBasic.Detail.Cert.NoChainHint" = "[CERT] Note: Intermediate certificate is not included. Use Merge-CertificateChain.ps1 if needed."
 
-  # merge_certificate.ps1
+  # Merge-CertificateChain.ps1
   "MergeCert.TitleSingle" = "========== Certificate chain merge tool =========="
   "MergeCert.TitleBatch" = "========== Certificate chain merge tool (batch) =========="
   "MergeCert.Step1" = "[1] Checking input files..."
@@ -85,7 +85,7 @@
   "MergeCert.MultiCandidatesNeedSpecify" = "Intermediate cert not specified and multiple candidates exist. To avoid wrong merge, specify -IntermediateCert.`n{0}"
   "MergeCert.RootDirNotFound" = "RootDir not found: {0}"
 
-  # decrypt_key.ps1
+  # Convert-KeyToPlaintext.ps1
   "DecryptKey.PathNotFound" = "Path not found: {0}"
   "DecryptKey.KeyHeader" = "[KEY] {0}"
   "DecryptKey.EncryptedLine" = "[INFO] Encrypted: {0}"
@@ -106,7 +106,7 @@
   "DecryptKey.NgPath" = "[NG] {0}"
   "DecryptKey.NgMsg" = "[NG] {0}"
 
-  # make_csr_generic.ps1
+  # New-CertificateSigningRequest.ps1
   "MakeCsr.CnRequired" = "CN is required."
   "MakeCsr.SubjectMissing" = "Subject is missing. Provide -Subject, or specify all of -C/-ST/-L/-O."
   "MakeCsr.OutExistsNoOverwrite" = "Output already has existing files (overwrite blocked): {0}`nSpecify -Overwrite to regenerate."
@@ -115,7 +115,7 @@
   "MakeCsr.DoneCsr" = "[OK] CSR: {0}"
   "MakeCsr.PreviewTitle" = "[INFO] CSR preview (Subject / SAN)"
 
-  # show_all_modulus.ps1
+  # Export-CertificateModulus.ps1
   "ShowModulus.Title" = "========== Certificate / key modulus list =========="
   "ShowModulus.CreatedAt" = "Created at: {0}"
   "ShowModulus.SectionCert" = "Certificates (.cer, .crt, .pem)"
@@ -131,7 +131,7 @@
   "ShowModulus.ConsoleTitle" = "[OK] Summary"
   "ShowModulus.SavedTo" = "Saved to: {0}"
 
-  # verify_certificate_key_match.ps1
+  # Test-CertificateKeyMatch.ps1
   "VerifyMatch.ReportTitle" = "Certificate / key / CSR match report"
   "VerifyMatch.CreatedAt" = "Created at: {0}"
   "VerifyMatch.Separator" = "=============================================="
@@ -177,7 +177,7 @@
   "VerifyMatch.SavedTo" = "Saved to: {0}"
   "VerifyMatch.ReportSavedTo" = "Report saved to: {0}"
 
-  # renew_from_old.ps1
+  # New-CertificateSigningRequestFromOld.ps1
   "Renew.MenuTitle" = "Multiple organizations found. Select organizations to process."
   "Renew.MenuHint" = "(e.g., 1 or 1,3 / all / q)"
   "Renew.MenuPrompt" = "Select"
@@ -219,7 +219,7 @@
   "Common.NoCertFiles" = "[INFO] No certificate files (.cer/.crt/.pem) found (chain check will be skipped)"
   "Common.ErrorNg" = "[NG] {0}"
 
-  # verify_certificate_key_match.ps1 detail sections
+  # Test-CertificateKeyMatch.ps1 detail sections
   "VerifyMatch.Detail.CertInfo" = "--- Certificate Info ---"
   "VerifyMatch.Detail.KeyInfo" = "--- Private Key Info ---"
   "VerifyMatch.Detail.CsrInfo" = "--- CSR Info ---"

@@ -21,7 +21,7 @@
   "Label.Csr" = "申請(CSR)"
   "Label.Key" = "秘密鍵"
 
-  # check_basic_info.ps1
+  # Get-CertificateInfo.ps1
   "CheckBasic.Header" = "========== {0} =========="
   "CheckBasic.Dir" = "[DIR] {0}"
   "CheckBasic.PassFilePresent" = "パスワード:{0}"
@@ -49,7 +49,7 @@
   "CheckBasic.Key.SkipNoPass" = "スキップ(パスワードなし)"
   "CheckBasic.Key.SkipNoPassLong" = "スキップ（パスワードなし）"
 
-  # Detail mode labels (check_basic_info.ps1)
+  # Detail mode labels (Get-CertificateInfo.ps1)
   "CheckBasic.Detail.File" = "[FILE] {0}"
   "CheckBasic.Detail.Key" = "[KEY]"
   "CheckBasic.Detail.Key.Encrypted" = "[KEY] 暗号化: {0}"
@@ -62,7 +62,7 @@
   "CheckBasic.Detail.Key.CannotRead" = "[警告] 秘密鍵を読み取れません"
   "CheckBasic.Detail.UnsupportedExt" = "未対応の拡張子: {0}"
 
-  # merge_certificate.ps1
+  # Merge-CertificateChain.ps1
   "MergeCert.TitleSingle" = "========== 証明書チェーン結合ツール =========="
   "MergeCert.TitleBatch" = "========== 証明書チェーン結合ツール（一括） =========="
   "MergeCert.Step1" = "[1] 入力ファイル確認..."
@@ -83,7 +83,7 @@
   "MergeCert.MultiCandidatesNeedSpecify" = "中間証明書が未指定で、候補が複数あります。誤結合防止のため -IntermediateCert を指定してください。`n{0}"
   "MergeCert.RootDirNotFound" = "RootDir が見つかりません: {0}"
 
-  # decrypt_key.ps1
+  # Convert-KeyToPlaintext.ps1
   "DecryptKey.PathNotFound" = "Path が見つかりません: {0}"
   "DecryptKey.KeyHeader" = "[秘密鍵] {0}"
   "DecryptKey.EncryptedLine" = "[情報] 暗号化: {0}"
@@ -104,7 +104,7 @@
   "DecryptKey.NgPath" = "[失敗] {0}"
   "DecryptKey.NgMsg" = "[失敗] {0}"
 
-  # make_csr_generic.ps1
+  # New-CertificateSigningRequest.ps1
   "MakeCsr.CnRequired" = "CN は必須です。"
   "MakeCsr.SubjectMissing" = "Subject が未指定です。-Subject を渡すか、-C/-ST/-L/-O を全て指定してください。"
   "MakeCsr.OutExistsNoOverwrite" = "出力先に既にファイルが存在します（上書き防止）: {0}`n再生成する場合は -Overwrite を指定してください。"
@@ -113,7 +113,7 @@
   "MakeCsr.DoneCsr" = "[成功] CSR   : {0}"
   "MakeCsr.PreviewTitle" = "[情報] CSR プレビュー（Subject / SAN）"
 
-  # show_all_modulus.ps1
+  # Export-CertificateModulus.ps1
   "ShowModulus.Title" = "========== 証明書/秘密鍵 Modulus 一覧 =========="
   "ShowModulus.CreatedAt" = "作成日時: {0}"
   "ShowModulus.SectionCert" = "証明書 (.cer, .crt, .pem)"
@@ -129,7 +129,7 @@
   "ShowModulus.ConsoleTitle" = "[成功] 概要"
   "ShowModulus.SavedTo" = "保存先: {0}"
 
-  # verify_certificate_key_match.ps1
+  # Test-CertificateKeyMatch.ps1
   "VerifyMatch.ReportTitle" = "証明書/秘密鍵/CSR 一致確認レポート"
   "VerifyMatch.CreatedAt" = "作成日時: {0}"
   "VerifyMatch.Separator" = "=============================================="
@@ -175,7 +175,7 @@
   "VerifyMatch.SavedTo" = "保存先: {0}"
   "VerifyMatch.ReportSavedTo" = "レポート保存先: {0}"
 
-  # renew_from_old.ps1
+  # New-CertificateSigningRequestFromOld.ps1
   "Renew.MenuTitle" = "複数の機関が見つかりました。処理する機関を選択してください。"
   "Renew.MenuHint" = "（例: 1  または  1,3  /  all  /  q）"
   "Renew.MenuPrompt" = "選択"
@@ -217,7 +217,7 @@
   "Common.NoCertFiles" = "[情報] 証明書ファイル(.cer/.crt/.pem) がありません（中間証明書同梱チェックは実行されません）"
   "Common.ErrorNg" = "[NG] {0}"
 
-  # verify_certificate_key_match.ps1 detail sections
+  # Test-CertificateKeyMatch.ps1 detail sections
   "VerifyMatch.Detail.CertInfo" = "--- 証明書情報 ---"
   "VerifyMatch.Detail.KeyInfo" = "--- 秘密鍵情報 ---"
   "VerifyMatch.Detail.CsrInfo" = "--- CSR 情報 ---"

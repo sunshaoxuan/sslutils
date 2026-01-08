@@ -21,7 +21,7 @@
   "Label.Csr" = "申请(CSR)"
   "Label.Key" = "私钥"
 
-  # check_basic_info.ps1
+  # Get-CertificateInfo.ps1
   "CheckBasic.Header" = "========== {0} =========="
   "CheckBasic.Dir" = "[DIR] {0}"
   "CheckBasic.PassFilePresent" = "密码:{0}"
@@ -49,7 +49,7 @@
   "CheckBasic.Key.SkipNoPass" = "跳过(无密码)"
   "CheckBasic.Key.SkipNoPassLong" = "跳过（无密码）"
 
-  # Detail mode labels (check_basic_info.ps1)
+  # Detail mode labels (Get-CertificateInfo.ps1)
   "CheckBasic.Detail.File" = "[FILE] {0}"
   "CheckBasic.Detail.Key" = "[KEY]"
   "CheckBasic.Detail.Key.Encrypted" = "[KEY] 加密: {0}"
@@ -62,9 +62,9 @@
   "CheckBasic.Detail.Key.CannotRead" = "[警告] 无法读取私钥"
   "CheckBasic.Detail.UnsupportedExt" = "不支持的扩展名: {0}"
   "CheckBasic.Detail.Cert.HasPrivateKey" = "[警告] 证书文件内包含疑似私钥块"
-  "CheckBasic.Detail.Cert.NoChainHint" = "[证书] 备注: 未包含中间证书。如需合并请使用 merge_certificate.ps1 等。"
+  "CheckBasic.Detail.Cert.NoChainHint" = "[证书] 备注: 未包含中间证书。如需合并请使用 Merge-CertificateChain.ps1 等。"
 
-  # merge_certificate.ps1
+  # Merge-CertificateChain.ps1
   "MergeCert.TitleSingle" = "========== 证书链合并工具 =========="
   "MergeCert.TitleBatch" = "========== 证书链合并工具（批量） =========="
   "MergeCert.Step1" = "[1] 输入文件检查..."
@@ -85,7 +85,7 @@
   "MergeCert.MultiCandidatesNeedSpecify" = "未指定中间证书且候选有多个。为避免误合并，请指定 -IntermediateCert。`n{0}"
   "MergeCert.RootDirNotFound" = "RootDir 不存在: {0}"
 
-  # decrypt_key.ps1
+  # Convert-KeyToPlaintext.ps1
   "DecryptKey.PathNotFound" = "路径不存在: {0}"
   "DecryptKey.KeyHeader" = "[私钥] {0}"
   "DecryptKey.EncryptedLine" = "[信息] 加密: {0}"
@@ -106,7 +106,7 @@
   "DecryptKey.NgPath" = "[失败] {0}"
   "DecryptKey.NgMsg" = "[失败] {0}"
 
-  # make_csr_generic.ps1
+  # New-CertificateSigningRequest.ps1
   "MakeCsr.CnRequired" = "CN 为必填。"
   "MakeCsr.SubjectMissing" = "未指定 Subject。请提供 -Subject，或完整指定 -C/-ST/-L/-O。"
   "MakeCsr.OutExistsNoOverwrite" = "输出目录已存在同名文件（防止覆盖）: {0}`n如需重新生成请指定 -Overwrite。"
@@ -115,7 +115,7 @@
   "MakeCsr.DoneCsr" = "[成功] CSR : {0}"
   "MakeCsr.PreviewTitle" = "[信息] CSR 预览（Subject / SAN）"
 
-  # show_all_modulus.ps1
+  # Export-CertificateModulus.ps1
   "ShowModulus.Title" = "========== 证书/私钥 Modulus 列表 =========="
   "ShowModulus.CreatedAt" = "生成时间: {0}"
   "ShowModulus.SectionCert" = "证书 (.cer, .crt, .pem)"
@@ -131,7 +131,7 @@
   "ShowModulus.ConsoleTitle" = "[成功] 概要"
   "ShowModulus.SavedTo" = "保存到: {0}"
 
-  # verify_certificate_key_match.ps1
+  # Test-CertificateKeyMatch.ps1
   "VerifyMatch.ReportTitle" = "证书/私钥/CSR 一致性验证报告"
   "VerifyMatch.CreatedAt" = "生成时间: {0}"
   "VerifyMatch.Separator" = "=============================================="
@@ -177,7 +177,7 @@
   "VerifyMatch.SavedTo" = "保存到: {0}"
   "VerifyMatch.ReportSavedTo" = "报告保存到: {0}"
 
-  # renew_from_old.ps1
+  # New-CertificateSigningRequestFromOld.ps1
   "Renew.MenuTitle" = "发现多个机构，请选择要处理的机构。"
   "Renew.MenuHint" = "（例: 1 或 1,3 / all / q）"
   "Renew.MenuPrompt" = "选择"
@@ -219,7 +219,7 @@
   "Common.NoCertFiles" = "[信息] 未找到证书文件(.cer/.crt/.pem)（将不执行中间证书合并检查）"
   "Common.ErrorNg" = "[失败] {0}"
 
-  # verify_certificate_key_match.ps1 detail sections
+  # Test-CertificateKeyMatch.ps1 detail sections
   "VerifyMatch.Detail.CertInfo" = "--- 证书信息 ---"
   "VerifyMatch.Detail.KeyInfo" = "--- 私钥信息 ---"
   "VerifyMatch.Detail.CsrInfo" = "--- CSR 信息 ---"
