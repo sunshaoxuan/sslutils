@@ -85,7 +85,7 @@ try {
 } catch { }
 
 $i18nModule = Join-Path $PSScriptRoot "lib\\i18n.ps1"
-if (-not (Test-Path -LiteralPath $i18nModule -PathType Leaf)) { throw "i18n モジュールが見つかりません: $i18nModule" }
+if (-not (Test-Path -LiteralPath $i18nModule -PathType Leaf)) { throw (T "Common.I18nModuleNotFound" @($i18nModule)) }
 . $i18nModule
 $__i18n = Initialize-I18n -Lang $Lang -BaseDir $PSScriptRoot
 function T([string]$Key, [object[]]$FormatArgs = @()) { return Get-I18nText -I18n $__i18n -Key $Key -FormatArgs $FormatArgs }
@@ -122,7 +122,7 @@ function Format-AutoModeStatus([bool]$isEncrypted, [string[]]$passphrases) {
 
 function Assert-ExistsFile([string]$p, [string]$label) {
   if (-not (Test-Path -LiteralPath $p -PathType Leaf)) {
-    throw "$label が見つかりません: $p"
+    throw (T "Common.FileNotFound" @($label, $p))
   }
 }
 
@@ -450,7 +450,7 @@ function Show-OneFile {
       if (-not [string]::IsNullOrWhiteSpace($sum.ExternalIntermediates)) {
         Write-Host ("[{0}] 外部中間証明書（候補）: {1}" -f (T "Label.Cert"), (($sum.ExternalIntermediates -split ";" | Select-Object -Unique -First 5) -join "; "))
       }
-      if ($sum.HasPrivateKey) { Write-Host "[警告] 証明書ファイル内に秘密鍵らしきブロックが含まれています" }
+      if ($sum.HasPrivateKey) { Write-Host (T "CheckBasic.Detail.Cert.HasPrivateKey") }
       Run-OpenSsl @("x509","-in",$FilePath,"-noout","-subject","-issuer","-dates") | Write-Output
       break
     }
@@ -462,9 +462,9 @@ function Show-OneFile {
       Write-Host ("[証明書] 最終利用: {0}" -f $sum.FinalUse)
       if (-not [string]::IsNullOrWhiteSpace($sum.ExternalIntermediates)) {
         Write-Host ("[証明書] 外部中間証明書（候補）: {0}" -f ($sum.ExternalIntermediates -split ";" | ForEach-Object { Join-Path $PSScriptRoot $_ } | Select-Object -Unique -First 5 -Skip 0) -join "; ")
-        Write-Host "[証明書] 補足: 中間証明書は同梱されていません。必要なら merge_certificate.ps1 等で結合してください。"
+        Write-Host (T "CheckBasic.Detail.Cert.NoChainHint")
       }
-      if ($sum.HasPrivateKey) { Write-Host "[警告] 証明書ファイル内に秘密鍵らしきブロックが含まれています" }
+      if ($sum.HasPrivateKey) { Write-Host (T "CheckBasic.Detail.Cert.HasPrivateKey") }
       Run-OpenSsl @("x509","-in",$FilePath,"-noout","-subject","-issuer","-dates") | Write-Output
       break
     }
@@ -476,9 +476,9 @@ function Show-OneFile {
       Write-Host ("[証明書] 最終利用: {0}" -f $sum.FinalUse)
       if (-not [string]::IsNullOrWhiteSpace($sum.ExternalIntermediates)) {
         Write-Host ("[証明書] 外部中間証明書（候補）: {0}" -f ($sum.ExternalIntermediates -split ";" | ForEach-Object { Join-Path $PSScriptRoot $_ } | Select-Object -Unique -First 5 -Skip 0) -join "; ")
-        Write-Host "[証明書] 補足: 中間証明書は同梱されていません。必要なら merge_certificate.ps1 等で結合してください。"
+        Write-Host (T "CheckBasic.Detail.Cert.NoChainHint")
       }
-      if ($sum.HasPrivateKey) { Write-Host "[警告] 証明書ファイル内に秘密鍵らしきブロックが含まれています" }
+      if ($sum.HasPrivateKey) { Write-Host (T "CheckBasic.Detail.Cert.HasPrivateKey") }
       Run-OpenSsl @("x509","-in",$FilePath,"-noout","-subject","-issuer","-dates") | Write-Output
       break
     }

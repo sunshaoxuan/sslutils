@@ -11,6 +11,8 @@
   "Common.OpenSslCmdFailed" = "OpenSSL 命令失败: {0}`n{1}"
   "Common.Exists" = "存在"
   "Common.NotExists" = "不存在"
+  "Common.I18nModuleNotFound" = "找不到 i18n 模块: {0}"
+  "Common.DirNotFound" = "{0} 不存在: {1}"
 
   # Common labels
   "Label.Old" = "旧"
@@ -59,6 +61,8 @@
   "CheckBasic.Detail.Key.CannotReadNeedPass" = "[警告] 加密私钥无法读取（请准备 {0} 或 -PassFile / 环境变量 PASS_FILE）"
   "CheckBasic.Detail.Key.CannotRead" = "[警告] 无法读取私钥"
   "CheckBasic.Detail.UnsupportedExt" = "不支持的扩展名: {0}"
+  "CheckBasic.Detail.Cert.HasPrivateKey" = "[警告] 证书文件内包含疑似私钥块"
+  "CheckBasic.Detail.Cert.NoChainHint" = "[证书] 备注: 未包含中间证书。如需合并请使用 merge_certificate.ps1 等。"
 
   # merge_certificate.ps1
   "MergeCert.TitleSingle" = "========== 证书链合并工具 =========="
@@ -79,6 +83,7 @@
   "MergeCert.NoIntermediateMatched" = "自动选择中间证书失败（issuer 与 candidate subject 不匹配）。为避免误合并已中止。`nissuer={0}`n候选:`n{1}"
   "MergeCert.OneCandidateButNoVerify" = "存在 1 个中间证书候选，但无法验证 issuer/subject 一致性，拒绝自动选择。请明确指定 -IntermediateCert: {0}"
   "MergeCert.MultiCandidatesNeedSpecify" = "未指定中间证书且候选有多个。为避免误合并，请指定 -IntermediateCert。`n{0}"
+  "MergeCert.RootDirNotFound" = "RootDir 不存在: {0}"
 
   # decrypt_key.ps1
   "DecryptKey.PathNotFound" = "路径不存在: {0}"

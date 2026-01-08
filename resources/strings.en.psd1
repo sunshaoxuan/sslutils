@@ -11,6 +11,8 @@
   "Common.OpenSslCmdFailed" = "OpenSSL command failed: {0}`n{1}"
   "Common.Exists" = "exists"
   "Common.NotExists" = "missing"
+  "Common.I18nModuleNotFound" = "i18n module not found: {0}"
+  "Common.DirNotFound" = "{0} not found: {1}"
 
   # Common labels
   "Label.Old" = "old"
@@ -59,6 +61,8 @@
   "CheckBasic.Detail.Key.CannotReadNeedPass" = "[WARN] Cannot read encrypted key (prepare {0} or -PassFile / env PASS_FILE)"
   "CheckBasic.Detail.Key.CannotRead" = "[WARN] Cannot read key"
   "CheckBasic.Detail.UnsupportedExt" = "Unsupported extension: {0}"
+  "CheckBasic.Detail.Cert.HasPrivateKey" = "[WARN] Certificate file contains what appears to be a private key block"
+  "CheckBasic.Detail.Cert.NoChainHint" = "[CERT] Note: Intermediate certificate is not included. Use merge_certificate.ps1 if needed."
 
   # merge_certificate.ps1
   "MergeCert.TitleSingle" = "========== Certificate chain merge tool =========="
@@ -79,6 +83,7 @@
   "MergeCert.NoIntermediateMatched" = "Auto-selection failed (no candidate subject matches issuer). Aborting to avoid wrong merge.`nissuer={0}`nCandidates:`n{1}"
   "MergeCert.OneCandidateButNoVerify" = "One intermediate candidate exists but issuer/subject verification is not possible; refusing auto-selection. Specify -IntermediateCert: {0}"
   "MergeCert.MultiCandidatesNeedSpecify" = "Intermediate cert not specified and multiple candidates exist. To avoid wrong merge, specify -IntermediateCert.`n{0}"
+  "MergeCert.RootDirNotFound" = "RootDir not found: {0}"
 
   # decrypt_key.ps1
   "DecryptKey.PathNotFound" = "Path not found: {0}"

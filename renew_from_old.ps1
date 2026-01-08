@@ -121,7 +121,7 @@ if ([string]::IsNullOrWhiteSpace($OldDir)) { $OldDir = Join-Path $PSScriptRoot "
 if ([string]::IsNullOrWhiteSpace($NewDir)) { $NewDir = Join-Path $PSScriptRoot "new" }
 
 $i18nModule = Join-Path $PSScriptRoot "lib\\i18n.ps1"
-if (-not (Test-Path -LiteralPath $i18nModule -PathType Leaf)) { throw "i18n モジュールが見つかりません: $i18nModule" }
+if (-not (Test-Path -LiteralPath $i18nModule -PathType Leaf)) { throw (T "Common.I18nModuleNotFound" @($i18nModule)) }
 . $i18nModule
 $__i18n = Initialize-I18n -Lang $Lang -BaseDir $PSScriptRoot
 function T([string]$Key, [object[]]$FormatArgs = @()) { return Get-I18nText -I18n $__i18n -Key $Key -FormatArgs $FormatArgs }

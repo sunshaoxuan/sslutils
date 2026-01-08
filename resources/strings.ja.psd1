@@ -11,6 +11,8 @@
   "Common.OpenSslCmdFailed" = "OpenSSL コマンド失敗: {0}`n{1}"
   "Common.Exists" = "存在"
   "Common.NotExists" = "未存在"
+  "Common.I18nModuleNotFound" = "i18n モジュールが見つかりません: {0}"
+  "Common.DirNotFound" = "{0} が見つかりません: {1}"
 
   # Common labels
   "Label.Old" = "旧"
@@ -79,6 +81,7 @@
   "MergeCert.NoIntermediateMatched" = "中間証明書の自動選択に失敗しました（issuer と一致する subject がありません）。誤結合防止のため結合を中止します。`nissuer={0}`n候補:`n{1}"
   "MergeCert.OneCandidateButNoVerify" = "中間証明書は 1 件ありますが、issuer/subject の一致確認ができないため自動選択しません。-IntermediateCert を明示指定してください: {0}"
   "MergeCert.MultiCandidatesNeedSpecify" = "中間証明書が未指定で、候補が複数あります。誤結合防止のため -IntermediateCert を指定してください。`n{0}"
+  "MergeCert.RootDirNotFound" = "RootDir が見つかりません: {0}"
 
   # decrypt_key.ps1
   "DecryptKey.PathNotFound" = "Path が見つかりません: {0}"

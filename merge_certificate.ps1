@@ -102,7 +102,7 @@ try {
 } catch { }
 
 $i18nModule = Join-Path $PSScriptRoot "lib\\i18n.ps1"
-if (-not (Test-Path -LiteralPath $i18nModule -PathType Leaf)) { throw "i18n モジュールが見つかりません: $i18nModule" }
+if (-not (Test-Path -LiteralPath $i18nModule -PathType Leaf)) { throw (T "Common.I18nModuleNotFound" @($i18nModule)) }
 . $i18nModule
 $__i18n = Initialize-I18n -Lang $Lang -BaseDir $PSScriptRoot
 function T([string]$Key, [object[]]$FormatArgs = @()) { return Get-I18nText -I18n $__i18n -Key $Key -FormatArgs $FormatArgs }
@@ -153,7 +153,7 @@ if (-not [string]::IsNullOrWhiteSpace($IntermediateCert)) { Assert-ExistsFile $I
 Ensure-Dir $OutDir
 
 if ([string]::IsNullOrWhiteSpace($RootDir)) { $RootDir = $PSScriptRoot }
-if (-not (Test-Path -LiteralPath $RootDir -PathType Container)) { throw "RootDir が見つかりません: $RootDir" }
+if (-not (Test-Path -LiteralPath $RootDir -PathType Container)) { throw (T "MergeCert.RootDirNotFound" @($RootDir)) }
 
 function Resolve-RelPath([string]$baseDir, [string]$fullPath) {
   $base = (Resolve-Path -LiteralPath $baseDir).Path.TrimEnd('\','/')
