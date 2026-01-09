@@ -743,10 +743,11 @@ function Show-Folder([string]$folderPath, [string]$label, [string]$oldRootForNew
           elseif ($finalCode -eq "SINGLE_CERT") { Write-Tag $finalText "Red" }
           else { Write-Tag $finalText "DarkYellow" }
           if (-not [string]::IsNullOrWhiteSpace($exti)) {
+            # 厳密一致の候補がある → 使える中間証明書
             $first = ($exti -split ";" | Select-Object -First 1)
-            if (-not [string]::IsNullOrWhiteSpace($first)) { Write-Tag (T "CheckBasic.Cert.Candidate" @($first)) "DarkYellow" }
+            if (-not [string]::IsNullOrWhiteSpace($first)) { Write-Tag (T "CheckBasic.Cert.Candidate" @($first)) "Green" }
           } elseif ($finalCode -eq "SINGLE_CERT" -and -not [string]::IsNullOrWhiteSpace($issuerCN)) {
-            # 候補がないが中間証明書が必要な場合、発行機関を表示
+            # 候補がないが中間証明書が必要な場合、発行機関を表示（この機関の中間証明書が必要）
             Write-Tag (T "CheckBasic.Cert.Issuer" @($issuerCN)) "Magenta"
           }
         }
