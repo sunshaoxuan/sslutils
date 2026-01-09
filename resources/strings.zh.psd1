@@ -33,6 +33,7 @@
   "CheckBasic.Cert.NotMerged" = "未合并"
   "CheckBasic.Cert.NeedMerge" = "需合并"
   "CheckBasic.Cert.Candidate" = "候选:{0}"
+  "CheckBasic.Cert.Issuer" = "发证机构:{0}"
   "CheckBasic.Cert.HasChain" = "已含中间证书"
   "CheckBasic.Cert.UsableGuess" = "可用(推测)"
   "CheckBasic.Cert.Unk" = "未知"

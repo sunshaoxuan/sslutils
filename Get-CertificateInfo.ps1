@@ -218,15 +218,21 @@ function Get-CertChainSummary([string]$certPath) {
       FinalUse = "UNKNOWN_PKCS7"
       ExternalIntermediates = ""
       HasPrivateKey = $info.HasPrivateKey
+      Issuer = ""
+      IssuerCN = ""
     }
   }
 
   if ($info.Format -eq "PEM") {
     $hasChain = ($info.CertBlocks -ge 2)
     $extIntermediates = @()
+    $issuer = ""
+    $issuerCN = ""
     if (-not $hasChain) {
       # issuer と subject が一致する中間証明書だけを候補として表示（張冠李戴防止）
       $issuer = Get-IssuerRfc2253FromCert $certPath
+      # issuer から CN を抽出（例: CN=GlobalSign GCC R6 AlphaSSL CA 2023,O=... → GlobalSign GCC R6 AlphaSSL CA 2023）
+      if ($issuer -match "(?:^|,)CN=([^,]+)") { $issuerCN = $matches[1].Trim() }
       $all = @(Find-IntermediateCertFiles)
       if (-not [string]::IsNullOrWhiteSpace($issuer) -and $all.Count -gt 0) {
         foreach ($cand in $all) {
@@ -244,6 +250,8 @@ function Get-CertChainSummary([string]$certPath) {
       FinalUse = if ($hasChain) { "FULLCHAIN_GUESS" } else { "SINGLE_CERT" }
       ExternalIntermediates = $extText
       HasPrivateKey = $info.HasPrivateKey
+      Issuer = $issuer
+      IssuerCN = $issuerCN
     }
   }
 
@@ -255,6 +263,8 @@ function Get-CertChainSummary([string]$certPath) {
     FinalUse = "UNKNOWN_DER"
     ExternalIntermediates = ""
     HasPrivateKey = $false
+    Issuer = ""
+    IssuerCN = ""
   }
 }
 
@@ -640,6 +650,7 @@ function Show-Folder([string]$folderPath, [string]$label, [string]$oldRootForNew
           ExtIntermediate = $sum.ExternalIntermediates
           FinalUse = Format-FinalUse $sum.FinalUse
           FinalUseCode = $sum.FinalUse
+          IssuerCN = $sum.IssuerCN
         }) | Out-Null
         continue
       }
@@ -721,6 +732,7 @@ function Show-Folder([string]$folderPath, [string]$label, [string]$oldRootForNew
         $finalCode = [string]$r.FinalUseCode
         $exti = [string]$r.ExtIntermediate
         $notAfter = [string]$r.NotAfter
+        $issuerCN = [string]$r.IssuerCN
         Write-TreeLine 4 $r.File {
           if (-not [string]::IsNullOrWhiteSpace($notAfter)) { Write-Tag (T "CheckBasic.Cert.Expiry" @($notAfter)) "Cyan" }
           if ($chainBool -is [bool] -and $chainBool) { Write-Tag (T "CheckBasic.Cert.HasChain") "Green" }
@@ -733,6 +745,9 @@ function Show-Folder([string]$folderPath, [string]$label, [string]$oldRootForNew
           if (-not [string]::IsNullOrWhiteSpace($exti)) {
             $first = ($exti -split ";" | Select-Object -First 1)
             if (-not [string]::IsNullOrWhiteSpace($first)) { Write-Tag (T "CheckBasic.Cert.Candidate" @($first)) "DarkYellow" }
+          } elseif ($finalCode -eq "SINGLE_CERT" -and -not [string]::IsNullOrWhiteSpace($issuerCN)) {
+            # 候補がないが中間証明書が必要な場合、発行機関を表示
+            Write-Tag (T "CheckBasic.Cert.Issuer" @($issuerCN)) "Magenta"
           }
         }
       }

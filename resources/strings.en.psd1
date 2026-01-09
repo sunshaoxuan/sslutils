@@ -33,6 +33,7 @@
   "CheckBasic.Cert.NotMerged" = "not merged"
   "CheckBasic.Cert.NeedMerge" = "merge needed"
   "CheckBasic.Cert.Candidate" = "candidate:{0}"
+  "CheckBasic.Cert.Issuer" = "issuer:{0}"
   "CheckBasic.Cert.HasChain" = "chain included"
   "CheckBasic.Cert.UsableGuess" = "usable (guess)"
   "CheckBasic.Cert.Unk" = "unknown"
