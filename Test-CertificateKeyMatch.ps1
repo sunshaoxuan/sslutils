@@ -220,17 +220,15 @@ function Get-SubjectFromCsr([string]$path) {
   return ($out | Select-Object -First 1)
 }
 
-function Find-SetFiles([string]$dir) {
-  $cert = Get-ChildItem -LiteralPath $dir -File -Include server.cer,server.crt -ErrorAction SilentlyContinue | Select-Object -First 1
-  if (-not $cert) { $cert = Get-ChildItem -LiteralPath $dir -File -Include *.cer,*.crt -ErrorAction SilentlyContinue | Select-Object -First 1 }
-  $key  = Get-ChildItem -LiteralPath $dir -File -Include server.key -ErrorAction SilentlyContinue | Select-Object -First 1
-  if (-not $key)  { $key  = Get-ChildItem -LiteralPath $dir -File -Include *.key -ErrorAction SilentlyContinue | Select-Object -First 1 }
-  $csr  = Get-ChildItem -LiteralPath $dir -File -Include server.csr -ErrorAction SilentlyContinue | Select-Object -First 1
-  if (-not $csr)  { $csr  = Get-ChildItem -LiteralPath $dir -File -Include *.csr -ErrorAction SilentlyContinue | Select-Object -First 1 }
+function Find-AllSetFiles([string]$dir) {
+  # 全ての証明書/鍵/CSR を検出（複数対応）
+  $certs = @(Get-ChildItem -LiteralPath $dir -File -Include *.cer,*.crt,*.pem -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch "^(nii|gs|globalsign)" })
+  $keys  = @(Get-ChildItem -LiteralPath $dir -File -Include *.key -ErrorAction SilentlyContinue)
+  $csrs  = @(Get-ChildItem -LiteralPath $dir -File -Include *.csr -ErrorAction SilentlyContinue)
   return [PSCustomObject]@{
-    Cert = if ($cert) { $cert.FullName } else { "" }
-    Key  = if ($key)  { $key.FullName } else { "" }
-    Csr  = if ($csr)  { $csr.FullName } else { "" }
+    Certs = @($certs | ForEach-Object { $_.FullName })
+    Keys  = @($keys  | ForEach-Object { $_.FullName })
+    Csrs  = @($csrs  | ForEach-Object { $_.FullName })
   }
 }
 
@@ -309,132 +307,185 @@ foreach ($t in $targets) {
       $lines.Add((T "VerifyMatch.Separator"))
       $lines.Add("")
 
-      $files = Find-SetFiles $serverPath
-    $certFound = -not [string]::IsNullOrWhiteSpace($files.Cert)
-    $keyFound  = -not [string]::IsNullOrWhiteSpace($files.Key)
-    $csrFound  = -not [string]::IsNullOrWhiteSpace($files.Csr)
+      $files = Find-AllSetFiles $serverPath
+      $certCount = $files.Certs.Count
+      $keyCount  = $files.Keys.Count
+      $csrCount  = $files.Csrs.Count
 
-    $certPathLabel = if ($certFound) { $files.Cert } else { (T "CheckBasic.None") }
-      $keyPathLabel  = if ($keyFound)  { $files.Key  } else { (T "CheckBasic.None") }
-      $csrPathLabel  = if ($csrFound)  { $files.Csr  } else { (T "CheckBasic.None") }
-
-    $lines.Add((T "VerifyMatch.DetectedFiles"))
-    $lines.Add((T "VerifyMatch.DetectedCert" @($certPathLabel)))
-    $lines.Add((T "VerifyMatch.DetectedKey" @($keyPathLabel)))
-    $lines.Add((T "VerifyMatch.DetectedCsr" @($csrPathLabel)))
-    $lines.Add("")
-
-    if (-not $certFound) { Write-Host (T "VerifyMatch.ConsoleCertMissing") } else { Write-Host (T "VerifyMatch.ConsoleCertFound") }
-    if (-not $keyFound)  { Write-Host (T "VerifyMatch.ConsoleKeyMissing") } else { Write-Host (T "VerifyMatch.ConsoleKeyFound") }
-    if (-not $csrFound)  { Write-Host (T "VerifyMatch.ConsoleCsrMissing") } else { Write-Host (T "VerifyMatch.ConsoleCsrFound") }
-    Write-Host ""
-
-    $certMod = if ($certFound) { Get-ModulusFromCert $files.Cert } else { $null }
-    $passFilesLocal = @()
-    $passFilesLocal += (Find-PassFile $serverPath)
-    $passFilesLocal += $passFilesToTry
-    # new の暗号化鍵は old 側のパスワードファイルが必要なケースがあるため old 直下/同名機関も候補に入れる
-    $passFilesLocal += (Find-PassFile $OldDir)
-    if ($orgName -ne "(root)") { $passFilesLocal += (Find-PassFile (Join-Path $OldDir $orgName)) }
-    $passphrases = Collect-Passphrases $passFilesLocal
-
-    $keyMod  = if ($keyFound)  { Get-ModulusFromKey  $files.Key  $passphrases } else { $null }
-    $csrMod  = if ($csrFound)  { Get-ModulusFromCsr  $files.Csr  } else { $null }
-
-    if ($certFound) {
-      $certSubject = Get-SubjectFromCert $files.Cert
-      $certSubjectLine = ""
-      if ($null -ne $certSubject) { $certSubjectLine = $certSubject }
-      $certModLine = ""
-      if ($null -ne $certMod) { $certModLine = $certMod }
-      $lines.Add((T "VerifyMatch.Detail.CertInfo"))
-      $lines.Add((T "VerifyMatch.Detail.Subject"))
-      $lines.Add($certSubjectLine)
-      $lines.Add((T "VerifyMatch.Detail.Modulus"))
-      $lines.Add(("Modulus={0}" -f $certModLine))
+      # ファイル一覧を表示（具体的なファイル名を列挙）
+      $lines.Add((T "VerifyMatch.DetectedFiles"))
+      if ($certCount -eq 0) {
+        $lines.Add((T "VerifyMatch.DetectedCert" @((T "CheckBasic.None"))))
+        Write-Host (T "VerifyMatch.ConsoleCertMissing")
+      } else {
+        foreach ($c in $files.Certs) {
+          $lines.Add((T "VerifyMatch.DetectedCert" @([IO.Path]::GetFileName($c))))
+        }
+        Write-Host ("  " + (T "Label.Cert") + ": " + ($files.Certs | ForEach-Object { [IO.Path]::GetFileName($_) }) -join ", ")
+      }
+      if ($keyCount -eq 0) {
+        $lines.Add((T "VerifyMatch.DetectedKey" @((T "CheckBasic.None"))))
+        Write-Host (T "VerifyMatch.ConsoleKeyMissing")
+      } else {
+        foreach ($k in $files.Keys) {
+          $lines.Add((T "VerifyMatch.DetectedKey" @([IO.Path]::GetFileName($k))))
+        }
+        Write-Host ("  " + (T "Label.Key") + ": " + ($files.Keys | ForEach-Object { [IO.Path]::GetFileName($_) }) -join ", ")
+      }
+      if ($csrCount -eq 0) {
+        $lines.Add((T "VerifyMatch.DetectedCsr" @((T "CheckBasic.None"))))
+        Write-Host (T "VerifyMatch.ConsoleCsrMissing")
+      } else {
+        foreach ($s in $files.Csrs) {
+          $lines.Add((T "VerifyMatch.DetectedCsr" @([IO.Path]::GetFileName($s))))
+        }
+        Write-Host ("  " + (T "Label.Csr") + ": " + ($files.Csrs | ForEach-Object { [IO.Path]::GetFileName($_) }) -join ", ")
+      }
       $lines.Add("")
-    }
+      Write-Host ""
 
-    if ($keyFound) {
-      $keyModLine = ""
-      if ($null -ne $keyMod) { $keyModLine = $keyMod }
-      $lines.Add((T "VerifyMatch.Detail.KeyInfo"))
-      $lines.Add((T "VerifyMatch.Detail.Modulus"))
-      $lines.Add(("Modulus={0}" -f $keyModLine))
-      $lines.Add("")
-    }
+      # パスワード収集
+      $passFilesLocal = @()
+      $passFilesLocal += (Find-PassFile $serverPath)
+      $passFilesLocal += $passFilesToTry
+      $passFilesLocal += (Find-PassFile $OldDir)
+      if ($orgName -ne "(root)") { $passFilesLocal += (Find-PassFile (Join-Path $OldDir $orgName)) }
+      $passphrases = Collect-Passphrases $passFilesLocal
 
-    if ($csrFound) {
-      $csrSubject = Get-SubjectFromCsr $files.Csr
-      $csrSubjectLine = ""
-      if ($null -ne $csrSubject) { $csrSubjectLine = $csrSubject }
-      $csrModLine = ""
-      if ($null -ne $csrMod) { $csrModLine = $csrMod }
-      $lines.Add((T "VerifyMatch.Detail.CsrInfo"))
-      $lines.Add((T "VerifyMatch.Detail.Subject"))
-      $lines.Add($csrSubjectLine)
-      $lines.Add((T "VerifyMatch.Detail.Modulus"))
-      $lines.Add(("Modulus={0}" -f $csrModLine))
-      $lines.Add("")
-    }
+      # 全ファイルの Modulus を取得してマップ化
+      $certModMap = @{}
+      foreach ($c in $files.Certs) {
+        $fn = [IO.Path]::GetFileName($c)
+        $mod = Get-ModulusFromCert $c
+        $subj = Get-SubjectFromCert $c
+        $certModMap[$fn] = [PSCustomObject]@{ Path=$c; Modulus=$mod; Subject=$subj }
+      }
+      $keyModMap = @{}
+      foreach ($k in $files.Keys) {
+        $fn = [IO.Path]::GetFileName($k)
+        $mod = Get-ModulusFromKey $k $passphrases
+        $keyModMap[$fn] = [PSCustomObject]@{ Path=$k; Modulus=$mod }
+      }
+      $csrModMap = @{}
+      foreach ($s in $files.Csrs) {
+        $fn = [IO.Path]::GetFileName($s)
+        $mod = Get-ModulusFromCsr $s
+        $subj = Get-SubjectFromCsr $s
+        $csrModMap[$fn] = [PSCustomObject]@{ Path=$s; Modulus=$mod; Subject=$subj }
+      }
 
-    $ok = $true
-    $comparisons = 0
-    $lines.Add((T "VerifyMatch.Judgement"))
+      # 詳細情報を出力
+      foreach ($fn in ($certModMap.Keys | Sort-Object)) {
+        $info = $certModMap[$fn]
+        $lines.Add((T "VerifyMatch.Detail.CertInfo") + " " + $fn)
+        $lines.Add((T "VerifyMatch.Detail.Subject"))
+        $lines.Add($(if ($info.Subject) { $info.Subject } else { "" }))
+        $lines.Add((T "VerifyMatch.Detail.Modulus"))
+        $lines.Add(("Modulus={0}" -f $(if ($info.Modulus) { $info.Modulus } else { "" })))
+        $lines.Add("")
+      }
+      foreach ($fn in ($keyModMap.Keys | Sort-Object)) {
+        $info = $keyModMap[$fn]
+        $lines.Add((T "VerifyMatch.Detail.KeyInfo") + " " + $fn)
+        $lines.Add((T "VerifyMatch.Detail.Modulus"))
+        $lines.Add(("Modulus={0}" -f $(if ($info.Modulus) { $info.Modulus } else { "" })))
+        $lines.Add("")
+      }
+      foreach ($fn in ($csrModMap.Keys | Sort-Object)) {
+        $info = $csrModMap[$fn]
+        $lines.Add((T "VerifyMatch.Detail.CsrInfo") + " " + $fn)
+        $lines.Add((T "VerifyMatch.Detail.Subject"))
+        $lines.Add($(if ($info.Subject) { $info.Subject } else { "" }))
+        $lines.Add((T "VerifyMatch.Detail.Modulus"))
+        $lines.Add(("Modulus={0}" -f $(if ($info.Modulus) { $info.Modulus } else { "" })))
+        $lines.Add("")
+      }
 
-    if (-not $certFound -and -not $keyFound -and -not $csrFound) {
-      $lines.Add((T "VerifyMatch.NoFiles"))
-      $ok = $false
-    } else {
-      if ($certFound -and $keyFound) {
-        $comparisons++
-        if ($certMod -and $keyMod -and ($certMod -eq $keyMod)) {
-          $lines.Add((T "VerifyMatch.MatchCertKey"))
-          Write-Host (T "VerifyMatch.ConsoleMatchCertKey")
-        } else {
-          $lines.Add((T "VerifyMatch.MismatchCertKey"))
-          Write-Host (T "VerifyMatch.ConsoleMismatchCertKey")
-          $ok = $false
+      # 判定：交差比較（全ての組み合わせ）
+      $ok = $true
+      $comparisons = 0
+      $lines.Add((T "VerifyMatch.Judgement"))
+
+      if ($certCount -eq 0 -and $keyCount -eq 0 -and $csrCount -eq 0) {
+        $lines.Add((T "VerifyMatch.NoFiles"))
+        $ok = $false
+      } else {
+        # Cert <-> Key の比較（全組み合わせ）
+        if ($certCount -gt 0 -and $keyCount -gt 0) {
+          foreach ($certFn in ($certModMap.Keys | Sort-Object)) {
+            $certInfo = $certModMap[$certFn]
+            foreach ($keyFn in ($keyModMap.Keys | Sort-Object)) {
+              $keyInfo = $keyModMap[$keyFn]
+              $comparisons++
+              if ($certInfo.Modulus -and $keyInfo.Modulus -and ($certInfo.Modulus -eq $keyInfo.Modulus)) {
+                $msg = (T "VerifyMatch.MatchCertKeyDetail" @($certFn, $keyFn))
+                $lines.Add($msg)
+                Write-Host -ForegroundColor Green ("  [OK] {0} <-> {1}" -f $certFn, $keyFn)
+              } else {
+                $msg = (T "VerifyMatch.MismatchCertKeyDetail" @($certFn, $keyFn))
+                $lines.Add($msg)
+                Write-Host -ForegroundColor Red ("  [NG] {0} <-> {1}" -f $certFn, $keyFn)
+                $ok = $false
+              }
+            }
+          }
+        }
+        # Cert <-> CSR の比較（全組み合わせ）
+        if ($certCount -gt 0 -and $csrCount -gt 0) {
+          foreach ($certFn in ($certModMap.Keys | Sort-Object)) {
+            $certInfo = $certModMap[$certFn]
+            foreach ($csrFn in ($csrModMap.Keys | Sort-Object)) {
+              $csrInfo = $csrModMap[$csrFn]
+              $comparisons++
+              if ($certInfo.Modulus -and $csrInfo.Modulus -and ($certInfo.Modulus -eq $csrInfo.Modulus)) {
+                $msg = (T "VerifyMatch.MatchCertCsrDetail" @($certFn, $csrFn))
+                $lines.Add($msg)
+                Write-Host -ForegroundColor Green ("  [OK] {0} <-> {1}" -f $certFn, $csrFn)
+              } else {
+                $msg = (T "VerifyMatch.MismatchCertCsrDetail" @($certFn, $csrFn))
+                $lines.Add($msg)
+                Write-Host -ForegroundColor Red ("  [NG] {0} <-> {1}" -f $certFn, $csrFn)
+                $ok = $false
+              }
+            }
+          }
+        }
+        # Key <-> CSR の比較（全組み合わせ）
+        if ($keyCount -gt 0 -and $csrCount -gt 0) {
+          foreach ($keyFn in ($keyModMap.Keys | Sort-Object)) {
+            $keyInfo = $keyModMap[$keyFn]
+            foreach ($csrFn in ($csrModMap.Keys | Sort-Object)) {
+              $csrInfo = $csrModMap[$csrFn]
+              $comparisons++
+              if ($keyInfo.Modulus -and $csrInfo.Modulus -and ($keyInfo.Modulus -eq $csrInfo.Modulus)) {
+                $msg = (T "VerifyMatch.MatchKeyCsrDetail" @($keyFn, $csrFn))
+                $lines.Add($msg)
+                Write-Host -ForegroundColor Green ("  [OK] {0} <-> {1}" -f $keyFn, $csrFn)
+              } else {
+                $msg = (T "VerifyMatch.MismatchKeyCsrDetail" @($keyFn, $csrFn))
+                $lines.Add($msg)
+                Write-Host -ForegroundColor Red ("  [NG] {0} <-> {1}" -f $keyFn, $csrFn)
+                $ok = $false
+              }
+            }
+          }
         }
       }
-      if ($certFound -and $csrFound) {
-        $comparisons++
-        if ($certMod -and $csrMod -and ($certMod -eq $csrMod)) {
-          $lines.Add((T "VerifyMatch.MatchCertCsr"))
-          Write-Host (T "VerifyMatch.ConsoleMatchCertCsr")
-        } else {
-          $lines.Add((T "VerifyMatch.MismatchCertCsr"))
-          Write-Host (T "VerifyMatch.ConsoleMismatchCertCsr")
-          $ok = $false
-        }
-      }
-      if ($keyFound -and $csrFound) {
-        $comparisons++
-        if ($keyMod -and $csrMod -and ($keyMod -eq $csrMod)) {
-          $lines.Add((T "VerifyMatch.MatchKeyCsr"))
-          Write-Host (T "VerifyMatch.ConsoleMatchKeyCsr")
-        } else {
-          $lines.Add((T "VerifyMatch.MismatchKeyCsr"))
-          Write-Host (T "VerifyMatch.ConsoleMismatchKeyCsr")
-          $ok = $false
-        }
-      }
-    }
 
-    if ($comparisons -eq 0) {
-      Write-Host (T "VerifyMatch.ConsoleInsufficient")
-      $lines.Add((T "VerifyMatch.Insufficient"))
-    }
+      if ($comparisons -eq 0) {
+        Write-Host (T "VerifyMatch.ConsoleInsufficient")
+        $lines.Add((T "VerifyMatch.Insufficient"))
+      }
 
-    if ($ok) {
-      $matchCount++
-      Write-Host (T "VerifyMatch.ConsoleFinalOk")
-      $lines.Add((T "VerifyMatch.FinalOk"))
-    } else {
-      $mismatchCount++
-      Write-Host (T "VerifyMatch.ConsoleFinalNg")
-      $lines.Add((T "VerifyMatch.FinalNg"))
-    }
+      if ($ok) {
+        $matchCount++
+        Write-Host (T "VerifyMatch.ConsoleFinalOk")
+        $lines.Add((T "VerifyMatch.FinalOk"))
+      } else {
+        $mismatchCount++
+        Write-Host (T "VerifyMatch.ConsoleFinalNg")
+        $lines.Add((T "VerifyMatch.FinalNg"))
+      }
 
       $lines.Add("")
       Write-Host ""
