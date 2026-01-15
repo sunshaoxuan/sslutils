@@ -313,7 +313,7 @@ foreach ($t in $targets) {
       $csrCount  = $files.Csrs.Count
 
       # ファイル一覧を表示（具体的なファイル名を列挙）
-      $lines.Add((T "VerifyMatch.DetectedFiles"))
+    $lines.Add((T "VerifyMatch.DetectedFiles"))
       if ($certCount -eq 0) {
         $lines.Add((T "VerifyMatch.DetectedCert" @((T "CheckBasic.None"))))
         Write-Host (T "VerifyMatch.ConsoleCertMissing")
@@ -341,16 +341,16 @@ foreach ($t in $targets) {
         }
         Write-Host ("  " + (T "Label.Csr") + ": " + ($files.Csrs | ForEach-Object { [IO.Path]::GetFileName($_) }) -join ", ")
       }
-      $lines.Add("")
-      Write-Host ""
+    $lines.Add("")
+    Write-Host ""
 
       # パスワード収集
-      $passFilesLocal = @()
-      $passFilesLocal += (Find-PassFile $serverPath)
-      $passFilesLocal += $passFilesToTry
-      $passFilesLocal += (Find-PassFile $OldDir)
-      if ($orgName -ne "(root)") { $passFilesLocal += (Find-PassFile (Join-Path $OldDir $orgName)) }
-      $passphrases = Collect-Passphrases $passFilesLocal
+    $passFilesLocal = @()
+    $passFilesLocal += (Find-PassFile $serverPath)
+    $passFilesLocal += $passFilesToTry
+    $passFilesLocal += (Find-PassFile $OldDir)
+    if ($orgName -ne "(root)") { $passFilesLocal += (Find-PassFile (Join-Path $OldDir $orgName)) }
+    $passphrases = Collect-Passphrases $passFilesLocal
 
       # 全ファイルの Modulus を取得してマップ化
       $certModMap = @{}
@@ -378,56 +378,56 @@ foreach ($t in $targets) {
       foreach ($fn in ($certModMap.Keys | Sort-Object)) {
         $info = $certModMap[$fn]
         $lines.Add((T "VerifyMatch.Detail.CertInfo") + " " + $fn)
-        $lines.Add((T "VerifyMatch.Detail.Subject"))
+      $lines.Add((T "VerifyMatch.Detail.Subject"))
         $lines.Add($(if ($info.Subject) { $info.Subject } else { "" }))
-        $lines.Add((T "VerifyMatch.Detail.Modulus"))
+      $lines.Add((T "VerifyMatch.Detail.Modulus"))
         $lines.Add(("Modulus={0}" -f $(if ($info.Modulus) { $info.Modulus } else { "" })))
-        $lines.Add("")
-      }
+      $lines.Add("")
+    }
       foreach ($fn in ($keyModMap.Keys | Sort-Object)) {
         $info = $keyModMap[$fn]
         $lines.Add((T "VerifyMatch.Detail.KeyInfo") + " " + $fn)
-        $lines.Add((T "VerifyMatch.Detail.Modulus"))
+      $lines.Add((T "VerifyMatch.Detail.Modulus"))
         $lines.Add(("Modulus={0}" -f $(if ($info.Modulus) { $info.Modulus } else { "" })))
-        $lines.Add("")
-      }
+      $lines.Add("")
+    }
       foreach ($fn in ($csrModMap.Keys | Sort-Object)) {
         $info = $csrModMap[$fn]
         $lines.Add((T "VerifyMatch.Detail.CsrInfo") + " " + $fn)
-        $lines.Add((T "VerifyMatch.Detail.Subject"))
+      $lines.Add((T "VerifyMatch.Detail.Subject"))
         $lines.Add($(if ($info.Subject) { $info.Subject } else { "" }))
-        $lines.Add((T "VerifyMatch.Detail.Modulus"))
+      $lines.Add((T "VerifyMatch.Detail.Modulus"))
         $lines.Add(("Modulus={0}" -f $(if ($info.Modulus) { $info.Modulus } else { "" })))
-        $lines.Add("")
-      }
+      $lines.Add("")
+    }
 
       # 判定：交差比較（全ての組み合わせ）
-      $ok = $true
-      $comparisons = 0
-      $lines.Add((T "VerifyMatch.Judgement"))
+    $ok = $true
+    $comparisons = 0
+    $lines.Add((T "VerifyMatch.Judgement"))
 
       if ($certCount -eq 0 -and $keyCount -eq 0 -and $csrCount -eq 0) {
-        $lines.Add((T "VerifyMatch.NoFiles"))
-        $ok = $false
-      } else {
+      $lines.Add((T "VerifyMatch.NoFiles"))
+      $ok = $false
+    } else {
         # Cert <-> Key の比較（全組み合わせ）
         if ($certCount -gt 0 -and $keyCount -gt 0) {
           foreach ($certFn in ($certModMap.Keys | Sort-Object)) {
             $certInfo = $certModMap[$certFn]
             foreach ($keyFn in ($keyModMap.Keys | Sort-Object)) {
               $keyInfo = $keyModMap[$keyFn]
-              $comparisons++
+        $comparisons++
               if ($certInfo.Modulus -and $keyInfo.Modulus -and ($certInfo.Modulus -eq $keyInfo.Modulus)) {
                 $msg = (T "VerifyMatch.MatchCertKeyDetail" @($certFn, $keyFn))
                 $lines.Add($msg)
                 Write-Host -ForegroundColor Green ("  [OK] {0} <-> {1}" -f $certFn, $keyFn)
-              } else {
+        } else {
                 $msg = (T "VerifyMatch.MismatchCertKeyDetail" @($certFn, $keyFn))
                 $lines.Add($msg)
                 Write-Host -ForegroundColor Red ("  [NG] {0} <-> {1}" -f $certFn, $keyFn)
-                $ok = $false
-              }
-            }
+          $ok = $false
+        }
+      }
           }
         }
         # Cert <-> CSR の比較（全組み合わせ）
@@ -436,18 +436,18 @@ foreach ($t in $targets) {
             $certInfo = $certModMap[$certFn]
             foreach ($csrFn in ($csrModMap.Keys | Sort-Object)) {
               $csrInfo = $csrModMap[$csrFn]
-              $comparisons++
+        $comparisons++
               if ($certInfo.Modulus -and $csrInfo.Modulus -and ($certInfo.Modulus -eq $csrInfo.Modulus)) {
                 $msg = (T "VerifyMatch.MatchCertCsrDetail" @($certFn, $csrFn))
                 $lines.Add($msg)
                 Write-Host -ForegroundColor Green ("  [OK] {0} <-> {1}" -f $certFn, $csrFn)
-              } else {
+        } else {
                 $msg = (T "VerifyMatch.MismatchCertCsrDetail" @($certFn, $csrFn))
                 $lines.Add($msg)
                 Write-Host -ForegroundColor Red ("  [NG] {0} <-> {1}" -f $certFn, $csrFn)
-                $ok = $false
-              }
-            }
+          $ok = $false
+        }
+      }
           }
         }
         # Key <-> CSR の比較（全組み合わせ）
@@ -456,36 +456,36 @@ foreach ($t in $targets) {
             $keyInfo = $keyModMap[$keyFn]
             foreach ($csrFn in ($csrModMap.Keys | Sort-Object)) {
               $csrInfo = $csrModMap[$csrFn]
-              $comparisons++
+        $comparisons++
               if ($keyInfo.Modulus -and $csrInfo.Modulus -and ($keyInfo.Modulus -eq $csrInfo.Modulus)) {
                 $msg = (T "VerifyMatch.MatchKeyCsrDetail" @($keyFn, $csrFn))
                 $lines.Add($msg)
                 Write-Host -ForegroundColor Green ("  [OK] {0} <-> {1}" -f $keyFn, $csrFn)
-              } else {
+        } else {
                 $msg = (T "VerifyMatch.MismatchKeyCsrDetail" @($keyFn, $csrFn))
                 $lines.Add($msg)
                 Write-Host -ForegroundColor Red ("  [NG] {0} <-> {1}" -f $keyFn, $csrFn)
-                $ok = $false
+          $ok = $false
               }
             }
-          }
         }
       }
+    }
 
-      if ($comparisons -eq 0) {
-        Write-Host (T "VerifyMatch.ConsoleInsufficient")
-        $lines.Add((T "VerifyMatch.Insufficient"))
-      }
+    if ($comparisons -eq 0) {
+      Write-Host (T "VerifyMatch.ConsoleInsufficient")
+      $lines.Add((T "VerifyMatch.Insufficient"))
+    }
 
-      if ($ok) {
-        $matchCount++
-        Write-Host (T "VerifyMatch.ConsoleFinalOk")
-        $lines.Add((T "VerifyMatch.FinalOk"))
-      } else {
-        $mismatchCount++
-        Write-Host (T "VerifyMatch.ConsoleFinalNg")
-        $lines.Add((T "VerifyMatch.FinalNg"))
-      }
+    if ($ok) {
+      $matchCount++
+      Write-Host (T "VerifyMatch.ConsoleFinalOk")
+      $lines.Add((T "VerifyMatch.FinalOk"))
+    } else {
+      $mismatchCount++
+      Write-Host (T "VerifyMatch.ConsoleFinalNg")
+      $lines.Add((T "VerifyMatch.FinalNg"))
+    }
 
       $lines.Add("")
       Write-Host ""
