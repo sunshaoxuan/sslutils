@@ -252,7 +252,10 @@
   "LE.Exporting" = "== 导出证书到宿主机 =="
   "LE.ExportFailedTrying" = "[警告] 导出到 {0} 失败，尝试回退到 {1}..."
   "LE.ExportFailed" = "导出失败: {0} 和 {1} 都无法写入。请检查 Docker Desktop 文件共享/安全软件拦截。"
+  "LE.ExportDirCreateFailed" = "[警告] 导出目录创建失败: {0}。回退到: {1}"
+  "LE.ExportDirFallback" = "[信息] 已更改导出目录: {0}"
   "LE.ExportZeroBytes" = "导出文件为 0 字节（{0}={1}, {2}={3}）。请检查权限/拦截。"
+  "LE.ExportFilesMissing" = "找不到导出的文件: {0} 或 {1}"
   "LE.ExportSuccess" = "[成功] {0} ({1} bytes)"
 
   # Repair-PemFile.ps1

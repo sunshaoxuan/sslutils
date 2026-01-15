@@ -250,7 +250,10 @@
   "LE.Exporting" = "== 証明書をホストへエクスポート =="
   "LE.ExportFailedTrying" = "[警告] {0} へのエクスポートに失敗しました。フォールバック先 {1} を試行中..."
   "LE.ExportFailed" = "エクスポート失敗: {0} と {1} の両方に書き込めません。Docker Desktop のファイル共有設定/セキュリティソフトを確認してください。"
+  "LE.ExportDirCreateFailed" = "[警告] エクスポート先ディレクトリの作成に失敗しました: {0}。フォールバック先: {1}"
+  "LE.ExportDirFallback" = "[情報] エクスポート先を変更しました: {0}"
   "LE.ExportZeroBytes" = "エクスポートされたファイルが 0 バイトです（{0}={1}, {2}={3}）。権限/ブロックを確認してください。"
+  "LE.ExportFilesMissing" = "エクスポートされたファイルが見つかりません: {0} または {1}"
   "LE.ExportSuccess" = "[成功] {0} ({1} bytes)"
 
   # Repair-PemFile.ps1

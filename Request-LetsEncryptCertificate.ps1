@@ -148,11 +148,28 @@ $Logs = Join-Path $Base "logs"
 
 New-Item -ItemType Directory -Force -Path $Challenges, $LetsEncrypt, $Logs | Out-Null
 
-# エクスポート先
+# エクスポート先（存在しない場合は自動作成、失敗時はフォールバック）
 if ([string]::IsNullOrWhiteSpace($ExportDir)) {
   $ExportDir = Join-Path $Base "out"
 }
-New-Item -ItemType Directory -Force -Path $ExportDir | Out-Null
+try {
+  if (-not (Test-Path -LiteralPath $ExportDir -PathType Container)) {
+    New-Item -ItemType Directory -Force -Path $ExportDir -ErrorAction Stop | Out-Null
+  }
+} catch {
+  Write-Host (T "LE.ExportDirCreateFailed" @($ExportDir, $FallbackExportDir)) -ForegroundColor Yellow
+  $ExportDir = $FallbackExportDir
+  try {
+    if (-not (Test-Path -LiteralPath $ExportDir -PathType Container)) {
+      New-Item -ItemType Directory -Force -Path $ExportDir -ErrorAction Stop | Out-Null
+    }
+  } catch {
+    # 最後の手段：カレントディレクトリ
+    $ExportDir = Join-Path (Get-Location).Path "le-export-$(Get-Date -Format 'yyyyMMdd_HHmmss')"
+    New-Item -ItemType Directory -Force -Path $ExportDir -ErrorAction Stop | Out-Null
+    Write-Host (T "LE.ExportDirFallback" @($ExportDir)) -ForegroundColor Yellow
+  }
+}
 
 # hook スクリプト生成（auth.sh / cleanup.sh）
 $authSh = @'
@@ -282,7 +299,7 @@ if ($exitCode -ne 0) {
   # 出力とログからエラーパターンを検出
   $allOutput = ($dockerOutput -join "`n") + "`n" + $errorDetails
 
-  # レート制限エラーの検出
+  # レート制限エラーの検出（例外を投げずに警告のみ）
   if ($allOutput -match "too many certificates.*already issued" -or
       $allOutput -match "rate.*limit" -or
       $allOutput -match "retry after") {
@@ -293,7 +310,9 @@ if ($exitCode -ne 0) {
       Write-Host (T "LE.RateLimitRetryAfter" @($matches[1])) -ForegroundColor Yellow
     }
     Write-Host (T "LE.RateLimitHint") -ForegroundColor Cyan
-    throw (T "LE.RateLimitFailed")
+    Write-Host ""
+    Write-Host (T "LE.RateLimitFailed") -ForegroundColor Yellow
+    exit 1
   }
 
   # その他のエラー
@@ -314,9 +333,36 @@ Write-Host (T "LE.Exporting") -ForegroundColor Cyan
 $rc = Export-CertificateFromContainer $ExportDir $leMount $safeDomain
 if ($rc -ne 0) {
   Write-Host (T "LE.ExportFailedTrying" @($ExportDir, $FallbackExportDir)) -ForegroundColor Yellow
+  # フォールバック先の作成を試行
+  try {
+    if (-not (Test-Path -LiteralPath $FallbackExportDir -PathType Container)) {
+      New-Item -ItemType Directory -Force -Path $FallbackExportDir -ErrorAction Stop | Out-Null
+    }
+  } catch {
+    Write-Host (T "LE.ExportDirCreateFailed" @($FallbackExportDir, "current directory")) -ForegroundColor Yellow
+    $FallbackExportDir = Join-Path (Get-Location).Path "le-export-$(Get-Date -Format 'yyyyMMdd_HHmmss')"
+    New-Item -ItemType Directory -Force -Path $FallbackExportDir -ErrorAction Stop | Out-Null
+    Write-Host (T "LE.ExportDirFallback" @($FallbackExportDir)) -ForegroundColor Yellow
+  }
+  
   $rc2 = Export-CertificateFromContainer $FallbackExportDir $leMount $safeDomain
   if ($rc2 -ne 0) {
-    throw (T "LE.ExportFailed" @($ExportDir, $FallbackExportDir))
+    # 最後の手段：カレントディレクトリ
+    $finalFallback = Join-Path (Get-Location).Path "le-export-$(Get-Date -Format 'yyyyMMdd_HHmmss')"
+    try {
+      New-Item -ItemType Directory -Force -Path $finalFallback -ErrorAction Stop | Out-Null
+      Write-Host (T "LE.ExportFailedTrying" @($FallbackExportDir, $finalFallback)) -ForegroundColor Yellow
+      $rc3 = Export-CertificateFromContainer $finalFallback $leMount $safeDomain
+      if ($rc3 -ne 0) {
+        Write-Host (T "LE.ExportFailed" @($ExportDir, $FallbackExportDir)) -ForegroundColor Red
+        exit 1
+      } else {
+        $ExportDir = $finalFallback
+      }
+    } catch {
+      Write-Host (T "LE.ExportFailed" @($ExportDir, $FallbackExportDir)) -ForegroundColor Red
+      exit 1
+    }
   }
   else {
     $ExportDir = $FallbackExportDir
@@ -327,10 +373,17 @@ if ($rc -ne 0) {
 $fullchain = Join-Path $ExportDir "fullchain.pem"
 $privkey = Join-Path $ExportDir "privkey.pem"
 
+if (-not (Test-Path -LiteralPath $fullchain -PathType Leaf) -or
+    -not (Test-Path -LiteralPath $privkey -PathType Leaf)) {
+  Write-Host (T "LE.ExportFilesMissing" @($fullchain, $privkey)) -ForegroundColor Red
+  exit 1
+}
+
 $len1 = (Get-Item $fullchain).Length
 $len2 = (Get-Item $privkey).Length
 if ($len1 -le 0 -or $len2 -le 0) {
-  throw (T "LE.ExportZeroBytes" @($fullchain, $len1, $privkey, $len2))
+  Write-Host (T "LE.ExportZeroBytes" @($fullchain, $len1, $privkey, $len2)) -ForegroundColor Red
+  exit 1
 }
 
 Write-Host ""

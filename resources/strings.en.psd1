@@ -252,7 +252,10 @@
   "LE.Exporting" = "== Exporting certificate to host =="
   "LE.ExportFailedTrying" = "[WARN] Export to {0} failed, trying fallback {1}..."
   "LE.ExportFailed" = "Export failed: cannot write to {0} or {1}. Check Docker Desktop file sharing/security software."
+  "LE.ExportDirCreateFailed" = "[WARN] Failed to create export directory: {0}. Fallback to: {1}"
+  "LE.ExportDirFallback" = "[INFO] Changed export directory to: {0}"
   "LE.ExportZeroBytes" = "Exported file is 0 bytes ({0}={1}, {2}={3}). Check permissions/blocking."
+  "LE.ExportFilesMissing" = "Exported files not found: {0} or {1}"
   "LE.ExportSuccess" = "[OK] {0} ({1} bytes)"
 
   # Repair-PemFile.ps1
