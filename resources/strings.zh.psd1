@@ -237,6 +237,8 @@
   "LE.CommandNotFound" = "命令未找到: {0}"
   "LE.Ready" = "== 准备就绪 =="
   "LE.Domain" = "域名: {0}"
+  "LE.CleaningWorkDir" = "[信息] 正在删除现有工作目录: {0}"
+  "LE.ReusingWorkDir" = "[信息] 复用现有工作目录: {0}"
   "LE.ChallengeDir" = "本地 challenge 文件目录:"
   "LE.ServerChallengeDir" = "服务器 challenge 目录（提示）:"
   "LE.ExportDir" = "证书导出目录:"

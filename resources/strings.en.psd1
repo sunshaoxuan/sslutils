@@ -237,6 +237,8 @@
   "LE.CommandNotFound" = "Command not found: {0}"
   "LE.Ready" = "== Ready =="
   "LE.Domain" = "Domain: {0}"
+  "LE.CleaningWorkDir" = "[INFO] Cleaning existing work directory: {0}"
+  "LE.ReusingWorkDir" = "[INFO] Reusing existing work directory: {0}"
   "LE.ChallengeDir" = "Local challenge file directory:"
   "LE.ServerChallengeDir" = "Server challenge directory (hint):"
   "LE.ExportDir" = "Certificate export directory:"

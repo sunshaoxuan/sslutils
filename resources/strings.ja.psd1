@@ -235,6 +235,8 @@
   "LE.CommandNotFound" = "コマンドが見つかりません: {0}"
   "LE.Ready" = "== 準備完了 =="
   "LE.Domain" = "ドメイン: {0}"
+  "LE.CleaningWorkDir" = "[情報] 既存の作業ディレクトリを削除中: {0}"
+  "LE.ReusingWorkDir" = "[情報] 既存の作業ディレクトリを再利用: {0}"
   "LE.ChallengeDir" = "ローカル challenge ファイル配置先:"
   "LE.ServerChallengeDir" = "サーバー側 challenge 配置先（ヒント）:"
   "LE.ExportDir" = "証明書エクスポート先:"

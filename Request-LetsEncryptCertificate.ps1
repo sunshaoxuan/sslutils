@@ -31,6 +31,9 @@ Let's Encrypt 登録用メールアドレス（必須）
 .PARAMETER ExportDir
 証明書エクスポート先ディレクトリ
 
+.PARAMETER Clean
+既存の作業ディレクトリを削除して新規作成（既定: false、既存ディレクトリを再利用）
+
 .PARAMETER Lang
 出力言語（既定: ja）
 
@@ -68,6 +71,9 @@ param(
 
   [Parameter(Mandatory = $false)]
   [string]$FallbackExportDir = "C:\le-out",
+
+  [Parameter(Mandatory = $false)]
+  [switch]$Clean,
 
   [Parameter(Mandatory = $false)]
   [ValidateSet("ja", "zh", "en")]
@@ -138,15 +144,36 @@ function Export-CertificateFromContainer([string]$dstDir, [string]$leMount, [str
 
 Assert-CommandExists "docker"
 
-# 作業ディレクトリ構築
-$safeDomain = $Domain.Replace('*', '_')
+# 作業ディレクトリ構築（既存ディレクトリを再利用、-Clean 指定時は削除）
+$safeDomain = $Domain.Replace('*', '_').Replace('\', '_').Replace('/', '_').Replace(':', '_')
 $Base = Join-Path $PSScriptRoot ("le-work-" + $safeDomain)
 $Work = Join-Path $Base "work"
 $Challenges = Join-Path $Work "challenges"
 $LetsEncrypt = Join-Path $Base "letsencrypt"
 $Logs = Join-Path $Base "logs"
 
-New-Item -ItemType Directory -Force -Path $Challenges, $LetsEncrypt, $Logs | Out-Null
+# 既存ディレクトリの処理
+if (Test-Path -LiteralPath $Base -PathType Container) {
+  if ($Clean) {
+    Write-Host (T "LE.CleaningWorkDir" @($Base)) -ForegroundColor Yellow
+    Remove-Item -LiteralPath $Base -Recurse -Force -ErrorAction Stop
+    New-Item -ItemType Directory -Force -Path $Challenges, $LetsEncrypt, $Logs | Out-Null
+  } else {
+    Write-Host (T "LE.ReusingWorkDir" @($Base)) -ForegroundColor Cyan
+    # 既存ディレクトリを再利用（必要なサブディレクトリが無い場合は作成）
+    if (-not (Test-Path -LiteralPath $Challenges -PathType Container)) {
+      New-Item -ItemType Directory -Force -Path $Challenges | Out-Null
+    }
+    if (-not (Test-Path -LiteralPath $LetsEncrypt -PathType Container)) {
+      New-Item -ItemType Directory -Force -Path $LetsEncrypt | Out-Null
+    }
+    if (-not (Test-Path -LiteralPath $Logs -PathType Container)) {
+      New-Item -ItemType Directory -Force -Path $Logs | Out-Null
+    }
+  }
+} else {
+  New-Item -ItemType Directory -Force -Path $Challenges, $LetsEncrypt, $Logs | Out-Null
+}
 
 # エクスポート先（存在しない場合は自動作成、失敗時はフォールバック）
 if ([string]::IsNullOrWhiteSpace($ExportDir)) {
