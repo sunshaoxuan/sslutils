@@ -266,9 +266,45 @@ $cmd = @(
   "-m", $Email
 )
 
-docker @cmd
-if ($LASTEXITCODE -ne 0) {
-  throw (T "LE.CertbotFailed" @($LASTEXITCODE, (Join-Path $Logs "letsencrypt.log")))
+# certbot 実行（出力は標準出力に表示されるが、エラー検出のためログも確認）
+docker @cmd 2>&1 | Tee-Object -Variable dockerOutput
+$exitCode = $LASTEXITCODE
+
+if ($exitCode -ne 0) {
+  # ログファイルからエラー内容を読み取る（可能な場合）
+  $logPath = Join-Path $Logs "letsencrypt.log"
+  $errorDetails = ""
+  if (Test-Path -LiteralPath $logPath -PathType Leaf) {
+    $logContent = Get-Content -LiteralPath $logPath -Tail 50 -ErrorAction SilentlyContinue
+    $errorDetails = ($logContent -join "`n")
+  }
+
+  # 出力とログからエラーパターンを検出
+  $allOutput = ($dockerOutput -join "`n") + "`n" + $errorDetails
+
+  # レート制限エラーの検出
+  if ($allOutput -match "too many certificates.*already issued" -or
+      $allOutput -match "rate.*limit" -or
+      $allOutput -match "retry after") {
+    Write-Host ""
+    Write-Host (T "LE.RateLimitError") -ForegroundColor Yellow
+    Write-Host ""
+    if ($allOutput -match "retry after ([0-9-]+ [0-9:]+ UTC)") {
+      Write-Host (T "LE.RateLimitRetryAfter" @($matches[1])) -ForegroundColor Yellow
+    }
+    Write-Host (T "LE.RateLimitHint") -ForegroundColor Cyan
+    throw (T "LE.RateLimitFailed")
+  }
+
+  # その他のエラー
+  Write-Host ""
+  Write-Host (T "LE.CertbotFailed" @($exitCode, $logPath)) -ForegroundColor Red
+  if (-not [string]::IsNullOrWhiteSpace($errorDetails)) {
+    Write-Host ""
+    Write-Host (T "LE.ErrorLogTail") -ForegroundColor Yellow
+    Write-Host ($logContent -join "`n")
+  }
+  throw (T "LE.CertbotFailed" @($exitCode, $logPath))
 }
 
 # 証明書エクスポート
