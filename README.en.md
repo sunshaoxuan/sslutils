@@ -36,20 +36,16 @@ Show certificate/key/CSR info.
 ```
 
 2) `Merge-CertificateChain.ps1`  
-Generate fullchain or chainfile (Apache chainfile).
+Generate fullchain (server cert + intermediates). Optionally append cross roots.
 ```powershell
 .\Merge-CertificateChain.ps1 -ClientCert .\client.cer -IntermediateCert .\intermediate.cer
-.\Merge-CertificateChain.ps1 -ClientCert .\client.cer -OutputStyle chainfile -IntermediateCert .\intermediate.cer
-.\Merge-CertificateChain.ps1 -ClientCert .\client.cer -OutputStyle chainfile -AutoFetchChain
+
+# fullchain + cross root
+.\Merge-CertificateChain.ps1 -ClientCert .\client.cer -IntermediateCert .\intermediate.cer -RootCert .\cross-root.cer
 ```
 
-## Apache setup (fullchain / chainfile)
-Apache commonly uses two styles:
-- fullchain: `SSLCertificateFile` points to a file that includes “server cert + intermediates”
-- chainfile: `SSLCertificateFile` points to “server cert only” and `SSLCertificateChainFile` points to “intermediate certs (optionally cross roots)”
-
-This tool switches via `-OutputStyle` in `Merge-CertificateChain.ps1`.  
-Browser trust depends on a complete chain, not on which Apache style you choose.
+## Apache setup (fullchain)
+Use a fullchain file (server cert + intermediates, optionally cross roots).
 
 ## Apache / Tomcat examples
 
@@ -57,13 +53,6 @@ Apache (fullchain):
 ```apache
 SSLCertificateFile      /path/to/fullchain.cer
 SSLCertificateKeyFile   /path/to/server.key
-```
-
-Apache (chainfile):
-```apache
-SSLCertificateFile      /path/to/server.cer
-SSLCertificateKeyFile   /path/to/server.key
-SSLCertificateChainFile /path/to/server.chain.cer
 ```
 
 Tomcat (PKCS#12):

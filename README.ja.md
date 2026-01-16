@@ -45,25 +45,17 @@ ssl_maker/
 ```
 
 2) `Merge-CertificateChain.ps1`  
-フルチェーン生成／チェーンファイル分離（Apache chainfile 対応）。
+fullchain を生成します（証明書 + 中間）。必要なら交差ルートを末尾に追加できます。
 ```powershell
 # fullchain（証明書+中間）
 .\Merge-CertificateChain.ps1 -ClientCert .\client.cer -IntermediateCert .\intermediate.cer
 
-# chainfile（証明書単体 + チェーンファイル）
-.\Merge-CertificateChain.ps1 -ClientCert .\client.cer -OutputStyle chainfile -IntermediateCert .\intermediate.cer
-
-# AIA から中間/ルートを自動取得
-.\Merge-CertificateChain.ps1 -ClientCert .\client.cer -OutputStyle chainfile -AutoFetchChain
+# fullchain + 交差ルート
+.\Merge-CertificateChain.ps1 -ClientCert .\client.cer -IntermediateCert .\intermediate.cer -RootCert .\cross-root.cer
 ```
 
-## Apache 設定の旧式/新式（fullchain / chainfile）
-Apache では主に 2 つの配置方法があります。
-- fullchain: `SSLCertificateFile` に「サーバ証明書 + 中間証明書」を結合したファイルを指定
-- chainfile: `SSLCertificateFile` に「サーバ証明書単体」、`SSLCertificateChainFile` に「中間証明書（必要なら交差ルート）」を指定
-
-本ツールでは `Merge-CertificateChain.ps1` の `-OutputStyle` で切り替えできます。  
-Chrome などのブラウザ認識は「チェーンが完全か」に依存するため、証明書単体＋チェーンファイル方式でも問題なく運用可能です。
+## Apache 設定（fullchain）
+Apache では fullchain（証明書 + 中間、必要なら交差ルート）を使用します。
 
 ## Apache / Tomcat の設定例
 
@@ -71,13 +63,6 @@ Apache（fullchain 方式）:
 ```apache
 SSLCertificateFile      /path/to/fullchain.cer
 SSLCertificateKeyFile   /path/to/server.key
-```
-
-Apache（chainfile 方式）:
-```apache
-SSLCertificateFile      /path/to/server.cer
-SSLCertificateKeyFile   /path/to/server.key
-SSLCertificateChainFile /path/to/server.chain.cer
 ```
 
 Tomcat（PKCS#12 方式）:

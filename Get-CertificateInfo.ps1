@@ -407,6 +407,35 @@ function Normalize-Cell([object]$v) {
   return ([string]$v)
 }
 
+function Get-DisplayWidth([string]$s) {
+  if ([string]::IsNullOrEmpty($s)) { return 0 }
+  $w = 0
+  foreach ($ch in $s.ToCharArray()) {
+    $code = [int][char]$ch
+    # Rough CJK wide char detection
+    if (
+      ($code -ge 0x1100 -and $code -le 0x115F) -or
+      ($code -ge 0x2E80 -and $code -le 0xA4CF) -or
+      ($code -ge 0xAC00 -and $code -le 0xD7A3) -or
+      ($code -ge 0xF900 -and $code -le 0xFAFF) -or
+      ($code -ge 0xFE10 -and $code -le 0xFE6F) -or
+      ($code -ge 0xFF00 -and $code -le 0xFFEF)
+    ) {
+      $w += 2
+    } else {
+      $w += 1
+    }
+  }
+  return $w
+}
+
+function Pad-DisplayRight([string]$s, [int]$width) {
+  $text = Normalize-Cell $s
+  $w = Get-DisplayWidth $text
+  if ($w -ge $width) { return $text }
+  return $text + (" " * ($width - $w))
+}
+
 function Write-PrettyTable([string]$title, [object[]]$rows, [string[]]$headers, [string[]]$fields) {
   Write-Host ("---- {0} ----" -f $title)
   if ($rows.Count -eq 0) {
@@ -417,10 +446,11 @@ function Write-PrettyTable([string]$title, [object[]]$rows, [string[]]$headers, 
 
   $widths = @()
   for ($i = 0; $i -lt $headers.Count; $i++) {
-    $w = ($headers[$i]).Length
+    $w = Get-DisplayWidth $headers[$i]
     foreach ($r in $rows) {
       $val = Normalize-Cell ($r | Select-Object -ExpandProperty $fields[$i] -ErrorAction SilentlyContinue)
-      if ($val.Length -gt $w) { $w = $val.Length }
+      $vw = Get-DisplayWidth $val
+      if ($vw -gt $w) { $w = $vw }
     }
     $widths += $w
   }
@@ -440,7 +470,7 @@ function Write-PrettyTable([string]$title, [object[]]$rows, [string[]]$headers, 
 
   $headerCells = @()
   for ($i = 0; $i -lt $headers.Count; $i++) {
-    $headerCells += (" {0} " -f $headers[$i].PadRight($widths[$i]))
+    $headerCells += (" {0} " -f (Pad-DisplayRight $headers[$i] $widths[$i]))
   }
   Write-Host ("|" + ($headerCells -join "|") + "|")
   Write-Host $mid
@@ -449,7 +479,7 @@ function Write-PrettyTable([string]$title, [object[]]$rows, [string[]]$headers, 
     $cells = @()
     for ($i = 0; $i -lt $fields.Count; $i++) {
       $val = Normalize-Cell ($r | Select-Object -ExpandProperty $fields[$i] -ErrorAction SilentlyContinue)
-      $cells += (" {0} " -f $val.PadRight($widths[$i]))
+      $cells += (" {0} " -f (Pad-DisplayRight $val $widths[$i]))
     }
     Write-Host ("|" + ($cells -join "|") + "|")
   }
@@ -907,6 +937,86 @@ function Show-Folder([string]$folderPath, [string]$label, [string]$oldRootForNew
       continue
     }
 
+    $certRows = New-Object System.Collections.Generic.List[object]
+    $csrRows  = New-Object System.Collections.Generic.List[object]
+    $keyRows  = New-Object System.Collections.Generic.List[object]
+    foreach ($f in ($files | Sort-Object FullName)) {
+      $ext = [IO.Path]::GetExtension($f.FullName).ToLowerInvariant()
+      # 機関フォルダからの相対パス（サブフォルダがある場合でも見やすくする）
+      $name = $f.Name
+      try {
+        $full = [string]$f.FullName
+        $base = [string]$orgPath
+        if ($full.StartsWith($base, [System.StringComparison]::OrdinalIgnoreCase)) {
+          $rel = $full.Substring($base.Length).TrimStart('\','/')
+          if (-not [string]::IsNullOrWhiteSpace($rel)) { $name = $rel }
+        }
+      } catch { }
+
+      if ($ext -in @(".cer",".crt",".pem")) {
+        $sum = Get-CertChainSummary $f.FullName
+        $chainPath = Find-ChainFileForCert $f.FullName "" $script:ChainSearchDirs
+        $chainSum = Get-ChainFileSummary $chainPath
+        $notAfter = Get-NotAfterFromCert $f.FullName
+        $chainText = ""
+        if ($sum.HasChain -is [bool]) { $chainText = Format-YesNo $sum.HasChain }
+        $certRows.Add([PSCustomObject]@{
+          File = $name
+          FullPath = $f.FullName
+          Dir = Split-Path -Parent $f.FullName
+          FileName = $f.Name
+          NotAfter = $notAfter
+          Format = Format-CertFormat $sum.Format
+          Blocks = $sum.CertBlocks
+          Chain = $chainText
+          ChainBool = $sum.HasChain
+          ExtIntermediate = $sum.ExternalIntermediates
+          FinalUse = Format-FinalUse $sum.FinalUse
+          FinalUseCode = $sum.FinalUse
+          IssuerCN = $sum.IssuerCN
+          ChainFile = if ($chainSum.Found) { [IO.Path]::GetFileName($chainPath) } else { "" }
+          ChainFileBlocks = if ($chainSum.Found) { $chainSum.CertBlocks } else { "" }
+          ChainFileFormat = if ($chainSum.Found) { Format-CertFormat $chainSum.Format } else { "" }
+        }) | Out-Null
+        continue
+      }
+
+      if ($ext -eq ".csr") {
+        $subj = ""
+        $cn = ""
+        $note = ""
+        try {
+          $out = Run-OpenSsl @("req","-in",$f.FullName,"-noout","-subject")
+          $subj = (($out | Select-Object -First 1) -replace "^subject=","").Trim()
+          if ($subj -match "(?:^|[,/\\s])CN\\s*=\\s*([^,\\/]+)") { $cn = $matches[1].Trim() }
+        } catch { $subj = "" }
+        if (-not [string]::IsNullOrWhiteSpace($cn)) { $note = "CN=$cn" } else { $note = $subj }
+        $csrRows.Add([PSCustomObject]@{
+          File = $name
+          Dir = Split-Path -Parent $f.FullName
+          FileName = $f.Name
+          Subject = $note
+        }) | Out-Null
+        continue
+      }
+
+      if ($ext -eq ".key") {
+        $isEnc = Test-KeyEncrypted $f.FullName
+        $encText = Format-YesNo $isEnc
+        $autoText = Format-AutoModeStatus $isEnc $passphrases
+        $decText = Try-TestKeyReadable $f.FullName $passphrases
+        $keyRows.Add([PSCustomObject]@{
+          File = $name
+          Dir = Split-Path -Parent $f.FullName
+          FileName = $f.Name
+          Encrypted = $encText
+          AutoMode = $autoText
+          DecryptCheck = $decText
+        }) | Out-Null
+        continue
+      }
+    }
+
     if ($PrettyTable) {
       $prettyRows = @()
       foreach ($r in ($certRows | Sort-Object File)) {
@@ -986,86 +1096,6 @@ function Show-Folder([string]$folderPath, [string]$label, [string]$oldRootForNew
         Write-Host "[PASS] 環境変数 PASS_FILE: 未設定"
       }
       Write-Host ""
-    }
-
-    $certRows = New-Object System.Collections.Generic.List[object]
-    $csrRows  = New-Object System.Collections.Generic.List[object]
-    $keyRows  = New-Object System.Collections.Generic.List[object]
-    foreach ($f in ($files | Sort-Object FullName)) {
-      $ext = [IO.Path]::GetExtension($f.FullName).ToLowerInvariant()
-      # 機関フォルダからの相対パス（サブフォルダがある場合でも見やすくする）
-      $name = $f.Name
-      try {
-        $full = [string]$f.FullName
-        $base = [string]$orgPath
-        if ($full.StartsWith($base, [System.StringComparison]::OrdinalIgnoreCase)) {
-          $rel = $full.Substring($base.Length).TrimStart('\','/')
-          if (-not [string]::IsNullOrWhiteSpace($rel)) { $name = $rel }
-        }
-      } catch { }
-
-      if ($ext -in @(".cer",".crt",".pem")) {
-        $sum = Get-CertChainSummary $f.FullName
-        $chainPath = Find-ChainFileForCert $f.FullName "" $script:ChainSearchDirs
-        $chainSum = Get-ChainFileSummary $chainPath
-        $notAfter = Get-NotAfterFromCert $f.FullName
-        $chainText = ""
-        if ($sum.HasChain -is [bool]) { $chainText = Format-YesNo $sum.HasChain }
-        $certRows.Add([PSCustomObject]@{
-          File = $name
-          FullPath = $f.FullName
-          Dir = Split-Path -Parent $f.FullName
-          FileName = $f.Name
-          NotAfter = $notAfter
-          Format = Format-CertFormat $sum.Format
-          Blocks = $sum.CertBlocks
-          Chain = $chainText
-          ChainBool = $sum.HasChain
-          ExtIntermediate = $sum.ExternalIntermediates
-          FinalUse = Format-FinalUse $sum.FinalUse
-          FinalUseCode = $sum.FinalUse
-          IssuerCN = $sum.IssuerCN
-          ChainFile = if ($chainSum.Found) { [IO.Path]::GetFileName($chainPath) } else { "" }
-          ChainFileBlocks = if ($chainSum.Found) { $chainSum.CertBlocks } else { "" }
-          ChainFileFormat = if ($chainSum.Found) { Format-CertFormat $chainSum.Format } else { "" }
-        }) | Out-Null
-        continue
-      }
-
-      if ($ext -eq ".csr") {
-        $subj = ""
-        $cn = ""
-        $note = ""
-        try {
-          $out = Run-OpenSsl @("req","-in",$f.FullName,"-noout","-subject")
-          $subj = (($out | Select-Object -First 1) -replace "^subject=","").Trim()
-          if ($subj -match "(?:^|[,/\\s])CN\\s*=\\s*([^,\\/]+)") { $cn = $matches[1].Trim() }
-        } catch { $subj = "" }
-        if (-not [string]::IsNullOrWhiteSpace($cn)) { $note = "CN=$cn" } else { $note = $subj }
-        $csrRows.Add([PSCustomObject]@{
-          File = $name
-          Dir = Split-Path -Parent $f.FullName
-          FileName = $f.Name
-          Subject = $note
-        }) | Out-Null
-        continue
-      }
-
-      if ($ext -eq ".key") {
-        $isEnc = Test-KeyEncrypted $f.FullName
-        $encText = Format-YesNo $isEnc
-        $autoText = Format-AutoModeStatus $isEnc $passphrases
-        $decText = Try-TestKeyReadable $f.FullName $passphrases
-        $keyRows.Add([PSCustomObject]@{
-          File = $name
-          Dir = Split-Path -Parent $f.FullName
-          FileName = $f.Name
-          Encrypted = $encText
-          AutoMode = $autoText
-          DecryptCheck = $decText
-        }) | Out-Null
-        continue
-      }
     }
 
     if ($Table) {

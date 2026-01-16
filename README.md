@@ -36,20 +36,16 @@ ssl_maker/
 ```
 
 2) `Merge-CertificateChain.ps1`  
-生成 fullchain 或 chainfile（Apache chainfile）。
+生成 fullchain（服务器证书 + 中间证书），可选追加交叉根。
 ```powershell
 .\Merge-CertificateChain.ps1 -ClientCert .\client.cer -IntermediateCert .\intermediate.cer
-.\Merge-CertificateChain.ps1 -ClientCert .\client.cer -OutputStyle chainfile -IntermediateCert .\intermediate.cer
-.\Merge-CertificateChain.ps1 -ClientCert .\client.cer -OutputStyle chainfile -AutoFetchChain
+
+# fullchain + 交叉根
+.\Merge-CertificateChain.ps1 -ClientCert .\client.cer -IntermediateCert .\intermediate.cer -RootCert .\cross-root.cer
 ```
 
-## Apache 配置方式（fullchain / chainfile）
-Apache 常见有两种配置方式：
-- fullchain：`SSLCertificateFile` 使用“服务器证书 + 中间证书”的合并文件
-- chainfile：`SSLCertificateFile` 使用“服务器证书单体”，`SSLCertificateChainFile` 使用“中间证书（必要时可加交叉根）”
-
-本工具通过 `Merge-CertificateChain.ps1` 的 `-OutputStyle` 切换。  
-浏览器是否信任取决于链是否完整，与是否使用 chainfile 方式无冲突。
+## Apache 配置方式（fullchain）
+Apache 建议直接使用 fullchain（服务器证书 + 中间证书，可选交叉根）。
 
 ## Apache / Tomcat 配置示例
 
@@ -57,13 +53,6 @@ Apache（fullchain）:
 ```apache
 SSLCertificateFile      /path/to/fullchain.cer
 SSLCertificateKeyFile   /path/to/server.key
-```
-
-Apache（chainfile）:
-```apache
-SSLCertificateFile      /path/to/server.cer
-SSLCertificateKeyFile   /path/to/server.key
-SSLCertificateChainFile /path/to/server.chain.cer
 ```
 
 Tomcat（PKCS#12）:
