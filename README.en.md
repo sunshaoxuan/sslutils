@@ -1,72 +1,72 @@
-# SSL 证书管理工具
+# SSL Certificate Management Tools
 
-语言版本:
+Languages:
 - 中文: README.md
 - 日本語: README.ja.md
 - English: README.en.md
 
-## 概览
-用于管理证书、私钥、CSR 的 PowerShell 脚本集合，支持多机构、多语言。
+## Overview
+PowerShell scripts to manage certificates, keys, and CSRs with multi-org and multi-language support.
 
-## 准备
-- PowerShell 5.1+ 或 PowerShell 7.x
-- OpenSSL（默认: `C:\Program Files\Git\usr\bin\openssl.exe`）
-- 如有加密私钥，准备 `passphrase.txt`
+## Prerequisites
+- PowerShell 5.1+ or PowerShell 7.x
+- OpenSSL (default: `C:\Program Files\Git\usr\bin\openssl.exe`)
+- `passphrase.txt` for encrypted keys if needed
 
-## 目录结构
+## Folder layout
 ```
 ssl_maker/
-├── old/                    # 旧证书/私钥/CSR
-├── new/                    # 新生成的 CSR/私钥
-├── merged/                 # 合并后的链文件
+├── old/                    # Existing cert/key/CSR
+├── new/                    # Newly generated CSR/key
+├── merged/                 # Merged chains
 ├── resources/
-│   └── downloaded/         # AIA 自动下载缓存
+│   └── downloaded/         # AIA auto-fetch cache
 └── *.ps1
 ```
 
-## 脚本与用法
+## Scripts and usage
 
 1) `Get-CertificateInfo.ps1`  
-查看证书/私钥/CSR 信息。
+Show certificate/key/CSR info.
 ```powershell
 .\Get-CertificateInfo.ps1
 .\Get-CertificateInfo.ps1 -Path .\new\example.com\example.com.cer -Table
-.\Get-CertificateInfo.ps1 -Lang zh -PrettyTable
+.\Get-CertificateInfo.ps1 -Lang en -PrettyTable
 .\Get-CertificateInfo.ps1 -Path .\server.cer -ChainFile .\server.chain.cer
 ```
 
 2) `Merge-CertificateChain.ps1`  
-生成 fullchain 或 chainfile（Apache chainfile）。
+Generate fullchain or chainfile (Apache chainfile).
 ```powershell
 .\Merge-CertificateChain.ps1 -ClientCert .\client.cer -IntermediateCert .\intermediate.cer
 .\Merge-CertificateChain.ps1 -ClientCert .\client.cer -OutputStyle chainfile -IntermediateCert .\intermediate.cer
 .\Merge-CertificateChain.ps1 -ClientCert .\client.cer -OutputStyle chainfile -AutoFetchChain
 ```
 
-## Apache 配置方式（fullchain / chainfile）
-Apache 常见有两种配置方式：
-- fullchain：`SSLCertificateFile` 使用“服务器证书 + 中间证书”的合并文件
-- chainfile：`SSLCertificateFile` 使用“服务器证书单体”，`SSLCertificateChainFile` 使用“中间证书（必要时可加交叉根）”
+## Apache setup (fullchain / chainfile)
+Apache commonly uses two styles:
+- fullchain: `SSLCertificateFile` points to a file that includes “server cert + intermediates”
+- chainfile: `SSLCertificateFile` points to “server cert only” and `SSLCertificateChainFile` points to “intermediate certs (optionally cross roots)”
 
-本工具通过 `Merge-CertificateChain.ps1` 的 `-OutputStyle` 切换。  
-浏览器是否信任取决于链是否完整，与是否使用 chainfile 方式无冲突。
+This tool switches via `-OutputStyle` in `Merge-CertificateChain.ps1`.  
+Browser trust depends on a complete chain, not on which Apache style you choose.
 
-## Apache / Tomcat 配置示例
+## Apache / Tomcat examples
 
-Apache（fullchain）:
+Apache (fullchain):
 ```apache
 SSLCertificateFile      /path/to/fullchain.cer
 SSLCertificateKeyFile   /path/to/server.key
 ```
 
-Apache（chainfile）:
+Apache (chainfile):
 ```apache
 SSLCertificateFile      /path/to/server.cer
 SSLCertificateKeyFile   /path/to/server.key
 SSLCertificateChainFile /path/to/server.chain.cer
 ```
 
-Tomcat（PKCS#12）:
+Tomcat (PKCS#12):
 ```bash
 openssl pkcs12 -export \
   -in /path/to/server.cer \
@@ -84,47 +84,47 @@ openssl pkcs12 -export \
 ```
 
 3) `Convert-KeyToPlaintext.ps1`  
-解密私钥。
+Decrypt encrypted private keys.
 ```powershell
 .\Convert-KeyToPlaintext.ps1 -Path .\new -Recurse -Overwrite
 ```
 
 4) `New-CertificateSigningRequest.ps1`  
-生成 CSR/私钥。
+Generate CSR and private key.
 ```powershell
 .\New-CertificateSigningRequest.ps1 -CN example.com -C JP -ST Tokyo -L Tokyo -O "Example Corp"
 ```
 
 5) `Export-CertificateModulus.ps1`  
-导出 Modulus。
+Export modulus values.
 ```powershell
 .\Export-CertificateModulus.ps1 -RootDir .\old
 ```
 
 6) `Test-CertificateKeyMatch.ps1`  
-生成一致性检查报告。
+Generate key/cert/CSR match report.
 ```powershell
 .\Test-CertificateKeyMatch.ps1 -Mode both
 ```
 
 7) `New-CertificateSigningRequestFromOld.ps1`  
-基于旧证书生成新 CSR/私钥。
+Generate new CSR/key from existing cert info.
 ```powershell
 .\New-CertificateSigningRequestFromOld.ps1
 ```
 
 8) `Request-LetsEncryptCertificate.ps1`  
-Docker + certbot 申请证书。
+Request Let's Encrypt cert using Docker + certbot.
 ```powershell
 .\Request-LetsEncryptCertificate.ps1 -Domain example.com -Email admin@example.com
 ```
 
 9) `Repair-PemFile.ps1`  
-修复/规范化 PEM。
+Repair/normalize PEM files.
 ```powershell
 .\Repair-PemFile.ps1 -Fullchain .\fullchain.pem -Privkey .\privkey.pem
 ```
 
-## 密码文件
-`passphrase.txt` 搜索顺序:  
-同目录 → 上级 → 机构目录 → old/new → 脚本目录 → 环境变量 `PASS_FILE`
+## Passphrase file
+`passphrase.txt` search order:  
+same folder → parent folders → org folder → old/new → script root → env `PASS_FILE`
