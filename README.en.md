@@ -44,10 +44,10 @@ Generate fullchain (server cert + intermediates). Optionally append cross roots.
 .\Merge-CertificateChain.ps1 -ClientCert .\client.cer -IntermediateCert .\intermediate.cer -RootCert .\cross-root.cer
 ```
 
-## Apache setup (fullchain)
-Use a fullchain file (server cert + intermediates, optionally cross roots).
+## Apache / Tomcat setup (fullchain)
+Use a fullchain file for both Apache and Tomcat (server cert + intermediates, optionally cross roots).
 
-## Apache / Tomcat examples
+## Apache / Tomcat examples (fullchain)
 
 Apache (fullchain):
 ```apache
@@ -55,7 +55,7 @@ SSLCertificateFile      /path/to/fullchain.cer
 SSLCertificateKeyFile   /path/to/server.key
 ```
 
-Tomcat (PKCS#12):
+Tomcat (PKCS#12, fullchain as input):
 ```bash
 openssl pkcs12 -export \
   -in /path/to/server.cer \

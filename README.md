@@ -44,10 +44,10 @@ ssl_maker/
 .\Merge-CertificateChain.ps1 -ClientCert .\client.cer -IntermediateCert .\intermediate.cer -RootCert .\cross-root.cer
 ```
 
-## Apache 配置方式（fullchain）
-Apache 建议直接使用 fullchain（服务器证书 + 中间证书，可选交叉根）。
+## Apache / Tomcat 配置方式（fullchain）
+Apache 与 Tomcat 都建议直接使用 fullchain（服务器证书 + 中间证书，可选交叉根）。
 
-## Apache / Tomcat 配置示例
+## Apache / Tomcat 配置示例（统一 fullchain）
 
 Apache（fullchain）:
 ```apache
@@ -55,7 +55,7 @@ SSLCertificateFile      /path/to/fullchain.cer
 SSLCertificateKeyFile   /path/to/server.key
 ```
 
-Tomcat（PKCS#12）:
+Tomcat（PKCS#12，fullchain 作为输入）:
 ```bash
 openssl pkcs12 -export \
   -in /path/to/server.cer \

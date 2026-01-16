@@ -54,10 +54,10 @@ fullchain を生成します（証明書 + 中間）。必要なら交差ルー�
 .\Merge-CertificateChain.ps1 -ClientCert .\client.cer -IntermediateCert .\intermediate.cer -RootCert .\cross-root.cer
 ```
 
-## Apache 設定（fullchain）
-Apache では fullchain（証明書 + 中間、必要なら交差ルート）を使用します。
+## Apache / Tomcat 設定（fullchain）
+Apache と Tomcat はどちらも fullchain（証明書 + 中間、必要なら交差ルート）を使用します。
 
-## Apache / Tomcat の設定例
+## Apache / Tomcat の設定例（fullchain）
 
 Apache（fullchain 方式）:
 ```apache
@@ -65,7 +65,7 @@ SSLCertificateFile      /path/to/fullchain.cer
 SSLCertificateKeyFile   /path/to/server.key
 ```
 
-Tomcat（PKCS#12 方式）:
+Tomcat（PKCS#12 方式、fullchain を入力）:
 ```bash
 openssl pkcs12 -export \
   -in /path/to/server.cer \
