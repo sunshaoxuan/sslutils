@@ -1,282 +1,407 @@
 # SSL Certificate Management Tools
 
-SSL/TLS 証明書・秘密鍵・CSR（証明書署名要求）を管理するための PowerShell スクリプト集です。
+This repository provides PowerShell scripts to manage SSL/TLS certificates, keys, and CSRs.
+The README includes Japanese, Chinese, and English usage guidance.
 
-## 概要
+---
 
-このツールセットは、複数の機関（組織）の SSL/TLS 証明書を効率的に管理するために開発されました。
-主に以下の用途で使用します：
+## 日本語 (JA)
 
-- 証明書・秘密鍵・CSR の基本情報確認
-- 証明書チェーン（中間証明書）の結合
-- 暗号化鍵の復号化
-- 新しい CSR と秘密鍵の生成
-- 証明書と鍵の一致確認
+### 概要
+証明書・秘密鍵・CSR を扱う PowerShell スクリプト集です。多機関対応と多言語対応を前提にしています。
 
-## 機能
+### 事前準備
+- PowerShell 5.1 以上 または PowerShell 7.x
+- OpenSSL（既定: `C:\Program Files\Git\usr\bin\openssl.exe`）
+- 必要なら `passphrase.txt`（暗号化鍵用）
 
-### 多言語対応
-
-すべてのスクリプトは、日本語・中国語・英語の 3 言語に対応しています。
-`-Lang` パラメータで言語を指定できます（既定: 日本語）。
-
-```powershell
-.\Get-CertificateInfo.ps1 -Lang ja  # 日本語
-.\Get-CertificateInfo.ps1 -Lang zh  # 中国語
-.\Get-CertificateInfo.ps1 -Lang en  # 英語
-```
-
-### 多機関対応
-
-`old\` と `new\` の階層構造を自動認識し、複数の機関（組織）の証明書を同時に管理できます。
-
+### フォルダ構成
 ```
 ssl_maker/
 ├── old/                    # 旧証明書・鍵・CSR
-│   ├── org1/
-│   │   ├── server.cer
-│   │   ├── server.key
-│   │   └── server.csr
-│   └── org2/
-│       └── ...
-├── new/                    # 新規生成された CSR・鍵
-│   ├── org1/
-│   │   └── server.csr
-│   └── org2/
-│       └── ...
-└── merged/                 # 結合済み証明書チェーン
-    ├── old/
-    └── new/
+│   └── org1/
+│       ├── server.cer
+│       ├── server.key
+│       └── server.csr
+├── new/                    # 新規生成 CSR・鍵
+│   └── org1/
+│       └── server.csr
+├── merged/                 # 結合済みチェーン
+│   ├── old/
+│   └── new/
+├── resources/
+│   └── downloaded/         # AIA 自動取得の保存先
+└── *.ps1
 ```
 
-## 必要な環境
+### スクリプト一覧と使い方
 
-- **PowerShell 5.1 以上** または **PowerShell 7.x**
-- **OpenSSL**（Git for Windows に含まれるものを使用可能）
-  - 既定パス: `C:\Program Files\Git\usr\bin\openssl.exe`
-  - カスタムパスは各スクリプトの `-OpenSsl` パラメータで指定可能
-
-## インストール
-
-1. このリポジトリをクローンまたはダウンロードします
-2. PowerShell でスクリプトディレクトリに移動します
-
+1) `Get-CertificateInfo.ps1`  
+証明書・秘密鍵・CSR の情報を表示。
 ```powershell
-cd C:\path\to\ssl_maker
-```
-
-## スクリプト一覧
-
-### 1. Get-CertificateInfo.ps1
-
-証明書・秘密鍵・CSR の基本情報を表示します。
-
-**主な機能:**
-- 証明書の有効期限、発行者、サブジェクトの表示
-- 証明書チェーン（中間証明書同梱）の確認
-- 秘密鍵の暗号化状態と無人運用可能性の判定
-- CSR のサブジェクト情報表示
-
-**使用例:**
-```powershell
-# old\ と new\ 配下を走査
 .\Get-CertificateInfo.ps1
-
-# 特定ファイルのみ表示
-.\Get-CertificateInfo.ps1 -Path .\new\example.com\example.com.cer
-
-# 表形式で表示
-.\Get-CertificateInfo.ps1 -Table
+.\Get-CertificateInfo.ps1 -Path .\new\example.com\example.com.cer -Table
+.\Get-CertificateInfo.ps1 -Lang ja -PrettyTable
+.\Get-CertificateInfo.ps1 -Path .\server.cer -ChainFile .\server.chain.cer
+.\Get-CertificateInfo.ps1 -Lang ja
 ```
 
-### 2. Merge-CertificateChain.ps1
-
-クライアント証明書と中間証明書を結合してフルチェーンを作成します。
-
-**主な機能:**
-- クライアント証明書と中間証明書の自動結合
-- 中間証明書の自動選択（issuer/subject による一致判定）
-- 既に結合済みの証明書の検出とスキップ
-- 一括処理モード
-
-**使用例:**
+2) `Merge-CertificateChain.ps1`  
+フルチェーン生成／チェーンファイル分離（Apache chainfile 対応）。
 ```powershell
-# 一括処理（old\ と new\ 配下を自動走査）
-.\Merge-CertificateChain.ps1
-
-# 特定の証明書を結合
+# fullchain（証明書+中間）
 .\Merge-CertificateChain.ps1 -ClientCert .\client.cer -IntermediateCert .\intermediate.cer
+
+# chainfile（証明書単体 + チェーンファイル）
+.\Merge-CertificateChain.ps1 -ClientCert .\client.cer -OutputStyle chainfile -IntermediateCert .\intermediate.cer
+
+# AIA から中間/ルートを自動取得
+.\Merge-CertificateChain.ps1 -ClientCert .\client.cer -OutputStyle chainfile -AutoFetchChain
 ```
 
-### 3. Convert-KeyToPlaintext.ps1
+### Apache 設定の旧式/新式（fullchain / chainfile）
+Apache では主に 2 つの配置方法があります。
+- fullchain: `SSLCertificateFile` に「サーバ証明書 + 中間証明書」を結合したファイルを指定
+- chainfile: `SSLCertificateFile` に「サーバ証明書単体」、`SSLCertificateChainFile` に「中間証明書（必要なら交差ルート）」を指定
 
-暗号化された秘密鍵ファイルを復号化して平文鍵を作成します。
+本ツールでは `Merge-CertificateChain.ps1` の `-OutputStyle` で切り替えできます。  
+Chrome などのブラウザ認識は「チェーンが完全か」に依存するため、証明書単体＋チェーンファイル方式でも問題なく運用可能です。
 
-**主な機能:**
-- 暗号化鍵の自動検出と復号化
-- パスワードファイル（passphrase.txt）の自動探索
-- 一括処理（ディレクトリ指定時の再帰処理）
-- インプレース復号化オプション
+### Apache / Tomcat の設定例
 
-**使用例:**
+Apache（fullchain 方式）:
+```apache
+SSLCertificateFile      /path/to/fullchain.cer
+SSLCertificateKeyFile   /path/to/server.key
+```
+
+Apache（chainfile 方式）:
+```apache
+SSLCertificateFile      /path/to/server.cer
+SSLCertificateKeyFile   /path/to/server.key
+SSLCertificateChainFile /path/to/server.chain.cer
+```
+
+Tomcat（PKCS#12 方式）:
+```bash
+openssl pkcs12 -export \
+  -in /path/to/server.cer \
+  -inkey /path/to/server.key \
+  -certfile /path/to/server.chain.cer \
+  -out /path/to/server.p12
+```
+```xml
+<Connector port="8443"
+  protocol="org.apache.coyote.http11.Http11NioProtocol"
+  SSLEnabled="true"
+  keystoreFile="/path/to/server.p12"
+  keystorePass="changeit"
+  keystoreType="PKCS12" />
+```
+
+3) `Convert-KeyToPlaintext.ps1`  
+暗号化鍵を平文に変換。
 ```powershell
-# 特定の鍵ファイルを復号化
 .\Convert-KeyToPlaintext.ps1 -Path .\new\example.com\server.key
-
-# ディレクトリ配下を再帰的に処理
 .\Convert-KeyToPlaintext.ps1 -Path .\new -Recurse -Overwrite
-
-# インプレース復号化（元ファイルを上書き）
-.\Convert-KeyToPlaintext.ps1 -Path .\encrypted.key -InPlace -Overwrite
 ```
 
-### 4. New-CertificateSigningRequest.ps1
-
-汎用的な CSR と秘密鍵を生成します。
-
-**主な機能:**
-- RSA 鍵の生成（鍵長指定可能、既定: 2048bit）
-- CSR の生成（Subject と SAN 対応）
-- 秘密鍵の暗号化オプション（AES-256）
-
-**使用例:**
+4) `New-CertificateSigningRequest.ps1`  
+CSR と秘密鍵を生成。
 ```powershell
-# Subject を明示指定
-.\New-CertificateSigningRequest.ps1 -CN example.com -Subject "/C=JP/ST=Tokyo/L=Tokyo/O=Example Corp/CN=example.com"
-
-# 個別パラメータで指定
 .\New-CertificateSigningRequest.ps1 -CN example.com -C JP -ST Tokyo -L Tokyo -O "Example Corp"
-
-# 暗号化鍵で生成
 .\New-CertificateSigningRequest.ps1 -CN example.com -PassFile .\passphrase.txt -Overwrite
 ```
 
-### 5. Export-CertificateModulus.ps1
-
-すべての証明書と秘密鍵の Modulus 値を一覧表示します。
-
-**主な機能:**
-- 証明書と秘密鍵の Modulus 値の抽出
-- 暗号化鍵の自動処理（パスワードファイル対応）
-- 一覧レポートの生成
-
-**使用例:**
+5) `Export-CertificateModulus.ps1`  
+証明書/鍵の Modulus を一覧出力。
 ```powershell
-# 指定ディレクトリ配下を処理
 .\Export-CertificateModulus.ps1 -RootDir .\old
-
-# パスワードファイルを指定
 .\Export-CertificateModulus.ps1 -RootDir . -PassFile .\passphrase.txt
 ```
 
-### 6. Test-CertificateKeyMatch.ps1
-
-証明書・秘密鍵・CSR の Modulus 一致確認レポートを生成します。
-
-**主な機能:**
-- 証明書と秘密鍵の Modulus 一致確認
-- 証明書と CSR の Modulus 一致確認
-- 秘密鍵と CSR の Modulus 一致確認
-- 詳細レポートの生成
-
-**使用例:**
+6) `Test-CertificateKeyMatch.ps1`  
+証明書/鍵/CSR の一致確認レポート。
 ```powershell
-# old\ と new\ の両方を確認
 .\Test-CertificateKeyMatch.ps1 -Mode both
-
-# old\ のみ確認
 .\Test-CertificateKeyMatch.ps1 -Mode old -PassFile .\passphrase.txt
 ```
 
-### 7. New-CertificateSigningRequestFromOld.ps1
-
-旧証明書情報から新しい CSR と秘密鍵を生成します。
-
-**主な機能:**
-- 旧証明書からの Subject と SAN の自動抽出
-- 旧秘密鍵からの鍵長（RSA bits）の自動検出
-- 多機関対応（機関ごとの処理）
-- 対話式メニュー（複数機関がある場合）
-
-**使用例:**
+7) `New-CertificateSigningRequestFromOld.ps1`  
+旧証明書情報から新 CSR/鍵を生成。
 ```powershell
-# 対話式メニューで機関を選択
 .\New-CertificateSigningRequestFromOld.ps1
-
-# 指定機関のみ処理
 .\New-CertificateSigningRequestFromOld.ps1 -Org example.com -Overwrite
-
-# すべての機関を処理
-.\New-CertificateSigningRequestFromOld.ps1 -All -PassFile .\passphrase.txt
 ```
 
-## パスワードファイル
-
-暗号化された秘密鍵を処理する場合、パスワードファイル（`passphrase.txt`）が必要です。
-
-**パスワードファイルの探索順序:**
-1. 鍵ファイルと同じディレクトリ
-2. 上位階層（最大 6 階層まで）
-3. 機関ディレクトリ直下
-4. `old\` または `new\` のルート
-5. スクリプトのルートディレクトリ
-6. 環境変数 `PASS_FILE`（設定されている場合）
-
-**注意:** パスワードファイルは対話入力を行いません。無人運用を前提としています。
-
-## バックアップ機能
-
-すべてのスクリプトは、既存ファイルを上書きする前に自動的にバックアップを作成します。
-バックアップファイル名の形式: `<元ファイル名>.bak_<タイムスタンプ>.<拡張子>`
-
-例: `server.key` → `server.bak_20260108_113550.key`
-
-## セキュリティに関する注意事項
-
-- **証明書・秘密鍵・CSR ファイルは Git にコミットされません**（`.gitignore` で除外）
-- **パスワードファイル（`passphrase.txt`）も Git にコミットされません**
-- これらのファイルはローカル環境でのみ管理してください
-- バックアップファイルも同様に、機密情報を含む可能性があるため Git に含まれません
-
-## トラブルシューティング
-
-### OpenSSL が見つからない
-
-`-OpenSsl` パラメータで OpenSSL のパスを明示指定してください。
-
+8) `Request-LetsEncryptCertificate.ps1`  
+Docker + certbot で Let's Encrypt を申請。
 ```powershell
-.\Get-CertificateInfo.ps1 -OpenSsl "C:\path\to\openssl.exe"
+.\Request-LetsEncryptCertificate.ps1 -Domain example.com -Email admin@example.com
 ```
 
-### 暗号化鍵が読み取れない
-
-パスワードファイル（`passphrase.txt`）が正しい場所に配置されているか確認してください。
-環境変数 `PASS_FILE` を設定することもできます。
-
+9) `Repair-PemFile.ps1`  
+PEM の修復・正規化。
 ```powershell
-$env:PASS_FILE = "C:\path\to\passphrase.txt"
+.\Repair-PemFile.ps1 -Fullchain .\fullchain.pem -Privkey .\privkey.pem
 ```
 
-### 文字化けが発生する
+### パスワードファイル
+`passphrase.txt` の探索順序（最大 6 階層）:  
+鍵と同階層 → 上位 → 機関直下 → old/new 直下 → スクリプト直下 → 環境変数 `PASS_FILE`
 
-PowerShell の出力エンコーディングを UTF-8 に設定してください。
+---
 
+## 中文 (ZH)
+
+### 概览
+用于管理证书、私钥、CSR 的 PowerShell 脚本集合，支持多机构、多语言。
+
+### 准备
+- PowerShell 5.1+ 或 PowerShell 7.x
+- OpenSSL（默认: `C:\Program Files\Git\usr\bin\openssl.exe`）
+- 如有加密私钥，准备 `passphrase.txt`
+
+### 目录结构
+```
+ssl_maker/
+├── old/                    # 旧证书/私钥/CSR
+├── new/                    # 新生成的 CSR/私钥
+├── merged/                 # 合并后的链文件
+├── resources/
+│   └── downloaded/         # AIA 自动下载缓存
+└── *.ps1
+```
+
+### 脚本与用法
+
+1) `Get-CertificateInfo.ps1`  
+查看证书/私钥/CSR 信息。
 ```powershell
-[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+.\Get-CertificateInfo.ps1
+.\Get-CertificateInfo.ps1 -Path .\new\example.com\example.com.cer -Table
+.\Get-CertificateInfo.ps1 -Lang zh -PrettyTable
+.\Get-CertificateInfo.ps1 -Path .\server.cer -ChainFile .\server.chain.cer
 ```
 
-## ライセンス
+2) `Merge-CertificateChain.ps1`  
+生成 fullchain 或 chainfile（Apache chainfile）。
+```powershell
+.\Merge-CertificateChain.ps1 -ClientCert .\client.cer -IntermediateCert .\intermediate.cer
+.\Merge-CertificateChain.ps1 -ClientCert .\client.cer -OutputStyle chainfile -IntermediateCert .\intermediate.cer
+.\Merge-CertificateChain.ps1 -ClientCert .\client.cer -OutputStyle chainfile -AutoFetchChain
+```
 
-このプロジェクトは MIT ライセンスの下で公開されています。
+### Apache 配置方式（fullchain / chainfile）
+Apache 常见有两种配置方式：
+- fullchain：`SSLCertificateFile` 使用“服务器证书 + 中间证书”的合并文件
+- chainfile：`SSLCertificateFile` 使用“服务器证书单体”，`SSLCertificateChainFile` 使用“中间证书（必要时可加交叉根）”
 
-## 貢献
+本工具通过 `Merge-CertificateChain.ps1` 的 `-OutputStyle` 切换。  
+浏览器是否信任取决于链是否完整，与是否使用 chainfile 方式无冲突。
 
-バグ報告や機能要望は、GitHub の Issues でお知らせください。
+### Apache / Tomcat 配置示例
 
-## 更新履歴
+Apache（fullchain）:
+```apache
+SSLCertificateFile      /path/to/fullchain.cer
+SSLCertificateKeyFile   /path/to/server.key
+```
 
-- **2026-01-08**: 初版リリース
-  - 多言語対応（日本語・中国語・英語）
-  - 多機関対応
-  - 証明書チェーン結合機能
-  - 暗号化鍵復号化機能
+Apache（chainfile）:
+```apache
+SSLCertificateFile      /path/to/server.cer
+SSLCertificateKeyFile   /path/to/server.key
+SSLCertificateChainFile /path/to/server.chain.cer
+```
+
+Tomcat（PKCS#12）:
+```bash
+openssl pkcs12 -export \
+  -in /path/to/server.cer \
+  -inkey /path/to/server.key \
+  -certfile /path/to/server.chain.cer \
+  -out /path/to/server.p12
+```
+```xml
+<Connector port="8443"
+  protocol="org.apache.coyote.http11.Http11NioProtocol"
+  SSLEnabled="true"
+  keystoreFile="/path/to/server.p12"
+  keystorePass="changeit"
+  keystoreType="PKCS12" />
+```
+
+3) `Convert-KeyToPlaintext.ps1`  
+解密私钥。
+```powershell
+.\Convert-KeyToPlaintext.ps1 -Path .\new -Recurse -Overwrite
+```
+
+4) `New-CertificateSigningRequest.ps1`  
+生成 CSR/私钥。
+```powershell
+.\New-CertificateSigningRequest.ps1 -CN example.com -C JP -ST Tokyo -L Tokyo -O "Example Corp"
+```
+
+5) `Export-CertificateModulus.ps1`  
+导出 Modulus。
+```powershell
+.\Export-CertificateModulus.ps1 -RootDir .\old
+```
+
+6) `Test-CertificateKeyMatch.ps1`  
+生成一致性检查报告。
+```powershell
+.\Test-CertificateKeyMatch.ps1 -Mode both
+```
+
+7) `New-CertificateSigningRequestFromOld.ps1`  
+基于旧证书生成新 CSR/私钥。
+```powershell
+.\New-CertificateSigningRequestFromOld.ps1
+```
+
+8) `Request-LetsEncryptCertificate.ps1`  
+Docker + certbot 申请证书。
+```powershell
+.\Request-LetsEncryptCertificate.ps1 -Domain example.com -Email admin@example.com
+```
+
+9) `Repair-PemFile.ps1`  
+修复/规范化 PEM。
+```powershell
+.\Repair-PemFile.ps1 -Fullchain .\fullchain.pem -Privkey .\privkey.pem
+```
+
+### 密码文件
+`passphrase.txt` 搜索顺序:  
+同目录 → 上级 → 机构目录 → old/new → 脚本目录 → 环境变量 `PASS_FILE`
+
+---
+
+## English (EN)
+
+### Overview
+PowerShell scripts to manage certificates, keys, and CSRs with multi-org and multi-language support.
+
+### Prerequisites
+- PowerShell 5.1+ or PowerShell 7.x
+- OpenSSL (default: `C:\Program Files\Git\usr\bin\openssl.exe`)
+- `passphrase.txt` for encrypted keys if needed
+
+### Folder layout
+```
+ssl_maker/
+├── old/                    # Existing cert/key/CSR
+├── new/                    # Newly generated CSR/key
+├── merged/                 # Merged chains
+├── resources/
+│   └── downloaded/         # AIA auto-fetch cache
+└── *.ps1
+```
+
+### Scripts and usage
+
+1) `Get-CertificateInfo.ps1`  
+Show certificate/key/CSR info.
+```powershell
+.\Get-CertificateInfo.ps1
+.\Get-CertificateInfo.ps1 -Path .\new\example.com\example.com.cer -Table
+.\Get-CertificateInfo.ps1 -Lang en -PrettyTable
+.\Get-CertificateInfo.ps1 -Path .\server.cer -ChainFile .\server.chain.cer
+```
+
+2) `Merge-CertificateChain.ps1`  
+Generate fullchain or chainfile (Apache chainfile).
+```powershell
+.\Merge-CertificateChain.ps1 -ClientCert .\client.cer -IntermediateCert .\intermediate.cer
+.\Merge-CertificateChain.ps1 -ClientCert .\client.cer -OutputStyle chainfile -IntermediateCert .\intermediate.cer
+.\Merge-CertificateChain.ps1 -ClientCert .\client.cer -OutputStyle chainfile -AutoFetchChain
+```
+
+### Apache setup (fullchain / chainfile)
+Apache commonly uses two styles:
+- fullchain: `SSLCertificateFile` points to a file that includes “server cert + intermediates”
+- chainfile: `SSLCertificateFile` points to “server cert only” and `SSLCertificateChainFile` points to “intermediate certs (optionally cross roots)”
+
+This tool switches via `-OutputStyle` in `Merge-CertificateChain.ps1`.  
+Browser trust depends on a complete chain, not on which Apache style you choose.
+
+### Apache / Tomcat examples
+
+Apache (fullchain):
+```apache
+SSLCertificateFile      /path/to/fullchain.cer
+SSLCertificateKeyFile   /path/to/server.key
+```
+
+Apache (chainfile):
+```apache
+SSLCertificateFile      /path/to/server.cer
+SSLCertificateKeyFile   /path/to/server.key
+SSLCertificateChainFile /path/to/server.chain.cer
+```
+
+Tomcat (PKCS#12):
+```bash
+openssl pkcs12 -export \
+  -in /path/to/server.cer \
+  -inkey /path/to/server.key \
+  -certfile /path/to/server.chain.cer \
+  -out /path/to/server.p12
+```
+```xml
+<Connector port="8443"
+  protocol="org.apache.coyote.http11.Http11NioProtocol"
+  SSLEnabled="true"
+  keystoreFile="/path/to/server.p12"
+  keystorePass="changeit"
+  keystoreType="PKCS12" />
+```
+
+3) `Convert-KeyToPlaintext.ps1`  
+Decrypt encrypted private keys.
+```powershell
+.\Convert-KeyToPlaintext.ps1 -Path .\new -Recurse -Overwrite
+```
+
+4) `New-CertificateSigningRequest.ps1`  
+Generate CSR and private key.
+```powershell
+.\New-CertificateSigningRequest.ps1 -CN example.com -C JP -ST Tokyo -L Tokyo -O "Example Corp"
+```
+
+5) `Export-CertificateModulus.ps1`  
+Export modulus values.
+```powershell
+.\Export-CertificateModulus.ps1 -RootDir .\old
+```
+
+6) `Test-CertificateKeyMatch.ps1`  
+Generate key/cert/CSR match report.
+```powershell
+.\Test-CertificateKeyMatch.ps1 -Mode both
+```
+
+7) `New-CertificateSigningRequestFromOld.ps1`  
+Generate new CSR/key from existing cert info.
+```powershell
+.\New-CertificateSigningRequestFromOld.ps1
+```
+
+8) `Request-LetsEncryptCertificate.ps1`  
+Request Let's Encrypt cert using Docker + certbot.
+```powershell
+.\Request-LetsEncryptCertificate.ps1 -Domain example.com -Email admin@example.com
+```
+
+9) `Repair-PemFile.ps1`  
+Repair/normalize PEM files.
+```powershell
+.\Repair-PemFile.ps1 -Fullchain .\fullchain.pem -Privkey .\privkey.pem
+```
+
+### Passphrase file
+`passphrase.txt` search order:  
+same folder → parent folders → org folder → old/new → script root → env `PASS_FILE`

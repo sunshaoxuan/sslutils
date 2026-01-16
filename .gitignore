@@ -35,3 +35,18 @@ Desktop.ini
 .idea/
 *.swp
 *.swo
+.claude/
+
+# Let's Encrypt 工作目录
+le-work-*/
+
+# 压缩文件（可能包含证书）
+*.zip
+
+# Certificate bundles / keystores
+*.p12
+*.pfx
+*.jks
+*.p7b
+*.p7c
+*.der

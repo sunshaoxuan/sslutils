@@ -25,11 +25,17 @@
 .PARAMETER OpenSsl
 OpenSSL 実行ファイルのパス（既定: C:\Program Files\Git\usr\bin\openssl.exe）
 
+.PARAMETER ChainFile
+証明書とは別のチェーンファイルを指定してチェック（単体チェック時のみ有効）
+
 .PARAMETER Detail
 詳細表示モード（OpenSSL の生出力をそのまま表示）
 
 .PARAMETER Table
 旧来の表形式で表示（既定はツリー表示）
+
+.PARAMETER PrettyTable
+罫線つきの見やすい表形式で表示（証明書のみ）
 
 .PARAMETER Lang
 出力言語（既定: ja / 選択肢: ja, zh, en）
@@ -43,8 +49,16 @@ old\ と new\ 配下を走査して、すべての証明書・鍵・CSR の情�
 指定した証明書ファイルのみ表示
 
 .EXAMPLE
+.\Get-CertificateInfo.ps1 -Path .\server.cer -ChainFile .\server.chain.cer
+チェーンファイルを指定して表示
+
+.EXAMPLE
 .\Get-CertificateInfo.ps1 -Lang en -Table
 英語で表形式表示
+
+.EXAMPLE
+.\Get-CertificateInfo.ps1 -Lang zh -PrettyTable
+罫線つきの表形式で表示
 
 .NOTES
 - 暗号化された秘密鍵は、passphrase.txt または環境変数 PASS_FILE から自動的にパスワードを読み取ります
@@ -61,6 +75,9 @@ param(
   [Parameter(Mandatory = $false)]
   [string]$OpenSsl = "C:\Program Files\Git\usr\bin\openssl.exe",
 
+  [Parameter(Mandatory = $false)]
+  [string]$ChainFile = "",
+
   # 詳細表示（従来の openssl 出力をそのまま表示）
   [Parameter(Mandatory = $false)]
   [switch]$Detail,
@@ -68,6 +85,10 @@ param(
   # 旧来の表形式で表示（既定はツリー表示）
   [Parameter(Mandatory = $false)]
   [switch]$Table,
+
+  # 罫線つきの表形式（証明書のみ）
+  [Parameter(Mandatory = $false)]
+  [switch]$PrettyTable,
 
   # 出力言語（既定: ja）
   [Parameter(Mandatory = $false)]
@@ -136,6 +157,24 @@ function Run-OpenSsl([string[]]$OpenSslArgs) {
 
 Assert-ExistsFile $OpenSsl "OpenSSL"
 
+if (-not [string]::IsNullOrWhiteSpace($ChainFile) -and [string]::IsNullOrWhiteSpace($Path)) {
+  Write-Host (T "CheckBasic.ChainFileIgnored") -ForegroundColor Yellow
+  $ChainFile = ""
+}
+
+$script:ChainSearchDirs = @(
+  $PSScriptRoot,
+  (Join-Path $PSScriptRoot "old"),
+  (Join-Path $PSScriptRoot "new"),
+  (Join-Path $PSScriptRoot "merged\\old"),
+  (Join-Path $PSScriptRoot "merged\\new")
+) | Select-Object -Unique
+
+$script:ChainDirMappings = @(
+  @{ Source = (Join-Path $PSScriptRoot "old"); Target = (Join-Path $PSScriptRoot "merged\\old") },
+  @{ Source = (Join-Path $PSScriptRoot "new"); Target = (Join-Path $PSScriptRoot "merged\\new") }
+)
+
 function Get-CertContainerInfo([string]$certPath) {
   # 形式判定（PEM/DER）と、PEM の場合は証明書ブロック数を数える
   try {
@@ -177,6 +216,70 @@ function Get-CertContainerInfo([string]$certPath) {
     CertBlocks = $blocks
     HasPrivateKey = [bool]$hasKey
     IsPkcs7 = [bool]$isPkcs7
+  }
+}
+
+function Find-ChainFileForCert([string]$certPath, [string]$explicit, [string[]]$searchDirs = @()) {
+  if (-not [string]::IsNullOrWhiteSpace($explicit)) {
+    Assert-ExistsFile $explicit "Chain file"
+    return (Resolve-Path -LiteralPath $explicit).Path
+  }
+  $dir = Split-Path -Parent $certPath
+  $base = [IO.Path]::GetFileNameWithoutExtension($certPath)
+  $ext = [IO.Path]::GetExtension($certPath)
+  $cands = @(
+    ("{0}.chain{1}" -f $base, $ext),
+    ("{0}.chain.pem" -f $base),
+    ("{0}.chain.cer" -f $base),
+    ("{0}.chain.crt" -f $base)
+  )
+  foreach ($c in $cands) {
+    $p = Join-Path $dir $c
+    if (Test-Path -LiteralPath $p -PathType Leaf) { return (Resolve-Path -LiteralPath $p).Path }
+  }
+
+  if ($script:ChainDirMappings.Count -gt 0) {
+    foreach ($m in $script:ChainDirMappings) {
+      $rel = Get-RelPathIfUnder $m.Source $certPath
+      if ([string]::IsNullOrWhiteSpace($rel)) { continue }
+      $relDir = Split-Path -Parent $rel
+      foreach ($c in $cands) {
+        $p = if ([string]::IsNullOrWhiteSpace($relDir)) {
+          (Join-Path $m.Target $c)
+        } else {
+          (Join-Path (Join-Path $m.Target $relDir) $c)
+        }
+        if (Test-Path -LiteralPath $p -PathType Leaf) { return (Resolve-Path -LiteralPath $p).Path }
+      }
+    }
+  }
+
+  if ($searchDirs.Count -gt 0) {
+    $matches = New-Object System.Collections.Generic.List[string]
+    foreach ($sd in $searchDirs) {
+      if (-not (Test-Path -LiteralPath $sd -PathType Container)) { continue }
+      foreach ($c in $cands) {
+        $p = Join-Path $sd $c
+        if (Test-Path -LiteralPath $p -PathType Leaf) {
+          $matches.Add((Resolve-Path -LiteralPath $p).Path) | Out-Null
+        }
+      }
+    }
+    $uniq = @($matches | Select-Object -Unique)
+    if ($uniq.Count -eq 1) { return $uniq[0] }
+  }
+  return ""
+}
+
+function Get-ChainFileSummary([string]$chainPath) {
+  if ([string]::IsNullOrWhiteSpace($chainPath)) {
+    return [PSCustomObject]@{ Found = $false; Format = ""; CertBlocks = "" }
+  }
+  $info = Get-CertContainerInfo $chainPath
+  return [PSCustomObject]@{
+    Found = $true
+    Format = $info.Format
+    CertBlocks = [string]$info.CertBlocks
   }
 }
 
@@ -277,6 +380,18 @@ function Format-CertFormat([string]$fmt) {
   }
 }
 
+function Get-RelPathIfUnder([string]$baseDir, [string]$fullPath) {
+  try {
+    $base = (Resolve-Path -LiteralPath $baseDir).Path.TrimEnd('\','/')
+    $full = (Resolve-Path -LiteralPath $fullPath).Path
+    if ($full.Length -lt $base.Length) { return "" }
+    if ($full.Substring(0, $base.Length).ToLowerInvariant() -ne $base.ToLowerInvariant()) { return "" }
+    return $full.Substring($base.Length).TrimStart('\','/')
+  } catch {
+    return ""
+  }
+}
+
 function Format-FinalUse([string]$code) {
   switch ($code) {
     "FULLCHAIN_GUESS" { return (T "CheckBasic.Cert.UsableGuess") }
@@ -285,6 +400,61 @@ function Format-FinalUse([string]$code) {
     "UNKNOWN_DER" { return (T "CheckBasic.Cert.Unk") }
     default { return (T "CheckBasic.Cert.Unk") }
   }
+}
+
+function Normalize-Cell([object]$v) {
+  if ($null -eq $v) { return "" }
+  return ([string]$v)
+}
+
+function Write-PrettyTable([string]$title, [object[]]$rows, [string[]]$headers, [string[]]$fields) {
+  Write-Host ("---- {0} ----" -f $title)
+  if ($rows.Count -eq 0) {
+    Write-Host (T "Common.NoCertFiles")
+    Write-Host ""
+    return
+  }
+
+  $widths = @()
+  for ($i = 0; $i -lt $headers.Count; $i++) {
+    $w = ($headers[$i]).Length
+    foreach ($r in $rows) {
+      $val = Normalize-Cell ($r | Select-Object -ExpandProperty $fields[$i] -ErrorAction SilentlyContinue)
+      if ($val.Length -gt $w) { $w = $val.Length }
+    }
+    $widths += $w
+  }
+
+  function Line([string]$sep, [string]$fill, [int[]]$ws) {
+    $parts = @()
+    foreach ($w in $ws) {
+      $parts += ($fill * ($w + 2))
+    }
+    return ($sep + ($parts -join $sep) + $sep)
+  }
+
+  $top = Line "+" "-" $widths
+  $mid = Line "+" "-" $widths
+  $bot = Line "+" "-" $widths
+  Write-Host $top
+
+  $headerCells = @()
+  for ($i = 0; $i -lt $headers.Count; $i++) {
+    $headerCells += (" {0} " -f $headers[$i].PadRight($widths[$i]))
+  }
+  Write-Host ("|" + ($headerCells -join "|") + "|")
+  Write-Host $mid
+
+  foreach ($r in $rows) {
+    $cells = @()
+    for ($i = 0; $i -lt $fields.Count; $i++) {
+      $val = Normalize-Cell ($r | Select-Object -ExpandProperty $fields[$i] -ErrorAction SilentlyContinue)
+      $cells += (" {0} " -f $val.PadRight($widths[$i]))
+    }
+    Write-Host ("|" + ($cells -join "|") + "|")
+  }
+  Write-Host $bot
+  Write-Host ""
 }
 
 function Get-NotAfterFromCert([string]$certPath) {
@@ -448,15 +618,48 @@ function Show-OneFile {
   Assert-ExistsFile $FilePath "入力ファイル"
 
   $ext = [IO.Path]::GetExtension($FilePath).ToLowerInvariant()
+  $chainPath = Find-ChainFileForCert $FilePath $ChainFile $script:ChainSearchDirs
+  $chainSum = Get-ChainFileSummary $chainPath
   Write-Host (T "CheckBasic.Detail.File" @((Resolve-Path -LiteralPath $FilePath)))
 
   switch ($ext) {
     ".cer" {
       $sum = Get-CertChainSummary $FilePath
+      if ($PrettyTable) {
+        $chainMode = if ($sum.HasChain -is [bool] -and $sum.HasChain) { "fullchain" } elseif ($chainSum.Found) { "chainfile" } else { "none" }
+        $row = [PSCustomObject]@{
+          Path = Split-Path -Parent $FilePath
+          File = [IO.Path]::GetFileName($FilePath)
+          Expiry = Get-NotAfterFromCert $FilePath
+          Chain = $chainMode
+          ChainFile = if ($chainSum.Found) { [IO.Path]::GetFileName($chainPath) } else { "" }
+          Blocks = $sum.CertBlocks
+          ChainBlocks = if ($chainSum.Found) { $chainSum.CertBlocks } else { "" }
+          Issuer = $sum.IssuerCN
+          Format = Format-CertFormat $sum.Format
+        }
+        Write-PrettyTable (T "CheckBasic.Pretty.CertTitle") @($row) @(
+          (T "CheckBasic.Pretty.Path"),
+          (T "CheckBasic.Pretty.File"),
+          (T "CheckBasic.Pretty.Expiry"),
+          (T "CheckBasic.Pretty.Chain"),
+          (T "CheckBasic.Pretty.ChainFile"),
+          (T "CheckBasic.Pretty.Blocks"),
+          (T "CheckBasic.Pretty.ChainBlocks"),
+          (T "CheckBasic.Pretty.Issuer"),
+          (T "CheckBasic.Pretty.Format")
+        ) @("Path","File","Expiry","Chain","ChainFile","Blocks","ChainBlocks","Issuer","Format")
+        break
+      }
       Write-Host ("[{0}] 形式: {1}" -f (T "Label.Cert"), (Format-CertFormat $sum.Format))
       if (-not [string]::IsNullOrWhiteSpace($sum.CertBlocks)) { Write-Host ("[{0}] 証明書ブロック数: {1}" -f (T "Label.Cert"), $sum.CertBlocks) }
       if ($sum.HasChain -is [bool]) { Write-Host ("[{0}] 中間証明書同梱: {1}" -f (T "Label.Cert"), (Format-YesNo $sum.HasChain)) }
       Write-Host ("[{0}] 最終利用: {1}" -f (T "Label.Cert"), (Format-FinalUse $sum.FinalUse))
+      if ($chainSum.Found) {
+        Write-Host ("[{0}] {1}: {2}" -f (T "Label.Cert"), (T "CheckBasic.Cert.ChainFile"), $chainPath)
+        if (-not [string]::IsNullOrWhiteSpace($chainSum.CertBlocks)) { Write-Host ("[{0}] {1}: {2}" -f (T "Label.Cert"), (T "CheckBasic.Cert.ChainBlocks"), $chainSum.CertBlocks) }
+        Write-Host ("[{0}] {1}: {2}" -f (T "Label.Cert"), (T "CheckBasic.Cert.ChainFormat"), (Format-CertFormat $chainSum.Format))
+      }
       if (-not [string]::IsNullOrWhiteSpace($sum.ExternalIntermediates)) {
         Write-Host ("[{0}] 外部中間証明書（候補）: {1}" -f (T "Label.Cert"), (($sum.ExternalIntermediates -split ";" | Select-Object -Unique -First 5) -join "; "))
       }
@@ -466,10 +669,41 @@ function Show-OneFile {
     }
     ".crt" {
       $sum = Get-CertChainSummary $FilePath
+      if ($PrettyTable) {
+        $chainMode = if ($sum.HasChain -is [bool] -and $sum.HasChain) { "fullchain" } elseif ($chainSum.Found) { "chainfile" } else { "none" }
+        $row = [PSCustomObject]@{
+          Path = Split-Path -Parent $FilePath
+          File = [IO.Path]::GetFileName($FilePath)
+          Expiry = Get-NotAfterFromCert $FilePath
+          Chain = $chainMode
+          ChainFile = if ($chainSum.Found) { [IO.Path]::GetFileName($chainPath) } else { "" }
+          Blocks = $sum.CertBlocks
+          ChainBlocks = if ($chainSum.Found) { $chainSum.CertBlocks } else { "" }
+          Issuer = $sum.IssuerCN
+          Format = Format-CertFormat $sum.Format
+        }
+        Write-PrettyTable (T "CheckBasic.Pretty.CertTitle") @($row) @(
+          (T "CheckBasic.Pretty.Path"),
+          (T "CheckBasic.Pretty.File"),
+          (T "CheckBasic.Pretty.Expiry"),
+          (T "CheckBasic.Pretty.Chain"),
+          (T "CheckBasic.Pretty.ChainFile"),
+          (T "CheckBasic.Pretty.Blocks"),
+          (T "CheckBasic.Pretty.ChainBlocks"),
+          (T "CheckBasic.Pretty.Issuer"),
+          (T "CheckBasic.Pretty.Format")
+        ) @("Path","File","Expiry","Chain","ChainFile","Blocks","ChainBlocks","Issuer","Format")
+        break
+      }
       Write-Host ("[証明書] 形式: {0}" -f $sum.Format)
       if (-not [string]::IsNullOrWhiteSpace($sum.CertBlocks)) { Write-Host ("[証明書] 証明書ブロック数: {0}" -f $sum.CertBlocks) }
       if (-not [string]::IsNullOrWhiteSpace($sum.HasChain)) { Write-Host ("[証明書] 中間証明書同梱: {0}" -f $sum.HasChain) }
       Write-Host ("[証明書] 最終利用: {0}" -f $sum.FinalUse)
+      if ($chainSum.Found) {
+        Write-Host ("[証明書] {0}: {1}" -f (T "CheckBasic.Cert.ChainFile"), $chainPath)
+        if (-not [string]::IsNullOrWhiteSpace($chainSum.CertBlocks)) { Write-Host ("[証明書] {0}: {1}" -f (T "CheckBasic.Cert.ChainBlocks"), $chainSum.CertBlocks) }
+        Write-Host ("[証明書] {0}: {1}" -f (T "CheckBasic.Cert.ChainFormat"), (Format-CertFormat $chainSum.Format))
+      }
       if (-not [string]::IsNullOrWhiteSpace($sum.ExternalIntermediates)) {
         Write-Host ("[証明書] 外部中間証明書（候補）: {0}" -f ($sum.ExternalIntermediates -split ";" | ForEach-Object { Join-Path $PSScriptRoot $_ } | Select-Object -Unique -First 5 -Skip 0) -join "; ")
         Write-Host (T "CheckBasic.Detail.Cert.NoChainHint")
@@ -480,10 +714,41 @@ function Show-OneFile {
     }
     ".pem" {
       $sum = Get-CertChainSummary $FilePath
+      if ($PrettyTable) {
+        $chainMode = if ($sum.HasChain -is [bool] -and $sum.HasChain) { "fullchain" } elseif ($chainSum.Found) { "chainfile" } else { "none" }
+        $row = [PSCustomObject]@{
+          Path = Split-Path -Parent $FilePath
+          File = [IO.Path]::GetFileName($FilePath)
+          Expiry = Get-NotAfterFromCert $FilePath
+          Chain = $chainMode
+          ChainFile = if ($chainSum.Found) { [IO.Path]::GetFileName($chainPath) } else { "" }
+          Blocks = $sum.CertBlocks
+          ChainBlocks = if ($chainSum.Found) { $chainSum.CertBlocks } else { "" }
+          Issuer = $sum.IssuerCN
+          Format = Format-CertFormat $sum.Format
+        }
+        Write-PrettyTable (T "CheckBasic.Pretty.CertTitle") @($row) @(
+          (T "CheckBasic.Pretty.Path"),
+          (T "CheckBasic.Pretty.File"),
+          (T "CheckBasic.Pretty.Expiry"),
+          (T "CheckBasic.Pretty.Chain"),
+          (T "CheckBasic.Pretty.ChainFile"),
+          (T "CheckBasic.Pretty.Blocks"),
+          (T "CheckBasic.Pretty.ChainBlocks"),
+          (T "CheckBasic.Pretty.Issuer"),
+          (T "CheckBasic.Pretty.Format")
+        ) @("Path","File","Expiry","Chain","ChainFile","Blocks","ChainBlocks","Issuer","Format")
+        break
+      }
       Write-Host ("[証明書] 形式: {0}" -f $sum.Format)
       if (-not [string]::IsNullOrWhiteSpace($sum.CertBlocks)) { Write-Host ("[証明書] 証明書ブロック数: {0}" -f $sum.CertBlocks) }
       if (-not [string]::IsNullOrWhiteSpace($sum.HasChain)) { Write-Host ("[証明書] 中間証明書同梱: {0}" -f $sum.HasChain) }
       Write-Host ("[証明書] 最終利用: {0}" -f $sum.FinalUse)
+      if ($chainSum.Found) {
+        Write-Host ("[証明書] {0}: {1}" -f (T "CheckBasic.Cert.ChainFile"), $chainPath)
+        if (-not [string]::IsNullOrWhiteSpace($chainSum.CertBlocks)) { Write-Host ("[証明書] {0}: {1}" -f (T "CheckBasic.Cert.ChainBlocks"), $chainSum.CertBlocks) }
+        Write-Host ("[証明書] {0}: {1}" -f (T "CheckBasic.Cert.ChainFormat"), (Format-CertFormat $chainSum.Format))
+      }
       if (-not [string]::IsNullOrWhiteSpace($sum.ExternalIntermediates)) {
         Write-Host ("[証明書] 外部中間証明書（候補）: {0}" -f ($sum.ExternalIntermediates -split ";" | ForEach-Object { Join-Path $PSScriptRoot $_ } | Select-Object -Unique -First 5 -Skip 0) -join "; ")
         Write-Host (T "CheckBasic.Detail.Cert.NoChainHint")
@@ -492,7 +757,28 @@ function Show-OneFile {
       Run-OpenSsl @("x509","-in",$FilePath,"-noout","-subject","-issuer","-dates") | Write-Output
       break
     }
-    ".csr" { Run-OpenSsl @("req","-in",$FilePath,"-noout","-subject") | Write-Output; break }
+    ".csr" {
+      if ($PrettyTable) {
+        $subj = ""
+        try {
+          $out = Run-OpenSsl @("req","-in",$FilePath,"-noout","-subject")
+          $subj = (($out | Select-Object -First 1) -replace "^subject=","").Trim()
+        } catch { $subj = "" }
+        $row = [PSCustomObject]@{
+          Path = Split-Path -Parent $FilePath
+          File = [IO.Path]::GetFileName($FilePath)
+          Subject = $subj
+        }
+        Write-PrettyTable (T "CheckBasic.Pretty.CsrTitle") @($row) @(
+          (T "CheckBasic.Pretty.Path"),
+          (T "CheckBasic.Pretty.File"),
+          (T "CheckBasic.Pretty.Subject")
+        ) @("Path","File","Subject")
+        break
+      }
+      Run-OpenSsl @("req","-in",$FilePath,"-noout","-subject") | Write-Output
+      break
+    }
     ".key" {
       $isEnc = Test-KeyEncrypted $FilePath
       $existingPassFiles = @($PassFiles | Where-Object { -not [string]::IsNullOrWhiteSpace($_) -and (Test-Path -LiteralPath $_ -PathType Leaf) } | Select-Object -Unique)
@@ -509,6 +795,27 @@ function Show-OneFile {
         Write-Host "[KEY] 環境変数 PASS_FILE: 未設定"
       }
       Write-Host ("[KEY] 無人運用: {0}" -f (Format-AutoModeStatus $isEnc $Passphrases))
+
+      if ($PrettyTable) {
+        $ok = Try-TestKeyReadable $FilePath $Passphrases
+        $usable = @($Passphrases | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count -gt 0
+        $decText = if ($ok -eq (T "Common.Success")) { (T "Common.Success") } elseif ($isEnc -and -not $usable) { (T "CheckBasic.Key.SkipNoPassLong") } else { (T "Common.Failed") }
+        $row = [PSCustomObject]@{
+          Path = Split-Path -Parent $FilePath
+          File = [IO.Path]::GetFileName($FilePath)
+          Encrypted = Format-YesNo $isEnc
+          AutoMode = Format-AutoModeStatus $isEnc $Passphrases
+          Decrypt = $decText
+        }
+        Write-PrettyTable (T "CheckBasic.Pretty.KeyTitle") @($row) @(
+          (T "CheckBasic.Pretty.Path"),
+          (T "CheckBasic.Pretty.File"),
+          (T "CheckBasic.Pretty.Encrypted"),
+          (T "CheckBasic.Pretty.AutoMode"),
+          (T "CheckBasic.Pretty.Decrypt")
+        ) @("Path","File","Encrypted","AutoMode","Decrypt")
+        break
+      }
 
       $ok = Try-ShowKeyBit $FilePath $Passphrases
       $usable = @($Passphrases | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count -gt 0
@@ -600,6 +907,68 @@ function Show-Folder([string]$folderPath, [string]$label, [string]$oldRootForNew
       continue
     }
 
+    if ($PrettyTable) {
+      $prettyRows = @()
+      foreach ($r in ($certRows | Sort-Object File)) {
+        $chainMode = if ($r.ChainBool -is [bool] -and $r.ChainBool) { "fullchain" } elseif (-not [string]::IsNullOrWhiteSpace($r.ChainFile)) { "chainfile" } else { "none" }
+        $prettyRows += [PSCustomObject]@{
+          Path = $r.Dir
+          File = $r.FileName
+          Expiry = $r.NotAfter
+          Chain = $chainMode
+          ChainFile = $r.ChainFile
+          Blocks = $r.Blocks
+          ChainBlocks = $r.ChainFileBlocks
+          Issuer = $r.IssuerCN
+          Format = $r.Format
+        }
+      }
+      Write-PrettyTable (T "CheckBasic.Pretty.CertTitle") $prettyRows @(
+        (T "CheckBasic.Pretty.Path"),
+        (T "CheckBasic.Pretty.File"),
+        (T "CheckBasic.Pretty.Expiry"),
+        (T "CheckBasic.Pretty.Chain"),
+        (T "CheckBasic.Pretty.ChainFile"),
+        (T "CheckBasic.Pretty.Blocks"),
+        (T "CheckBasic.Pretty.ChainBlocks"),
+        (T "CheckBasic.Pretty.Issuer"),
+        (T "CheckBasic.Pretty.Format")
+      ) @("Path","File","Expiry","Chain","ChainFile","Blocks","ChainBlocks","Issuer","Format")
+
+      $csrPretty = @()
+      foreach ($r in ($csrRows | Sort-Object File)) {
+        $csrPretty += [PSCustomObject]@{
+          Path = $r.Dir
+          File = $r.FileName
+          Subject = $r.Subject
+        }
+      }
+      Write-PrettyTable (T "CheckBasic.Pretty.CsrTitle") $csrPretty @(
+        (T "CheckBasic.Pretty.Path"),
+        (T "CheckBasic.Pretty.File"),
+        (T "CheckBasic.Pretty.Subject")
+      ) @("Path","File","Subject")
+
+      $keyPretty = @()
+      foreach ($r in ($keyRows | Sort-Object File)) {
+        $keyPretty += [PSCustomObject]@{
+          Path = $r.Dir
+          File = $r.FileName
+          Encrypted = $r.Encrypted
+          AutoMode = $r.AutoMode
+          Decrypt = $r.DecryptCheck
+        }
+      }
+      Write-PrettyTable (T "CheckBasic.Pretty.KeyTitle") $keyPretty @(
+        (T "CheckBasic.Pretty.Path"),
+        (T "CheckBasic.Pretty.File"),
+        (T "CheckBasic.Pretty.Encrypted"),
+        (T "CheckBasic.Pretty.AutoMode"),
+        (T "CheckBasic.Pretty.Decrypt")
+      ) @("Path","File","Encrypted","AutoMode","Decrypt")
+      continue
+    }
+
     if ($Table) {
       # 旧来：要点だけを表で表示
       Write-Host ("---- 機関: {0} ----" -f $orgName)
@@ -637,11 +1006,16 @@ function Show-Folder([string]$folderPath, [string]$label, [string]$oldRootForNew
 
       if ($ext -in @(".cer",".crt",".pem")) {
         $sum = Get-CertChainSummary $f.FullName
+        $chainPath = Find-ChainFileForCert $f.FullName "" $script:ChainSearchDirs
+        $chainSum = Get-ChainFileSummary $chainPath
         $notAfter = Get-NotAfterFromCert $f.FullName
         $chainText = ""
         if ($sum.HasChain -is [bool]) { $chainText = Format-YesNo $sum.HasChain }
         $certRows.Add([PSCustomObject]@{
           File = $name
+          FullPath = $f.FullName
+          Dir = Split-Path -Parent $f.FullName
+          FileName = $f.Name
           NotAfter = $notAfter
           Format = Format-CertFormat $sum.Format
           Blocks = $sum.CertBlocks
@@ -651,6 +1025,9 @@ function Show-Folder([string]$folderPath, [string]$label, [string]$oldRootForNew
           FinalUse = Format-FinalUse $sum.FinalUse
           FinalUseCode = $sum.FinalUse
           IssuerCN = $sum.IssuerCN
+          ChainFile = if ($chainSum.Found) { [IO.Path]::GetFileName($chainPath) } else { "" }
+          ChainFileBlocks = if ($chainSum.Found) { $chainSum.CertBlocks } else { "" }
+          ChainFileFormat = if ($chainSum.Found) { Format-CertFormat $chainSum.Format } else { "" }
         }) | Out-Null
         continue
       }
@@ -667,6 +1044,8 @@ function Show-Folder([string]$folderPath, [string]$label, [string]$oldRootForNew
         if (-not [string]::IsNullOrWhiteSpace($cn)) { $note = "CN=$cn" } else { $note = $subj }
         $csrRows.Add([PSCustomObject]@{
           File = $name
+          Dir = Split-Path -Parent $f.FullName
+          FileName = $f.Name
           Subject = $note
         }) | Out-Null
         continue
@@ -679,6 +1058,8 @@ function Show-Folder([string]$folderPath, [string]$label, [string]$oldRootForNew
         $decText = Try-TestKeyReadable $f.FullName $passphrases
         $keyRows.Add([PSCustomObject]@{
           File = $name
+          Dir = Split-Path -Parent $f.FullName
+          FileName = $f.Name
           Encrypted = $encText
           AutoMode = $autoText
           DecryptCheck = $decText
@@ -733,6 +1114,8 @@ function Show-Folder([string]$folderPath, [string]$label, [string]$oldRootForNew
         $exti = [string]$r.ExtIntermediate
         $notAfter = [string]$r.NotAfter
         $issuerCN = [string]$r.IssuerCN
+        $chainFileName = [string]$r.ChainFile
+        $chainBlocks = [string]$r.ChainFileBlocks
         Write-TreeLine 4 $r.File {
           if (-not [string]::IsNullOrWhiteSpace($notAfter)) { Write-Tag (T "CheckBasic.Cert.Expiry" @($notAfter)) "Cyan" }
           if ($chainBool -is [bool] -and $chainBool) { Write-Tag (T "CheckBasic.Cert.HasChain") "Green" }
@@ -749,6 +1132,13 @@ function Show-Folder([string]$folderPath, [string]$label, [string]$oldRootForNew
           } elseif ($finalCode -eq "SINGLE_CERT" -and -not [string]::IsNullOrWhiteSpace($issuerCN)) {
             # 候補がないが中間証明書が必要な場合、発行機関を表示（この機関の中間証明書が必要）
             Write-Tag (T "CheckBasic.Cert.Issuer" @($issuerCN)) "Magenta"
+          }
+          if (-not [string]::IsNullOrWhiteSpace($chainFileName)) {
+            if (-not [string]::IsNullOrWhiteSpace($chainBlocks)) {
+              Write-Tag (T "CheckBasic.Cert.ChainFileBlocks" @($chainBlocks)) "Green"
+            } else {
+              Write-Tag (T "CheckBasic.Cert.ChainFileFound") "Green"
+            }
           }
         }
       }

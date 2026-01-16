@@ -25,6 +25,27 @@
 .PARAMETER OutDir
 出力ディレクトリ（既定: .\merged）
 
+.PARAMETER OutputStyle
+出力スタイル（fullchain: 証明書+中間証明書, chainfile: 証明書単体+チェーンファイル）
+
+.PARAMETER ChainCert
+チェーンファイル用の証明書（省略時：中間証明書の自動選択または -IntermediateCert を使用）
+
+.PARAMETER RootCert
+チェーンファイルに追加するルート証明書（複数指定可、任意）
+
+.PARAMETER ChainOutFile
+チェーンファイルの出力パス（省略時：ChainOutDir 配下に自動配置）
+
+.PARAMETER ChainOutDir
+チェーンファイルの出力ディレクトリ（既定: OutDir と同じ）
+
+.PARAMETER AutoFetchChain
+AIA (CA Issuers) から中間/ルート証明書を自動取得する（OpenSSL 必須）
+
+.PARAMETER DownloadDir
+自動取得した証明書の保存先ディレクトリ
+
 .PARAMETER RootDir
 一括処理時の探索ルート（未指定ならスクリプト配下）
 
@@ -48,6 +69,14 @@ old\ と new\ 配下のすべての証明書を自動結合
 .\Merge-CertificateChain.ps1 -ClientCert .\client.cer -IntermediateCert .\intermediate.cer
 指定した証明書を結合
 
+.EXAMPLE
+.\Merge-CertificateChain.ps1 -ClientCert .\client.cer -IntermediateCert .\intermediate.cer -RootCert .\root.cer -OutputStyle chainfile
+Apache の SSLCertificateChainFile 用にチェーンファイルを作成
+
+.EXAMPLE
+.\Merge-CertificateChain.ps1 -ClientCert .\client.cer -OutputStyle chainfile -AutoFetchChain
+中間/ルート証明書を AIA から自動取得してチェーンファイルを作成
+
 .NOTES
 - 中間証明書の自動選択は、クライアント証明書の issuer と中間証明書の subject が一致するものを探します
 - 既存の出力ファイルと内容が同一の場合は、バックアップせずにスキップします
@@ -69,6 +98,34 @@ param(
 
   [Parameter(Mandatory = $false)]
   [string]$OutDir = ".\merged",
+
+  # 出力スタイル
+  [Parameter(Mandatory = $false)]
+  [ValidateSet("fullchain","chainfile")]
+  [string]$OutputStyle = "fullchain",
+
+  # チェーンファイル用の証明書（省略可）
+  [Parameter(Mandatory = $false)]
+  [string]$ChainCert = "",
+
+  # チェーンファイルに追加するルート証明書（複数指定可）
+  [Parameter(Mandatory = $false)]
+  [string[]]$RootCert = @(),
+
+  # チェーンファイル出力先（未指定の場合は ChainOutDir 配下に自動配置）
+  [Parameter(Mandatory = $false)]
+  [string]$ChainOutFile = "",
+
+  [Parameter(Mandatory = $false)]
+  [string]$ChainOutDir = "",
+
+  # AIA から中間/ルートを自動取得
+  [Parameter(Mandatory = $false)]
+  [switch]$AutoFetchChain,
+
+  # 自動取得した証明書の保存先
+  [Parameter(Mandatory = $false)]
+  [string]$DownloadDir = "",
 
   # 一括処理時の探索ルート（未指定ならスクリプト配下）
   [Parameter(Mandatory = $false)]
@@ -149,8 +206,18 @@ if (-not [string]::IsNullOrWhiteSpace($ClientCert)) {
   Assert-ExistsFile $ClientCert "Client certificate"
 }
 if (-not [string]::IsNullOrWhiteSpace($IntermediateCert)) { Assert-ExistsFile $IntermediateCert "Intermediate certificate" }
+if (-not [string]::IsNullOrWhiteSpace($ChainCert)) { Assert-ExistsFile $ChainCert "Chain certificate" }
+if ($RootCert.Count -gt 0) {
+  foreach ($r in $RootCert) {
+    if (-not [string]::IsNullOrWhiteSpace($r)) { Assert-ExistsFile $r "Root certificate" }
+  }
+}
 
 Ensure-Dir $OutDir
+if ([string]::IsNullOrWhiteSpace($ChainOutDir)) { $ChainOutDir = $OutDir }
+Ensure-Dir $ChainOutDir
+if ([string]::IsNullOrWhiteSpace($DownloadDir)) { $DownloadDir = Join-Path $PSScriptRoot "resources\\downloaded" }
+if ($AutoFetchChain) { Ensure-Dir $DownloadDir }
 
 if ([string]::IsNullOrWhiteSpace($RootDir)) { $RootDir = $PSScriptRoot }
 if (-not (Test-Path -LiteralPath $RootDir -PathType Container)) { throw (T "MergeCert.RootDirNotFound" @($RootDir)) }
@@ -175,6 +242,30 @@ function Get-OutPathForClientCert([string]$clientCertPath) {
   return $outPath
 }
 
+function Get-ChainOutPathForClientCert([string]$clientCertPath) {
+  if (-not [string]::IsNullOrWhiteSpace($ChainOutFile)) { return $ChainOutFile }
+  if (-not [string]::IsNullOrWhiteSpace($OutFile)) {
+    $base = [IO.Path]::GetFileNameWithoutExtension($OutFile)
+    $ext = [IO.Path]::GetExtension($OutFile)
+    $dir = Split-Path -Parent $OutFile
+    if ([string]::IsNullOrWhiteSpace($dir)) { $dir = "." }
+    return (Join-Path $dir ("{0}.chain{1}" -f $base, $ext))
+  }
+  $rel = Resolve-RelPath $RootDir $clientCertPath
+  $relDir = Split-Path -Parent $rel
+  $base = [IO.Path]::GetFileNameWithoutExtension($rel)
+  $ext = [IO.Path]::GetExtension($rel)
+  $name = ("{0}.chain{1}" -f $base, $ext)
+  $outPath = if ([string]::IsNullOrWhiteSpace($relDir)) {
+    (Join-Path $ChainOutDir $name)
+  } else {
+    (Join-Path (Join-Path $ChainOutDir $relDir) $name)
+  }
+  $outParent = Split-Path -Parent $outPath
+  if (-not [string]::IsNullOrWhiteSpace($outParent)) { Ensure-Dir $outParent }
+  return $outPath
+}
+
 function Run-OpenSsl([string[]]$OpenSslArgs, [switch]$AllowFail) {
   $out = & $OpenSsl @OpenSslArgs 2>&1 | ForEach-Object { $_.ToString() }
   if ($LASTEXITCODE -ne 0) {
@@ -182,6 +273,77 @@ function Run-OpenSsl([string[]]$OpenSslArgs, [switch]$AllowFail) {
     throw (T "Common.OpenSslCmdFailed" @(($OpenSslArgs -join " "), (($out | Where-Object { $_ -ne "" }) -join "`n")))
   }
   return $out
+}
+
+function Get-UrlSha1([string]$s) {
+  $sha1 = [System.Security.Cryptography.SHA1]::Create()
+  try {
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($s)
+    $hash = $sha1.ComputeHash($bytes)
+    return ([System.BitConverter]::ToString($hash)).Replace("-", "").ToLowerInvariant()
+  } finally {
+    $sha1.Dispose()
+  }
+}
+
+function Get-AiaIssuerUrls([string]$certPath) {
+  if (-not (Test-Path -LiteralPath $OpenSsl -PathType Leaf)) { return @() }
+  $text = Run-OpenSsl @("x509","-in",$certPath,"-noout","-text") -AllowFail
+  $urls = @()
+  foreach ($line in $text) {
+    if ($line -match "CA Issuers - URI:(.+)$") {
+      $u = $matches[1].Trim()
+      if (-not [string]::IsNullOrWhiteSpace($u)) { $urls += $u }
+    }
+  }
+  return @($urls | Select-Object -Unique)
+}
+
+function Download-CertFromUrl([string]$url) {
+  if ([string]::IsNullOrWhiteSpace($url)) { return "" }
+  $hash = Get-UrlSha1 $url
+  $ext = [IO.Path]::GetExtension(([System.Uri]$url).AbsolutePath)
+  if ([string]::IsNullOrWhiteSpace($ext)) { $ext = ".cer" }
+  $rawPath = Join-Path $DownloadDir ("aia-" + $hash + $ext)
+
+  try {
+    Invoke-WebRequest -Uri $url -OutFile $rawPath -UseBasicParsing | Out-Null
+  } catch {
+    return ""
+  }
+
+  $head = ""
+  try { $head = (Get-Content -LiteralPath $rawPath -TotalCount 1) } catch { }
+  if ($head -match "BEGIN CERTIFICATE") { return $rawPath }
+
+  if (-not (Test-Path -LiteralPath $OpenSsl -PathType Leaf)) { return "" }
+  $pemPath = Join-Path $DownloadDir ("aia-" + $hash + ".pem")
+  $null = Run-OpenSsl @("x509","-inform","DER","-in",$rawPath,"-out",$pemPath) -AllowFail
+  if (Test-Path -LiteralPath $pemPath -PathType Leaf) { return $pemPath }
+  return ""
+}
+
+function AutoFetch-IssuerCert([string]$certPath) {
+  if (-not (Test-Path -LiteralPath $OpenSsl -PathType Leaf)) {
+    Write-Host (T "MergeCert.AutoFetchNeedOpenSsl") -ForegroundColor Yellow
+    return ""
+  }
+  Write-Host (T "MergeCert.AutoFetchStart") -ForegroundColor Cyan
+  $urls = @(Get-AiaIssuerUrls $certPath)
+  if ($urls.Count -eq 0) {
+    Write-Host (T "MergeCert.AutoFetchNoAia" @($certPath)) -ForegroundColor Yellow
+    return ""
+  }
+  foreach ($u in $urls) {
+    Write-Host (T "MergeCert.AutoFetchUrl" @($u)) -ForegroundColor Cyan
+    $p = Download-CertFromUrl $u
+    if (-not [string]::IsNullOrWhiteSpace($p)) {
+      Write-Host (T "MergeCert.AutoFetchSaved" @($p)) -ForegroundColor Green
+      return $p
+    }
+    Write-Host (T "MergeCert.AutoFetchFailed" @($u)) -ForegroundColor Yellow
+  }
+  return ""
 }
 
 function NormalizeLf([string]$s) {
@@ -198,6 +360,34 @@ function Normalize-MergedText([string]$s) {
   return $t
 }
 
+function Get-FirstCertBlock([string]$pemText) {
+  $m = [regex]::Match($pemText, "-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----", "Singleline")
+  if (-not $m.Success) {
+    throw (T "MergeCert.NoCertBlock")
+  }
+  return Normalize-MergedText $m.Value
+}
+
+function Get-RemainingCertBlocksText([string]$pemText) {
+  $matches = [regex]::Matches($pemText, "-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----", "Singleline")
+  if ($matches.Count -le 1) { return "" }
+  $text = ""
+  for ($i = 1; $i -lt $matches.Count; $i++) {
+    $text += (Normalize-MergedText $matches[$i].Value)
+  }
+  return Normalize-MergedText $text
+}
+
+function Get-CertSubjectIssuer([string]$certPath) {
+  if (-not (Test-Path -LiteralPath $OpenSsl -PathType Leaf)) { return $null }
+  $subjLine = (Run-OpenSsl @("x509","-in",$certPath,"-noout","-subject","-nameopt","RFC2253") -AllowFail | Select-Object -First 1)
+  $issuerLine = (Run-OpenSsl @("x509","-in",$certPath,"-noout","-issuer","-nameopt","RFC2253") -AllowFail | Select-Object -First 1)
+  $subj = ([string]$subjLine).Trim().Replace("subject=","")
+  $issuer = ([string]$issuerLine).Trim().Replace("issuer=","")
+  if ([string]::IsNullOrWhiteSpace($subj) -or [string]::IsNullOrWhiteSpace($issuer)) { return $null }
+  return [PSCustomObject]@{ Subject = $subj; Issuer = $issuer }
+}
+
 function Read-TextIfExists([string]$path) {
   if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return "" }
   try {
@@ -205,6 +395,31 @@ function Read-TextIfExists([string]$path) {
   } catch {
     return ""
   }
+}
+
+function Build-ChainTextFromFiles([string[]]$chainFiles) {
+  $combined = ""
+  foreach ($cf in $chainFiles) {
+    Assert-ExistsFile $cf "Chain certificate"
+    $text = Get-Content -LiteralPath $cf -Raw
+    $combined += (Normalize-MergedText $text)
+  }
+  return Normalize-MergedText $combined
+}
+
+function Write-FileIfChanged([string]$path, [string]$content, [string]$outKey) {
+  $existing = Read-TextIfExists $path
+  if (-not [string]::IsNullOrWhiteSpace($existing)) {
+    $existingNorm = Normalize-MergedText $existing
+    if ($existingNorm -eq $content) {
+      Write-Host (T "MergeCert.SameAsExistingSkip" @((Resolve-Path -LiteralPath $path)))
+      return
+    }
+  }
+
+  Backup-IfExists $path
+  Set-Content -LiteralPath $path -Value $content -NoNewline -Encoding ASCII
+  Write-Host (T $outKey @((Resolve-Path -LiteralPath $path)))
 }
 
 function Find-IntermediateCandidates() {
@@ -224,6 +439,10 @@ function Select-IntermediateCert([string]$clientCertPath) {
 
   $cands = @(Find-IntermediateCandidates)
   if ($cands.Count -eq 0) {
+    if ($AutoFetchChain) {
+      $auto = AutoFetch-IssuerCert $clientCertPath
+      if (-not [string]::IsNullOrWhiteSpace($auto)) { return $auto }
+    }
     throw (T "MergeCert.NoIntermediateCandidates")
   }
 
@@ -280,37 +499,94 @@ function Merge-One([string]$clientCertPath) {
   $blockCount = Get-CertBlockCount $a
   $alreadyMerged = ($blockCount -ge 2)
 
-  if ($alreadyMerged -and $SkipIfAlreadyMerged -and -not $Force) {
-    Write-Host (T "MergeCert.AlreadyHasChain" @($blockCount))
-    $merged = $a
-  } else {
-    $selectedIntermediate = Select-IntermediateCert $clientCertPath
-    Assert-ExistsFile $selectedIntermediate "Intermediate certificate"
-    Write-Host (T "MergeCert.IntermediateCert" @((Resolve-Path -LiteralPath $selectedIntermediate)))
+  if ($OutputStyle -eq "fullchain") {
+    if ($alreadyMerged -and $SkipIfAlreadyMerged -and -not $Force) {
+      Write-Host (T "MergeCert.AlreadyHasChain" @($blockCount))
+      $merged = $a
+    } else {
+      $selectedIntermediate = Select-IntermediateCert $clientCertPath
+      Assert-ExistsFile $selectedIntermediate "Intermediate certificate"
+      Write-Host (T "MergeCert.IntermediateCert" @((Resolve-Path -LiteralPath $selectedIntermediate)))
 
-    $b = Get-Content -LiteralPath $selectedIntermediate -Raw
-    $b = Normalize-MergedText $b
-    $merged = $a + $b
-  }
-
-  $merged = Normalize-MergedText $merged
-
-  # 既存出力と同一なら何もしない（不要なバックアップ/更新を防ぐ）
-  $existing = Read-TextIfExists $outPath
-  if (-not [string]::IsNullOrWhiteSpace($existing)) {
-    $existingNorm = Normalize-MergedText $existing
-    if ($existingNorm -eq $merged) {
-      Write-Host (T "MergeCert.SameAsExistingSkip" @((Resolve-Path -LiteralPath $outPath)))
-      return
+      $b = Get-Content -LiteralPath $selectedIntermediate -Raw
+      $b = Normalize-MergedText $b
+      $merged = $a + $b
     }
-  }
 
-  Backup-IfExists $outPath
-  Set-Content -LiteralPath $outPath -Value $merged -NoNewline -Encoding ASCII
+    $merged = Normalize-MergedText $merged
+    Write-FileIfChanged $outPath $merged "MergeCert.OutFile"
+  }
+  else {
+    $certOnly = Get-FirstCertBlock $a
+    Write-FileIfChanged $outPath $certOnly "MergeCert.OutFile"
+
+    $chainText = ""
+    $chainFiles = @()
+    if (-not [string]::IsNullOrWhiteSpace($ChainCert)) {
+      $chainFiles += $ChainCert
+      Write-Host (T "MergeCert.ChainCert" @((Resolve-Path -LiteralPath $ChainCert)))
+    }
+    elseif (-not [string]::IsNullOrWhiteSpace($IntermediateCert)) {
+      $chainFiles += $IntermediateCert
+      Write-Host (T "MergeCert.IntermediateCert" @((Resolve-Path -LiteralPath $IntermediateCert)))
+    }
+    elseif ($alreadyMerged -and -not $Force) {
+      $chainText = Get-RemainingCertBlocksText $a
+      if (-not [string]::IsNullOrWhiteSpace($chainText)) {
+        Write-Host (T "MergeCert.ChainFromClient")
+      }
+    }
+    else {
+      $selectedIntermediate = Select-IntermediateCert $clientCertPath
+      Assert-ExistsFile $selectedIntermediate "Intermediate certificate"
+      Write-Host (T "MergeCert.IntermediateCert" @((Resolve-Path -LiteralPath $selectedIntermediate)))
+      $chainFiles += $selectedIntermediate
+    }
+
+    $rootResolved = @()
+    if ($RootCert.Count -gt 0) {
+      foreach ($r in $RootCert) {
+        if (-not [string]::IsNullOrWhiteSpace($r)) {
+          $chainFiles += $r
+          $rootResolved += (Resolve-Path -LiteralPath $r)
+        }
+      }
+    }
+    elseif ($AutoFetchChain -and $chainFiles.Count -gt 0) {
+      $autoRoot = AutoFetch-IssuerCert $chainFiles[0]
+      if (-not [string]::IsNullOrWhiteSpace($autoRoot)) {
+        $chainFiles += $autoRoot
+        $rootResolved += (Resolve-Path -LiteralPath $autoRoot)
+      }
+    }
+    if ($rootResolved.Count -gt 0) {
+      Write-Host (T "MergeCert.RootCerts" @(($rootResolved -join "; ")))
+    }
+
+    if ($AutoFetchChain -and $rootResolved.Count -gt 0) {
+      foreach ($r in $rootResolved) {
+        $ri = Get-CertSubjectIssuer $r
+        if ($null -ne $ri) {
+          if ($ri.Subject -ne $ri.Issuer) {
+            Write-Host (T "MergeCert.CrossRootHint" @($r)) -ForegroundColor Yellow
+          }
+        }
+      }
+    }
+
+    if ($chainFiles.Count -gt 0) {
+      $chainText += (Build-ChainTextFromFiles $chainFiles)
+    }
+    $chainText = Normalize-MergedText $chainText
+    if ([string]::IsNullOrWhiteSpace($chainText.Trim())) {
+      throw (T "MergeCert.NoChainData")
+    }
+    $chainOutPath = Get-ChainOutPathForClientCert $clientCertPath
+    Write-FileIfChanged $chainOutPath $chainText "MergeCert.ChainOutFile"
+  }
 
   Write-Host ""
   Write-Host (T "MergeCert.Done")
-  Write-Host (T "MergeCert.OutFile" @((Resolve-Path -LiteralPath $outPath)))
 }
 
 function Find-ClientCerts([string]$root) {
@@ -354,5 +630,3 @@ if ([string]::IsNullOrWhiteSpace($ClientCert)) {
 }
 
 Merge-One $ClientCert
-
-
