@@ -32,7 +32,7 @@ OpenSSL 実行ファイルのパス
 OpenSSL とディレクトリ情報を表示して終了
 
 .PARAMETER Overwrite
-出力先（new\<CN>\server.key/server.csr）が既に存在する場合に、バックアップして再生成
+出力先（new\<CN>\<base>.key/<base>.csr）が既に存在する場合に、バックアップして再生成
 
 .PARAMETER Org
 機関ディレクトリ名（指定した場合はその機関のみ処理）
@@ -63,7 +63,7 @@ OpenSSL とディレクトリ情報を表示して終了
 - 旧秘密鍵から鍵長を自動検出します（暗号化鍵の場合はパスワードが必要）
 - 複数機関がある場合は、対話式メニューで選択します（-Org または -All で回避可能）
 - -Overwrite と複数機関の組み合わせは、安全のため "YES" の入力が必要です
-- 出力先は new\<機関名>\<CN>\server.key と server.csr です
+- 出力先は new\<機関名>\<CN>\<base>.key と <base>.csr です
 #>
 
 param(
@@ -89,7 +89,7 @@ param(
   [switch]$ShowInfo
 
   ,
-  # 出力先(new\<CN>\server.key/server.csr)が既に存在する場合に、削除して再生成する
+  # 出力先(new\<CN>\<base>.key/<base>.csr)が既に存在する場合に、削除して再生成する
   [Parameter(Mandatory = $false)]
   [switch]$Overwrite
 
@@ -110,7 +110,7 @@ param(
 
   # 出力言語（既定: ja）
   [Parameter(Mandatory = $false)]
-  [ValidateSet("ja","zh","en")]
+  [ValidateSet("ja", "zh", "en")]
   [string]$Lang = "ja"
 )
 
@@ -126,7 +126,14 @@ if (-not (Test-Path -LiteralPath $i18nModule -PathType Leaf)) { throw (T "Common
 $__i18n = Initialize-I18n -Lang $Lang -BaseDir $PSScriptRoot
 function T([string]$Key, [object[]]$FormatArgs = @()) { return Get-I18nText -I18n $__i18n -Key $Key -FormatArgs $FormatArgs }
 
+# メニューモジュールを読み込む
+$menuModule = Join-Path $PSScriptRoot "lib\\menu.ps1"
+if (Test-Path -LiteralPath $menuModule -PathType Leaf) {
+  . $menuModule
+}
+
 $FixedPassFileName = "passphrase.txt"
+
 
 function Assert-ExistsFile([string]$path, [string]$label) {
   if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
@@ -160,7 +167,8 @@ function With-TempPassFile([string]$passphrase, [scriptblock]$action) {
   try {
     Set-Content -LiteralPath $tmp -Value $passphrase -NoNewline -Encoding ASCII
     return & $action $tmp
-  } finally {
+  }
+  finally {
     Remove-Item -Force -ErrorAction SilentlyContinue -LiteralPath $tmp
   }
 }
@@ -203,7 +211,7 @@ function SubjectMapToSubj([hashtable]$m) {
     throw (T "Renew.CnMissingInSubject")
   }
   $parts = New-Object System.Collections.Generic.List[string]
-  foreach ($k in @("C","ST","L","O","OU","CN")) {
+  foreach ($k in @("C", "ST", "L", "O", "OU", "CN")) {
     if ($m.ContainsKey($k) -and -not [string]::IsNullOrWhiteSpace([string]$m[$k])) {
       $parts.Add(("/{0}={1}" -f $k, $m[$k])) | Out-Null
     }
@@ -212,32 +220,44 @@ function SubjectMapToSubj([hashtable]$m) {
 }
 
 function Get-CertSubject([string]$certPath) {
-  $out = Run-OpenSsl @("x509","-in",$certPath,"-noout","-subject")
+  $out = Run-OpenSsl @("x509", "-in", $certPath, "-noout", "-subject")
   $line = ($out | Where-Object { $_ -match "^subject=" } | Select-Object -First 1)
   if (-not $line) { $line = ($out | Select-Object -First 1) }
   return ([string]$line).Trim()
 }
 
 function Get-CertSANs([string]$certPath) {
-  $out = Run-OpenSsl @("x509","-in",$certPath,"-noout","-ext","subjectAltName")
-  $dns = New-Object System.Collections.Generic.List[string]
-  foreach ($line in $out) {
-    if ($line -match "DNS:") {
-      $parts = $line -split ","
-      foreach ($p in $parts) {
-        $t = $p.Trim()
-        if ($t -match "DNS:(.+)$") {
-          $name = $matches[1].Trim()
-          if (-not [string]::IsNullOrWhiteSpace($name)) { $dns.Add($name) }
-        }
-      }
+  $out = @()
+  try {
+    $out = @(Run-OpenSsl @("x509", "-in", $certPath, "-noout", "-ext", "subjectAltName"))
+  }
+  catch {
+    $out = @()
+  }
+  if ($out.Count -eq 0) {
+    try {
+      $out = @(Run-OpenSsl @("x509", "-in", $certPath, "-noout", "-text"))
+    }
+    catch {
+      return @()
     }
   }
-  return $dns | Select-Object -Unique
+
+  $items = New-Object System.Collections.Generic.List[string]
+  foreach ($line in $out) {
+    foreach ($m in [regex]::Matches([string]$line, "(DNS|IP Address|IP):\s*([^,]+)")) {
+      $t = $m.Groups[1].Value
+      $v = $m.Groups[2].Value.Trim()
+      if ([string]::IsNullOrWhiteSpace($v)) { continue }
+      if ($t -eq "IP Address") { $t = "IP" }
+      $items.Add(("{0}:{1}" -f $t, $v)) | Out-Null
+    }
+  }
+  return @($items | Select-Object -Unique)
 }
 
 function Get-CsrSubject([string]$csrPath) {
-  $out = Run-OpenSsl @("req","-in",$csrPath,"-noout","-subject")
+  $out = Run-OpenSsl @("req", "-in", $csrPath, "-noout", "-subject")
   $line = ($out | Where-Object { $_ -match "^subject=" } | Select-Object -First 1)
   if (-not $line) { $line = ($out | Select-Object -First 1) }
   return ([string]$line).Trim()
@@ -252,31 +272,144 @@ function Get-RsaBitsFromKey([string]$keyPath) {
       return $null
     }
 
-    $out = Run-OpenSsl @("rsa","-in",$keyPath,"-noout","-text")
+    $out = Run-OpenSsl @("rsa", "-in", $keyPath, "-noout", "-text")
     foreach ($line in $out) {
       if ($line -match "\((\d+)\s+bit\)") {
         return [int]$matches[1]
       }
     }
     return $null
-  } catch {
+  }
+  catch {
     return $null
   }
 }
 
+function Normalize-SanItem([string]$s) {
+  if ([string]::IsNullOrWhiteSpace($s)) { return "" }
+  $t = $s.Trim()
+  if ($t -match "^(DNS|IP|IP Address|URI|EMAIL):") {
+    $prefix = $matches[1]
+    $value = $t.Substring($prefix.Length + 1).Trim()
+    if ([string]::IsNullOrWhiteSpace($value)) { return "" }
+    if ($prefix -eq "IP Address") { $prefix = "IP" }
+    return ("{0}:{1}" -f $prefix, $value)
+  }
+  return ("DNS:{0}" -f $t)
+}
+
 function Build-SanOpt([string[]]$sans) {
   if ($null -eq $sans -or $sans.Count -eq 0) { return @() }
-  $value = "subjectAltName=" + (($sans | ForEach-Object { "DNS:$_" }) -join ",")
+  $items = New-Object System.Collections.Generic.List[string]
+  foreach ($s in $sans) {
+    $n = Normalize-SanItem $s
+    if ([string]::IsNullOrWhiteSpace($n)) { continue }
+    $items.Add($n) | Out-Null
+  }
+  $uniq = @($items | Select-Object -Unique)
+  if ($uniq.Count -eq 0) { return @() }
+  $value = "subjectAltName=" + ($uniq -join ",")
   return @("-addext", $value)
+}
+
+function Parse-SanInput([string]$raw) {
+  if ([string]::IsNullOrWhiteSpace($raw)) { return @() }
+  return @($raw -split "[,;\s]+" | Where-Object { $_ -ne "" })
+}
+
+function Prompt-AdjustSans([string]$cn, [string[]]$current) {
+  $currentText = if ($null -eq $current -or $current.Count -eq 0) { (T "CheckBasic.None") } else { ($current -join ", ") }
+  
+  # メニューモジュールが利用可能かチェック
+  $useMenu = $false
+  try {
+    if (Get-Command Show-MenuSelect -ErrorAction SilentlyContinue) {
+      $null = $host.UI.RawUI
+      $useMenu = $true
+    }
+  }
+  catch { }
+
+  if ($useMenu) {
+    # 反転表示メニューを使用
+    $items = @(
+      (T "Renew.SanMenuOptionKeep"),
+      (T "Renew.SanMenuOptionCn"),
+      (T "Renew.SanMenuOptionAppend"),
+      (T "Renew.SanMenuOptionReplace"),
+      ("[ {0} ]" -f (T "Common.MenuCancel"))
+    )
+    $title = (T "Renew.SanMenuTitle") + "`n" + (T "Renew.SanMenuCurrent" @($currentText))
+    $choice = Show-MenuSelect -title $title -items $items
+    if ($null -eq $choice -or $choice -eq $items.Count) { 
+      # キャンセル または ESC = 機関選択に戻る
+      return @("__SKIP__")
+    }
+    
+    switch ($choice) {
+      1 { return $current }  # 現在の SAN を使用
+      2 { return @("DNS:$cn") }  # CN のみ
+      3 {
+        $raw = (Read-Host (T "Renew.SanInputAppend")).Trim()
+        $list = Parse-SanInput $raw
+        return @($current) + $list
+      }
+      4 {
+        $raw = (Read-Host (T "Renew.SanInputReplace")).Trim()
+        $list = Parse-SanInput $raw
+        if ($list.Count -eq 0) { return $current }
+        return $list
+      }
+      default { return $current }
+    }
+  }
+  else {
+    # フォールバック: 従来の数字入力方式
+    Write-Host ""
+    Write-Host (T "Renew.SanMenuTitle")
+    Write-Host (T "Renew.SanMenuCurrent" @($currentText))
+    Write-Host (T "Renew.SanMenuOptionKeep")
+    Write-Host (T "Renew.SanMenuOptionCn")
+    Write-Host (T "Renew.SanMenuOptionAppend")
+    Write-Host (T "Renew.SanMenuOptionReplace")
+    $choice = ""
+    try {
+      $choice = (Read-Host (T "Renew.SanMenuPrompt")).Trim()
+    }
+    catch {
+      return $current
+    }
+    if ([string]::IsNullOrWhiteSpace($choice)) { $choice = "1" }
+
+    switch ($choice) {
+      "2" { return @("DNS:$cn") }
+      "3" {
+        $raw = (Read-Host (T "Renew.SanInputAppend")).Trim()
+        $list = Parse-SanInput $raw
+        return @($current) + $list
+      }
+      "4" {
+        $raw = (Read-Host (T "Renew.SanInputReplace")).Trim()
+        $list = Parse-SanInput $raw
+        if ($list.Count -eq 0) { return $current }
+        return $list
+      }
+      default { return $current }
+    }
+  }
 }
 
 function Find-OldSets([string]$dir, [bool]$recurse = $true) {
   # *.cer/*.crt を基準にセットを作ります
   $certs = @()
   if ($recurse) {
-    $certs = @(Get-ChildItem -LiteralPath $dir -Recurse -File -Include *.cer,*.crt -ErrorAction SilentlyContinue)
-  } else {
-    $certs = @(Get-ChildItem -LiteralPath $dir -File -Include *.cer,*.crt -ErrorAction SilentlyContinue)
+    $certs = @(Get-ChildItem -LiteralPath $dir -Recurse -File | Where-Object { $_.Extension -match "^\.(cer|crt|pem)$" })
+  }
+  if ($recurse) {
+    $certs = @(Get-ChildItem -LiteralPath $dir -Recurse -File | Where-Object { $_.Extension -match "^\.(cer|crt|pem)$" })
+  }
+  else {
+    $certs = @(Get-ChildItem -LiteralPath $dir -File | Where-Object { $_.Extension -match "^\.(cer|crt|pem)$" })
   }
   $sets = @()
   foreach ($c in $certs) {
@@ -298,20 +431,20 @@ function Find-OldSets([string]$dir, [bool]$recurse = $true) {
       Key  = if ($key) { $key.FullName } else { "" }
     }
   }
-  return $sets
+  return @($sets)
 }
 
 function Get-OrgCandidates() {
   $list = New-Object System.Collections.Generic.List[object]
 
   # old 直下に証明書がある場合は (root) も機関として扱う
-  $rootCerts = @(Get-ChildItem -LiteralPath $OldDir -File -Include *.cer,*.crt -ErrorAction SilentlyContinue)
+  $rootCerts = @(Get-ChildItem -LiteralPath $OldDir -File -Include *.cer, *.crt -ErrorAction SilentlyContinue)
   if ($rootCerts.Count -gt 0) {
-    $list.Add([PSCustomObject]@{ Name="(root)"; FullName=$OldDir }) | Out-Null
+    $list.Add([PSCustomObject]@{ Name = "(root)"; FullName = $OldDir }) | Out-Null
   }
 
   foreach ($d in @(Get-ChildItem -LiteralPath $OldDir -Directory -ErrorAction SilentlyContinue)) {
-    $list.Add([PSCustomObject]@{ Name=$d.Name; FullName=$d.FullName }) | Out-Null
+    $list.Add([PSCustomObject]@{ Name = $d.Name; FullName = $d.FullName }) | Out-Null
   }
 
   # (root) を先頭、それ以外は名前順
@@ -320,12 +453,168 @@ function Get-OrgCandidates() {
   return @($roots + $others)
 }
 
+function Get-NotAfterFromCert([string]$certPath) {
+  try {
+    # Run-OpenSsl は既に定義済み
+    $out = @(Run-OpenSsl @("x509", "-in", $certPath, "-noout", "-dates"))
+    $line = @($out | Where-Object { $_ -match "^notAfter=" } | Select-Object -First 1)
+    if ($line.Count -eq 0 -or [string]::IsNullOrWhiteSpace($line[0])) { return $null }
+    $dateStr = ([string]$line[0]).Trim().Replace("notAfter=", "")
+    
+    # OpenSSL の日付形式 (MMM  d HH:mm:ss yyyy 'GMT') は日にちが 1 桁のときスペースが 2 つになるため正規化
+    $normalizedDate = $dateStr -replace "\s+", " "
+    
+    # 形式: "Feb 9 13:51:42 2026 GMT"
+    return [DateTime]::ParseExact($normalizedDate, "MMM d HH:mm:ss yyyy 'GMT'", [System.Globalization.CultureInfo]::InvariantCulture)
+  }
+  catch {
+    return $null
+  }
+}
+
+# ==========================================================
+# TSV Helper Functions
+# ==========================================================
+$script:sessionTsvOverwrite = @{}  # Tracks if we have already handled overwrite/backup for a file path in this session
+
+function Parse-LegacyTsv([string]$tsvPath) {
+  # 戻り値: cn -> UPKI形式の13フィールド全てを含むハッシュ
+  # UPKI TSV format (13 Tab-separated fields):
+  # [0]=Subject, [1]=SAN数, [2]=空, [3]=SystemID, [4]=空, [5]=空
+  # [6]=CSR(Base64), [7]=部門, [8]=機関名, [9]=Contact, [10]=CN, [11]=Software, [12]=SAN
+  $index = @{}
+  try {
+    if (-not (Test-Path -LiteralPath $tsvPath -PathType Leaf)) { return $index }
+    # Shift-JIS（コードページ932）で読み込み（日本Windowsファイル対応）
+    $sjis = [System.Text.Encoding]::GetEncoding(932)
+    $content = [System.IO.File]::ReadAllText($tsvPath, $sjis)
+    $parts = $content -split "`t"
+    
+    # Validate UPKI format (13 fields)
+    if ($parts.Count -ge 12) {
+      $cn = $parts[10].Trim()
+      if ($cn) {
+        $index[$cn] = @{
+          "Subject"  = $parts[0].Trim()
+          "SanCount" = $parts[1].Trim()
+          "Empty2"   = $parts[2].Trim()
+          "SystemID" = $parts[3].Trim()
+          "Empty4"   = $parts[4].Trim()
+          "Empty5"   = $parts[5].Trim()
+          "CSR"      = if ($parts.Count -gt 6) { $parts[6].Trim() } else { "" }
+          "Dept"     = if ($parts.Count -gt 7) { $parts[7].Trim() } else { "" }
+          "OrgName"  = if ($parts.Count -gt 8) { $parts[8].Trim() } else { "" }
+          "Contact"  = if ($parts.Count -gt 9) { $parts[9].Trim() } else { "" }
+          "CN"       = $cn
+          "Software" = if ($parts.Count -gt 11) { $parts[11].Trim() } else { "" }
+          "SAN"      = if ($parts.Count -gt 12) { $parts[12].Trim() } else { "" }
+        }
+      }
+    }
+  }
+  catch {}
+  return $index
+}
+
+function Confirm-TsvData([string]$cn, [hashtable]$legacyData) {
+  if ($NonInteractive) { return $legacyData } # Return as-is in non-interactive
+    
+  Write-Host ""
+  Write-Host (T "Renew.TsvConfirmTitle" @($cn)) -ForegroundColor Cyan
+    
+  # 旧データから全フィールドをコピー、編集可能フィールドのみ確認
+  $result = $legacyData.Clone()
+
+  # 入力プロンプトヘルパー
+  $ask = { param($label, $current) 
+    $p = Read-Host ("  {0} [{1}]" -f $label, $current)
+    if ([string]::IsNullOrWhiteSpace($p)) { return $current }
+    return $p.Trim()
+  }
+
+  # 編集可能フィールド
+  $result["Dept"] = & $ask (T "Renew.TsvLabelDept") $result["Dept"]
+  $result["OrgName"] = & $ask (T "Renew.TsvLabelOrgName") $result["OrgName"]
+  $result["Contact"] = & $ask (T "Renew.TsvLabelContact") $result["Contact"]
+  $result["Software"] = & $ask (T "Renew.TsvLabelSoftware") $result["Software"]
+    
+  return $result
+}
+
+function Export-TsvRow([string]$outPath, [string]$tsvLine) {
+  # Safety Check (Once per session per file)
+  if (Test-Path -LiteralPath $outPath) {
+    if (-not $script:sessionTsvOverwrite.ContainsKey($outPath)) {
+      if ($Overwrite) {
+        # Auto Backup
+        $ts = (Get-Date).ToString("yyyyMMdd_HHmmss")
+        $bakName = "{0}.bak_{1}{2}" -f [IO.Path]::GetFileNameWithoutExtension($outPath), $ts, [IO.Path]::GetExtension($outPath)
+        Rename-Item -LiteralPath $outPath -NewName $bakName -Force
+        Write-Host (T "Renew.TsvBackedUp" @($bakName)) -ForegroundColor Gray
+      }
+      elseif (-not $NonInteractive) {
+        Write-Host (T "Renew.TsvExistsWarn" @($outPath)) -ForegroundColor Yellow
+        $ans = (Read-Host (T "Renew.TsvOverwritePrompt")).Trim()
+        if ($ans -match "^[yY]") {
+          # Backup
+          $ts = (Get-Date).ToString("yyyyMMdd_HHmmss")
+          $bakName = "{0}.bak_{1}{2}" -f [IO.Path]::GetFileNameWithoutExtension($outPath), $ts, [IO.Path]::GetExtension($outPath)
+          Rename-Item -LiteralPath $outPath -NewName $bakName -Force
+          Write-Host (T "Renew.TsvBackedUp" @($bakName)) -ForegroundColor Gray
+        }
+        else {
+          Write-Host (T "Renew.TsvSkipped") -ForegroundColor Yellow
+          return # Skip writing
+        }
+      }
+      $script:sessionTsvOverwrite[$outPath] = $true
+    }
+  }
+  else {
+    $script:sessionTsvOverwrite[$outPath] = $true # Mark as 'owned' by session if we created it
+  }
+
+  # Ensure output directory exists
+  $outDir = [IO.Path]::GetDirectoryName($outPath)
+  if (-not (Test-Path -LiteralPath $outDir)) {
+    New-Item -ItemType Directory -Path $outDir -Force | Out-Null
+  }
+
+  # UPKI互換性のためShift-JIS（コードページ932）で書き込み
+  $sjis = [System.Text.Encoding]::GetEncoding(932)
+  [System.IO.File]::WriteAllText($outPath, $tsvLine, $sjis)
+  Write-Host (T "Renew.TsvAppended") -ForegroundColor Green
+}
+
+
+function Get-NextExpiryDate([object]$candidate) {
+  $isRoot = ($candidate.Name -eq "(root)")
+  $certs = @(if ($isRoot) {
+      @(Get-ChildItem -LiteralPath $candidate.FullName -File -Include *.cer, *.crt, *.pem -ErrorAction SilentlyContinue)
+    }
+    else {
+      @(Get-ChildItem -LiteralPath $candidate.FullName -Recurse -File -Include *.cer, *.crt, *.pem -ErrorAction SilentlyContinue)
+    })
+  if ($certs.Count -eq 0) { return $null }
+
+  $dates = New-Object System.Collections.Generic.List[DateTime]
+  foreach ($c in $certs) {
+    if ($c.Name -match "nii-combined") { continue } # 結合済みは重複するので除外（任意）
+    $d = Get-NotAfterFromCert $c.FullName
+    if ($null -ne $d) { $dates.Add($d) }
+  }
+
+  if ($dates.Count -eq 0) { return $null }
+  $sorted = @($dates | Sort-Object)
+  return $sorted[0]
+}
+
 function Get-NewStatusSummary([object]$candidate) {
   $name = $candidate.Name
 
-  # (root) の場合：old直下の証明書ファイル名(base)が new\<base>\... に展開されるため、件数で表示する
+  # (root) の場合
   if ($name -eq "(root)") {
-    $rootCerts = @(Get-ChildItem -LiteralPath $candidate.FullName -File -Include *.cer,*.crt -ErrorAction SilentlyContinue)
+    $rootCerts = @(Get-ChildItem -LiteralPath $candidate.FullName -File -Include *.cer, *.crt -ErrorAction SilentlyContinue)
     if ($rootCerts.Count -eq 0) { return (T "Renew.New.NotGenerated") }
 
     $done = 0
@@ -334,9 +623,10 @@ function Get-NewStatusSummary([object]$candidate) {
       $dir = Join-Path $NewDir $base
       if (-not (Test-Path -LiteralPath $dir -PathType Container)) { continue }
       $has = @(
-        @(Get-ChildItem -LiteralPath $dir -Recurse -File -Filter "server.csr" -ErrorAction SilentlyContinue),
-        @(Get-ChildItem -LiteralPath $dir -Recurse -File -Filter "server.key" -ErrorAction SilentlyContinue)
-      ) | ForEach-Object { $_ } | Where-Object { $_ -ne $null }
+        @(Get-ChildItem -LiteralPath $dir -Recurse -File -Filter "*.csr" -ErrorAction SilentlyContinue) +
+        @(Get-ChildItem -LiteralPath $dir -Recurse -File -Filter "*.key" -ErrorAction SilentlyContinue) |
+        Where-Object { $_ -ne $null }
+      )
       if ($has.Count -gt 0) { $done++ }
     }
     if ($done -eq 0) { return (T "Renew.New.NotGeneratedRoot" @($rootCerts.Count)) }
@@ -348,19 +638,22 @@ function Get-NewStatusSummary([object]$candidate) {
     return (T "Renew.New.NotGenerated")
   }
 
-  $csrs = @(Get-ChildItem -LiteralPath $newOrgDir -Recurse -File -Filter "server.csr" -ErrorAction SilentlyContinue)
-  $keys = @(Get-ChildItem -LiteralPath $newOrgDir -Recurse -File -Filter "server.key" -ErrorAction SilentlyContinue)
+  $csrs = @(Get-ChildItem -LiteralPath $newOrgDir -Recurse -File -Filter "*.csr" -ErrorAction SilentlyContinue)
+  $keys = @(Get-ChildItem -LiteralPath $newOrgDir -Recurse -File -Filter "*.key" -ErrorAction SilentlyContinue)
   if ($csrs.Count -eq 0 -and $keys.Count -eq 0) {
     return (T "Renew.New.NotGenerated")
   }
 
-  $latestItem = @($csrs + $keys | Sort-Object LastWriteTime -Descending | Select-Object -First 1)
-  $latest = if ($latestItem.Count -gt 0) { $latestItem[0].LastWriteTime.ToString("yyyy-MM-dd HH:mm") } else { "" }
+  $latestItem = @(
+    $($csrs + $keys) | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+  )
+  $latest = if ($latestItem.Count -gt 0 -and $null -ne $latestItem[0]) { $latestItem[0].LastWriteTime.ToString("yyyy-MM-dd HH:mm") } else { "" }
 
   $cnDirs = 0
   if ($csrs.Count -gt 0) {
     $cnDirs = @($csrs | ForEach-Object { $_.Directory.FullName } | Select-Object -Unique).Count
-  } elseif ($keys.Count -gt 0) {
+  }
+  elseif ($keys.Count -gt 0) {
     $cnDirs = @($keys | ForEach-Object { $_.Directory.FullName } | Select-Object -Unique).Count
   }
 
@@ -371,58 +664,113 @@ function Get-NewStatusSummary([object]$candidate) {
 }
 
 function Prompt-SelectOrgs([object[]]$candidates) {
-  Write-Host ""
-  Write-Host (T "Renew.MenuTitle")
-  Write-Host (T "Renew.MenuHint")
-  Write-Host ""
-
-  for ($i = 0; $i -lt $candidates.Count; $i++) {
-    $name = $candidates[$i].Name
-    $certCount = 0
-    if ($name -eq "(root)") {
-      $certCount = @(Get-ChildItem -LiteralPath $candidates[$i].FullName -File -Include *.cer,*.crt -ErrorAction SilentlyContinue).Count
-    } else {
-      $certCount = @(Get-ChildItem -LiteralPath $candidates[$i].FullName -Recurse -File -Include *.cer,*.crt -ErrorAction SilentlyContinue).Count
+  # メニューモジュールが利用可能かチェック
+  $useMenu = $false
+  try {
+    if (Get-Command Show-MenuSelect -ErrorAction SilentlyContinue) {
+      $null = $host.UI.RawUI
+      $useMenu = $true
     }
-    $newStatus = Get-NewStatusSummary $candidates[$i]
-    Write-Host ("[{0}] {1}  (certs={2}, {3})" -f ($i + 1), $name, $certCount, $newStatus)
   }
+  catch { }
 
-  while ($true) {
-    $raw = ""
-    try {
-      $raw = (Read-Host (T "Renew.MenuPrompt")).Trim()
-    } catch {
-      throw (T "Renew.NoInteractive")
-    }
-    if ([string]::IsNullOrWhiteSpace($raw)) { continue }
-    if ($raw -match "^(q|quit|exit)$") { throw (T "Renew.Cancelled") }
-    if ($raw -match "^(all|a)$") { return $candidates }
-
-    $picked = New-Object System.Collections.Generic.List[object]
-    $tokens = $raw -split "[,\\s]+" | Where-Object { $_ -ne "" }
-    $ok = $true
-    foreach ($t in $tokens) {
-      if ($t -notmatch "^[0-9]+$") { $ok = $false; break }
-      $idx = [int]$t
-      if ($idx -lt 1 -or $idx -gt $candidates.Count) { $ok = $false; break }
-      $picked.Add($candidates[$idx - 1]) | Out-Null
-    }
-    if (-not $ok -or $picked.Count -eq 0) {
-      Write-Host (T "Renew.InvalidInput")
-      continue
-    }
-
-    # 重複排除（順序維持）
-    $uniq = New-Object System.Collections.Generic.List[object]
-    $seen = @{}
-    foreach ($p in $picked) {
-      if (-not $seen.ContainsKey($p.Name)) {
-        $seen[$p.Name] = $true
-        $uniq.Add($p) | Out-Null
+  if ($useMenu) {
+    # 反転表示メニューを使用
+    $items = @()
+    $candidateList = @($candidates)
+    for ($i = 0; $i -lt $candidateList.Count; $i++) {
+      $cand = $candidateList[$i]
+      $name = $cand.Name
+      $certCount = 0
+      if ($name -eq "(root)") {
+        $certCount = @(Get-ChildItem -LiteralPath $cand.FullName -File -Include *.cer, *.crt -ErrorAction SilentlyContinue).Count
       }
+      else {
+        $certCount = @(Get-ChildItem -LiteralPath $cand.FullName -Recurse -File -Include *.cer, *.crt, *.pem -ErrorAction SilentlyContinue).Count
+      }
+      
+      # 原始証明書の最早有効期限を取得
+      $expiry = Get-NextExpiryDate $cand
+      $expiryStr = if ($null -ne $expiry) { $expiry.ToString("yyyy-MM-dd") } else { "N/A" }
+      
+      $newStatus = Get-NewStatusSummary $cand
+      
+      # 改行を含むマルチライン形式を構築
+      $itemText = "{0}`n(certs={1}, expires={2}, {3})" -f $name, $certCount, $expiryStr, $newStatus
+      $items += $itemText
     }
-    return @($uniq)
+    $items += ("[ {0} ]" -f (T "Common.MenuAll"))
+    $items += ("[ {0} ]" -f (T "Common.MenuQuit"))
+    
+    $title = (T "Renew.MenuTitle") + "`n" + (T "Renew.MenuHint")
+    # 1行目のみ反転表示されるようになったメニューを呼び出し
+    $choice = Show-MenuSelect -title $title -items $items
+    if ($null -eq $choice -or $choice -eq $items.Count) { 
+      # "終了" を選択した場合 または ESC
+      return $null
+    }
+    if ($choice -eq ($items.Count - 1)) { return $candidates }  # All
+    
+    return @($candidates[$choice - 1])
+  }
+  else {
+    # フォールバック: 従来の数字入力方式
+    Write-Host ""
+    Write-Host (T "Renew.MenuTitle")
+    Write-Host (T "Renew.MenuHint")
+    Write-Host ""
+
+    $candidateList = @($candidates)
+    for ($i = 0; $i -lt $candidateList.Count; $i++) {
+      $name = $candidateList[$i].Name
+      $certCount = 0
+      if ($name -eq "(root)") {
+        $certCount = @(Get-ChildItem -LiteralPath $candidateList[$i].FullName -File -Include *.cer, *.crt -ErrorAction SilentlyContinue).Count
+      }
+      else {
+        $certCount = @(Get-ChildItem -LiteralPath $candidateList[$i].FullName -Recurse -File -Include *.cer, *.crt -ErrorAction SilentlyContinue).Count
+      }
+      $newStatus = Get-NewStatusSummary $candidates[$i]
+      Write-Host ("[{0}] {1}  (certs={2}, {3})" -f ($i + 1), $name, $certCount, $newStatus)
+    }
+
+    while ($true) {
+      $raw = ""
+      try {
+        $raw = (Read-Host (T "Renew.MenuPrompt")).Trim()
+      }
+      catch {
+        throw (T "Renew.NoInteractive")
+      }
+      if ([string]::IsNullOrWhiteSpace($raw)) { continue }
+      if ($raw -match "^(q|quit|exit)$") { throw (T "Renew.Cancelled") }
+      if ($raw -match "^(all|a)$") { return $candidates }
+
+      $picked = New-Object System.Collections.Generic.List[object]
+      $tokens = $raw -split "[,\\s]+" | Where-Object { $_ -ne "" }
+      $ok = $true
+      foreach ($t in $tokens) {
+        if ($t -notmatch "^[0-9]+$") { $ok = $false; break }
+        $idx = [int]$t
+        if ($idx -lt 1 -or $idx -gt $candidates.Count) { $ok = $false; break }
+        $picked.Add($candidates[$idx - 1]) | Out-Null
+      }
+      if (-not $ok -or $picked.Count -eq 0) {
+        Write-Host (T "Renew.InvalidInput")
+        continue
+      }
+
+      # 重複排除（順序維持）
+      $uniq = New-Object System.Collections.Generic.List[object]
+      $seen = @{}
+      foreach ($p in $picked) {
+        if (-not $seen.ContainsKey($p.Name)) {
+          $seen[$p.Name] = $true
+          $uniq.Add($p) | Out-Null
+        }
+      }
+      return $uniq.ToArray()
+    }
   }
 }
 
@@ -447,204 +795,361 @@ $generated = New-Object System.Collections.Generic.List[object]
 # ==========================================================
 # 機関（第一階層）ごとに処理
 # ==========================================================
-$orgDirs = @()
+$interactive = $false
+$validCands = $null
+
 if (-not [string]::IsNullOrWhiteSpace($Org)) {
   if ($Org -eq "(root)" -or $Org -eq "." -or $Org -eq "root") {
-    $rootCerts = @(Get-ChildItem -LiteralPath $OldDir -File -Include *.cer,*.crt -ErrorAction SilentlyContinue)
+    $rootCerts = @(Get-ChildItem -LiteralPath $OldDir -File -Include *.cer, *.crt -ErrorAction SilentlyContinue)
     if ($rootCerts.Count -eq 0) { throw (T "Renew.RootNoCerts") }
-    $orgDirs = @([PSCustomObject]@{ Name="(root)"; FullName=$OldDir })
-  } else {
+    $orgDirs = @([PSCustomObject]@{ Name = "(root)"; FullName = $OldDir })
+  }
+  else {
     $p = Join-Path $OldDir $Org
     if (-not (Test-Path -LiteralPath $p -PathType Container)) { throw (T "Renew.OrgFolderMissing" @($p)) }
-    $orgDirs = @([PSCustomObject]@{ Name=$Org; FullName=$p })
+    $orgDirs = @([PSCustomObject]@{ Name = $Org; FullName = $p })
   }
-} else {
-  $cands = @(Get-OrgCandidates)
-  if ($cands.Count -eq 0) { throw (T "Renew.NoOrgFound" @($OldDir)) }
-
+}
+else {
+  $validCands = @(Get-OrgCandidates)
+  if ($validCands.Count -eq 0) { throw (T "Renew.NoOrgFound" @($OldDir)) }
+  
   if ($All) {
-    $orgDirs = $cands
-  } elseif ($cands.Count -eq 1) {
-    $orgDirs = $cands
-  } else {
+    $orgDirs = $validCands
+  }
+  elseif ($validCands.Count -eq 1) {
+    $orgDirs = $validCands
+  }
+  else {
     if ($NonInteractive) {
       throw (T "Renew.MultiOrgNeedSpecify")
     }
-    $orgDirs = @(Prompt-SelectOrgs $cands)
+    $interactive = $true
   }
 }
 
-if ($Overwrite -and $orgDirs.Count -gt 1) {
-  if ($NonInteractive) {
-    throw (T "Renew.MultiOverwriteForbidden")
-  }
-  Write-Host ""
-  Write-Host (T "Renew.MultiOverwriteWarn")
-  $ans = (Read-Host (T "Renew.MultiOverwriteConfirmPrompt")).Trim()
-  if ($ans -ne "YES") { throw (T "Renew.Cancelled") }
-}
-
-foreach ($orgDir in $orgDirs) {
-  $orgName = $orgDir.Name
-  $orgPath = $orgDir.FullName
-
-  $sets = @()
-  if ($orgName -eq "(root)") {
-    # (root) は直下のみ（サブフォルダの機関と重複させない）
-    $sets = @(Find-OldSets $orgPath $false)
-  } else {
-    $sets = @(Find-OldSets $orgPath $true)
-  }
-  if ($sets.Count -eq 0) {
-    continue
+$script:returnToOrgMenu = $true
+while ($script:returnToOrgMenu) {
+  $script:returnToOrgMenu = $false
+  
+  if ($interactive) {
+    $orgDirs = @(Prompt-SelectOrgs $validCands)
+    if ($null -eq $orgDirs[0]) { break }
   }
 
-  foreach ($set in $sets) {
-    $certPath = $set.Cert
-    $certSubjectLine = Get-CertSubject $certPath
-    $subjectMap = Parse-SubjectToMap $certSubjectLine
+  if ($Overwrite -and $orgDirs.Count -gt 1) {
+    if ($NonInteractive) {
+      throw (T "Renew.MultiOverwriteForbidden")
+    }
+    Write-Host ""
+    Write-Host (T "Renew.MultiOverwriteWarn")
+    $ans = (Read-Host (T "Renew.MultiOverwriteConfirmPrompt")).Trim()
+    if ($ans -ne "YES") { throw (T "Renew.Cancelled") }
+  }
 
-    $cn = $subjectMap["CN"]
-    if ([string]::IsNullOrWhiteSpace($cn)) {
-      # フォールバック：証明書の subject が取れない場合、同一セットの CSR から subject を取る
-      if (-not [string]::IsNullOrWhiteSpace($set.Csr) -and (Test-Path -LiteralPath $set.Csr -PathType Leaf)) {
-        $csrSubjectLine = Get-CsrSubject $set.Csr
-        $subjectMap = Parse-SubjectToMap $csrSubjectLine
-        $cn = $subjectMap["CN"]
-      }
+  foreach ($orgDir in $orgDirs) {
+    $orgName = $orgDir.Name
+    $orgPath = $orgDir.FullName
+
+    $sets = @()
+    if ($orgName -eq "(root)") {
+      # (root) は直下のみ（サブフォルダの機関と重複させない）
+      $sets = @(Find-OldSets $orgPath $false)
+    }
+    else {
+      $sets = @(Find-OldSets $orgPath $true)
+      if ($sets.Count -eq 0) { continue }
+    }
+    if ($sets.Count -eq 0) {
+      continue
+    }
+
+    foreach ($set in $sets) {
+      $certPath = $set.Cert
+      $certSubjectLine = Get-CertSubject $certPath
+      $subjectMap = Parse-SubjectToMap $certSubjectLine
+
+      $cn = $subjectMap["CN"]
       if ([string]::IsNullOrWhiteSpace($cn)) {
-        throw (T "Renew.CnNotFound" @($certPath, $certSubjectLine, $set.Csr))
+        # フォールバック：証明書の subject が取れない場合、同一セットの CSR から subject を取る
+        if (-not [string]::IsNullOrWhiteSpace($set.Csr) -and (Test-Path -LiteralPath $set.Csr -PathType Leaf)) {
+          $csrSubjectLine = Get-CsrSubject $set.Csr
+          $subjectMap = Parse-SubjectToMap $csrSubjectLine
+          $cn = $subjectMap["CN"]
+        }
+        if ([string]::IsNullOrWhiteSpace($cn)) {
+          throw (T "Renew.CnNotFound" @($certPath, $certSubjectLine, $set.Csr))
+        }
       }
-    }
 
-    $sans = @()
-    try { $sans = @(Get-CertSANs $certPath) } catch { $sans = @() }
-    if ($sans.Count -eq 0) {
-      # SAN が取れない場合は CN のみを入れる
-      $sans = @($cn)
-    }
+      $sans = @()
+      try { $sans = @(Get-CertSANs $certPath) } catch { $sans = @() }
+      if ($sans.Count -eq 0) {
+        # SAN が取れない場合は CN のみを入れる
+        $sans = @("DNS:$cn")
+      }
+      if (-not $NonInteractive) {
+        $sans = @(Prompt-AdjustSans $cn $sans)
+        if ($sans.Count -eq 1 -and $sans[0] -eq "__SKIP__") {
+          # ユーザーがキャンセル = 機関選択メニューに戻る
+          $script:returnToOrgMenu = $true
+          break  # foreach $set を抜ける
+        }
+      }
 
-    # セット単位のパスワードファイル（任意）
-    $setPassFile = ""
-    if (-not [string]::IsNullOrWhiteSpace($PassFile)) {
-      Assert-ExistsFile $PassFile "PassFile"
-      $setPassFile = $PassFile
-    } else {
-      $setPassFile = Find-PassFile ([IO.Path]::GetDirectoryName($certPath))
-      if ([string]::IsNullOrWhiteSpace($setPassFile)) { $setPassFile = Find-PassFile $orgPath }
-      # (root) のみ old 直下も探す（他機関への誤適用を避ける）
-      if ($orgName -eq "(root)" -and [string]::IsNullOrWhiteSpace($setPassFile)) { $setPassFile = Find-PassFile $OldDir }
-    }
-    $setPassphrase = Get-Passphrase $setPassFile
+      # セット単位のパスワードファイル（任意）
+      $setPassFile = ""
+      if (-not [string]::IsNullOrWhiteSpace($PassFile)) {
+        Assert-ExistsFile $PassFile "PassFile"
+        $setPassFile = $PassFile
+      }
+      else {
+        $setPassFile = Find-PassFile ([IO.Path]::GetDirectoryName($certPath))
+        if ([string]::IsNullOrWhiteSpace($setPassFile)) { $setPassFile = Find-PassFile $orgPath }
+        # (root) のみ old 直下も探す（他機関への誤適用を避ける）
+        if ($orgName -eq "(root)" -and [string]::IsNullOrWhiteSpace($setPassFile)) { $setPassFile = Find-PassFile $OldDir }
+      }
+      $setPassphrase = Get-Passphrase $setPassFile
 
-    $rsaBits = $DefaultRsaBits
-    if (-not [string]::IsNullOrWhiteSpace($set.Key)) {
-      $bits = $null
-      # 暗号化鍵の場合、パスワードで読める可能性がある
+      $rsaBits = $DefaultRsaBits
+      if (-not [string]::IsNullOrWhiteSpace($set.Key)) {
+        $bits = $null
+        # 暗号化鍵の場合、パスワードで読める可能性がある
+        if (-not [string]::IsNullOrWhiteSpace($setPassphrase)) {
+          $bits = With-TempPassFile $setPassphrase {
+            param($tmpPass)
+            try {
+              $out = Run-OpenSsl @("rsa", "-in", $set.Key, "-noout", "-text", "-passin", ("file:{0}" -f $tmpPass))
+              foreach ($line in $out) { if ($line -match "\((\d+)\s+bit\)") { return [int]$matches[1] } }
+              return $null
+            }
+            catch { return $null }
+          }
+        }
+        if (-not $bits) {
+          $bits = Get-RsaBitsFromKey $set.Key
+        }
+        if ($bits) { $rsaBits = $bits }
+      }
+
+      $subj = SubjectMapToSubj $subjectMap
+      $sanOpt = Build-SanOpt $sans
+
+      # new\<機関>\<CN>\...  (root の場合は証明書ファイル名を機関名として扱う)
+      $orgOut = $orgName
+      if ($orgName -eq "(root)") { $orgOut = [IO.Path]::GetFileNameWithoutExtension($certPath) }
+      $newOrgDir = Join-Path $NewDir $orgOut
+      Ensure-Dir $newOrgDir
+      $outDir = $newOrgDir
+      if ($orgOut -ne $cn) { $outDir = Join-Path $newOrgDir $cn }
+      Ensure-Dir $outDir
+
+      $base = [IO.Path]::GetFileNameWithoutExtension($certPath)
+      $outKey = Join-Path $outDir ("{0}.key" -f $base)
+      $outCsr = Join-Path $outDir ("{0}.csr" -f $base)
+
+      # 既存ファイルがある場合は上書きしない（事故防止）
+      if ((Test-Path -LiteralPath $outKey -PathType Leaf) -or (Test-Path -LiteralPath $outCsr -PathType Leaf)) {
+        if ($Overwrite) {
+          # 事故防止：削除ではなくバックアップしてから再生成する
+          $ts = (Get-Date).ToString("yyyyMMdd_HHmmss")
+          if (Test-Path -LiteralPath $outKey -PathType Leaf) {
+            try {
+              # 拡張子は維持（*.key）し、ファイル名にタイムスタンプを入れる
+              Rename-Item -Force -ErrorAction Stop -LiteralPath $outKey -NewName ("{0}.bak_{1}.key" -f $base, $ts)
+            }
+            catch {
+              throw (T "Renew.BackupKeyFail" @($outKey))
+            }
+          }
+          if (Test-Path -LiteralPath $outCsr -PathType Leaf) {
+            try {
+              # 拡張子は維持（*.csr）し、ファイル名にタイムスタンプを入れる
+              Rename-Item -Force -ErrorAction Stop -LiteralPath $outCsr -NewName ("{0}.bak_{1}.csr" -f $base, $ts)
+            }
+            catch {
+              throw (T "Renew.BackupCsrFail" @($outCsr))
+            }
+          }
+        }
+        else {
+          # 対話的に選択
+          $conflictItems = New-Object System.Collections.Generic.List[string]
+          $conflictItems.Add((T "Renew.ConflictOverwrite")) | Out-Null
+              
+          # 複数件ある場合のみ「スキップ」を出す（現在の組織が複数件 or 処理対象組織が複数）
+          $isBatchTask = ($orgDirs.Count -gt 1 -or $sets.Count -gt 1)
+          if ($isBatchTask) {
+            $conflictItems.Add((T "Renew.ConflictSkip")) | Out-Null
+          }
+              
+          # 常に出す（いいえ / 戻る）
+          $conflictItems.Add((T "Renew.ConflictCancel")) | Out-Null
+
+          $conflictTitle = (T "Renew.OutExistsPrompt" @($outDir))
+          $conflictSel = Show-MenuSelect -title $conflictTitle -items $conflictItems.ToArray() -helpText (T "Renew.MenuPrompt")
+              
+          if ($null -eq $conflictSel) {
+            # ESC
+            $script:returnToOrgMenu = $true
+            break
+          }
+
+          if ($isBatchTask -and $conflictSel -eq 2) {
+            # スキップ (batch mode Choice 2)
+            continue
+          }
+
+          if (($isBatchTask -and $conflictSel -eq 3) -or (-not $isBatchTask -and $conflictSel -eq 2)) {
+            # キャンセル / 戻る (batch Choice 3 or single Choice 2)
+            $script:returnToOrgMenu = $true
+            break
+          }
+              
+          # Overwrite を選択した場合（既存の $Overwrite=true 時のロジックを実行）
+          $ts = (Get-Date).ToString("yyyyMMdd_HHmmss")
+          if (Test-Path -LiteralPath $outKey -PathType Leaf) {
+            try { Rename-Item -Force -ErrorAction Stop -LiteralPath $outKey -NewName ("{0}.bak_{1}.key" -f $base, $ts) }
+            catch { throw (T "Renew.BackupKeyFail" @($outKey)) }
+          }
+          if (Test-Path -LiteralPath $outCsr -PathType Leaf) {
+            try { Rename-Item -Force -ErrorAction Stop -LiteralPath $outCsr -NewName ("{0}.bak_{1}.csr" -f $base, $ts) }
+            catch { throw (T "Renew.BackupCsrFail" @($outCsr)) }
+          }
+        }
+      }
+
       if (-not [string]::IsNullOrWhiteSpace($setPassphrase)) {
-        $bits = With-TempPassFile $setPassphrase {
+        # OpenSSL 3.x の req は -aes256 を受け付けないため、genpkey + req で生成する
+        With-TempPassFile $setPassphrase {
           param($tmpPass)
-          try {
-            $out = Run-OpenSsl @("rsa","-in",$set.Key,"-noout","-text","-passin",("file:{0}" -f $tmpPass))
-            foreach ($line in $out) { if ($line -match "\((\d+)\s+bit\)") { return [int]$matches[1] } }
-            return $null
-          } catch { return $null }
-        }
+          Run-OpenSsl @(
+            "genpkey",
+            "-algorithm", "RSA",
+            "-pkeyopt", ("rsa_keygen_bits:{0}" -f $rsaBits),
+            "-out", $outKey,
+            "-aes-256-cbc",
+            "-pass", ("file:{0}" -f $tmpPass)
+          ) | Out-Null
+
+          $reqArgs = @("req", "-new", "-sha256", "-key", $outKey, "-passin", ("file:{0}" -f $tmpPass), "-out", $outCsr, "-subj", $subj)
+          if ($sanOpt.Count -gt 0) { $reqArgs += $sanOpt }
+          Run-OpenSsl $reqArgs | Out-Null
+        } | Out-Null
       }
-      if (-not $bits) {
-        $bits = Get-RsaBitsFromKey $set.Key
+      else {
+        $keyArgs = @("req", "-new", "-newkey", "rsa:$rsaBits", "-sha256", "-nodes", "-keyout", $outKey, "-out", $outCsr, "-subj", $subj)
+        if ($sanOpt.Count -gt 0) { $keyArgs += $sanOpt }
+        Run-OpenSsl $keyArgs | Out-Null
       }
-      if ($bits) { $rsaBits = $bits }
-    }
-
-    $subj = SubjectMapToSubj $subjectMap
-    $sanOpt = Build-SanOpt $sans
-
-    # new\<機関>\<CN>\...  (root の場合は証明書ファイル名を機関名として扱う)
-    $orgOut = $orgName
-    if ($orgName -eq "(root)") { $orgOut = [IO.Path]::GetFileNameWithoutExtension($certPath) }
-    $newOrgDir = Join-Path $NewDir $orgOut
-    Ensure-Dir $newOrgDir
-    $outDir = $newOrgDir
-    if ($orgOut -ne $cn) { $outDir = Join-Path $newOrgDir $cn }
-    Ensure-Dir $outDir
-
-    $outKey = Join-Path $outDir "server.key"
-    $outCsr = Join-Path $outDir "server.csr"
-
-    # 既存ファイルがある場合は上書きしない（事故防止）
-    if ((Test-Path -LiteralPath $outKey -PathType Leaf) -or (Test-Path -LiteralPath $outCsr -PathType Leaf)) {
-      if ($Overwrite) {
-        # 事故防止：削除ではなくバックアップしてから再生成する
-        $ts = (Get-Date).ToString("yyyyMMdd_HHmmss")
-        if (Test-Path -LiteralPath $outKey -PathType Leaf) {
-          try {
-            # 拡張子は維持（*.key）し、ファイル名にタイムスタンプを入れる
-            Rename-Item -Force -ErrorAction Stop -LiteralPath $outKey -NewName ("server.bak_{0}.key" -f $ts)
-          } catch {
-            throw (T "Renew.BackupKeyFail" @($outKey))
+          
+      # --- INTEGRATED TSV GENERATION START ---
+      try {
+        # 1. Find TSV in Old Directory (Set -> Cert -> Directory)
+        $oldCertDir = [IO.Path]::GetDirectoryName($certPath)
+        $targetFilter = "*.tsv"
+        $legacyTsvFiles = @(Get-ChildItem -LiteralPath $oldCertDir -Filter $targetFilter -File -ErrorAction SilentlyContinue)
+              
+        $tsvDefaults = @{ "Software" = "Apache"; "Contact" = "Admin"; "Term" = "1"; "SystemID" = "SYS-NEW" }
+        $tsvOutName = "server_list.tsv" # Default name
+        
+        if ($legacyTsvFiles.Count -gt 0) {
+          $legFile = $legacyTsvFiles[0]
+          $tsvOutName = $legFile.Name
+          $map = Parse-LegacyTsv $legFile.FullName
+          if ($map.ContainsKey($cn)) {
+            $tsvDefaults = $map[$cn]
           }
         }
-        if (Test-Path -LiteralPath $outCsr -PathType Leaf) {
-          try {
-            # 拡張子は維持（*.csr）し、ファイル名にタイムスタンプを入れる
-            Rename-Item -Force -ErrorAction Stop -LiteralPath $outCsr -NewName ("server.bak_{0}.csr" -f $ts)
-          } catch {
-            throw (T "Renew.BackupCsrFail" @($outCsr))
-          }
+        
+        # 3. Confirm/Edit
+        $finalData = Confirm-TsvData $cn $tsvDefaults
+                  
+        # 4. Build UPKI 13-field TSV Row
+        # [0]=Subject, [1]=SAN数, [2]=空, [3]=SystemID, [4]=空, [5]=空
+        # [6]=CSR(Base64), [7]=部門, [8]=機関名, [9]=Contact, [10]=CN, [11]=Software, [12]=SAN
+        
+        # CSR内容（Base64）を読み込み
+        $csrBase64 = ""
+        if (Test-Path -LiteralPath $outCsr) {
+          $csrLines = Get-Content -LiteralPath $outCsr
+          # Extract only base64 body (skip BEGIN/END lines)
+          $csrBase64 = ($csrLines | Where-Object { $_ -notmatch "^----" }) -join ""
         }
-      } else {
-        throw (T "Renew.OutExistsNoOverwrite" @($outDir))
+        
+        # SAN文字列を構築（dNSName=xxx,dNSName=yyy）
+        $sanParts = @()
+        foreach ($s in $sans) {
+          if ($s -match "^DNS:(.*)") { $sanParts += "dNSName=$($matches[1])" }
+          elseif ($s -match "^IP:(.*)") { $sanParts += "iPAddress=$($matches[1])" }
+        }
+        $sanConfig = $sanParts -join ","
+        
+        # UPKI形式の13フィールド配列を構築
+        $fields = @(
+          $finalData["Subject"]     # [0] Subject DN
+          $finalData["SanCount"]    # [1] SAN count
+          $finalData["Empty2"]      # [2] empty
+          $finalData["SystemID"]    # [3] SystemID
+          $finalData["Empty4"]      # [4] empty
+          $finalData["Empty5"]      # [5] empty
+          $csrBase64                # [6] CSR Base64
+          $finalData["Dept"]        # [7] 部門
+          $finalData["OrgName"]     # [8] 機関名
+          $finalData["Contact"]     # [9] Contact
+          $cn                       # [10] CN
+          $finalData["Software"]    # [11] Software
+          $sanConfig                # [12] SAN
+        )
+        
+        # Join with Tab
+        $tsvLine = $fields -join "`t"
+
+        # 5. Export (Shift-JIS encoding)
+        $tsvOutPath = Join-Path $newOrgDir $tsvOutName
+        Export-TsvRow $tsvOutPath $tsvLine
       }
+      catch {
+        Write-Warning "TSV Generation Failed: $_"
+      }
+      # --- INTEGRATED TSV GENERATION END ---
+
+      $generated.Add([PSCustomObject]@{
+          Org      = $orgOut
+          CN       = $cn
+          Cert     = $certPath
+          OutDir   = $outDir
+          Key      = $outKey
+          Csr      = $outCsr
+          RsaBits  = $rsaBits
+          SANs     = ($sans -join ", ")
+          PassFile = $setPassFile
+        }) | Out-Null
     }
-
-    if (-not [string]::IsNullOrWhiteSpace($setPassphrase)) {
-      # OpenSSL 3.x の req は -aes256 を受け付けないため、genpkey + req で生成する
-      With-TempPassFile $setPassphrase {
-        param($tmpPass)
-        Run-OpenSsl @(
-          "genpkey",
-          "-algorithm","RSA",
-          "-pkeyopt",("rsa_keygen_bits:{0}" -f $rsaBits),
-          "-out",$outKey,
-          "-aes-256-cbc",
-          "-pass",("file:{0}" -f $tmpPass)
-        ) | Out-Null
-
-        $reqArgs = @("req","-new","-sha256","-key",$outKey,"-passin",("file:{0}" -f $tmpPass),"-out",$outCsr,"-subj",$subj)
-        if ($sanOpt.Count -gt 0) { $reqArgs += $sanOpt }
-        Run-OpenSsl $reqArgs | Out-Null
-      } | Out-Null
-    } else {
-      $keyArgs = @("req","-new","-newkey","rsa:$rsaBits","-sha256","-nodes","-keyout",$outKey,"-out",$outCsr,"-subj",$subj)
-      if ($sanOpt.Count -gt 0) { $keyArgs += $sanOpt }
-      Run-OpenSsl $keyArgs | Out-Null
-    }
-
-    $generated.Add([PSCustomObject]@{
-      Org = $orgOut
-      CN = $cn
-      Cert = $certPath
-      OutDir = $outDir
-      Key = $outKey
-      Csr = $outCsr
-      RsaBits = $rsaBits
-      SANs = ($sans -join ", ")
-      PassFile = $setPassFile
-    }) | Out-Null
+    # SAN メニューでキャンセルされた場合は機関ループを抜ける
+    if ($script:returnToOrgMenu) { break }
   }
-}
+  # SAN メニューでキャンセルされた場合は機関選択に戻る
+  if ($script:returnToOrgMenu) { continue }
 
-Write-Host ""
-Write-Host (T "Renew.DoneTitle")
-$generated |
-  Sort-Object Org,CN |
+  Write-Host ""
+  Write-Host (T "Renew.DoneTitle")
+  $generated |
+  Sort-Object Org, CN |
   Select-Object `
-    @{Name=(T "Renew.Table.Org"); Expression = { $_.Org }}, `
-    @{Name=(T "Renew.Table.Cn"); Expression = { $_.CN }}, `
-    @{Name=(T "Renew.Table.RsaBits"); Expression = { $_.RsaBits }}, `
-    @{Name=(T "Renew.Table.San"); Expression = { $_.SANs }}, `
-    @{Name=(T "Renew.Table.OutDir"); Expression = { $_.OutDir }} |
+  @{Name = (T "Renew.Table.Org"); Expression = { $_.Org } }, `
+  @{Name = (T "Renew.Table.Cn"); Expression = { $_.CN } }, `
+  @{Name = (T "Renew.Table.RsaBits"); Expression = { $_.RsaBits } }, `
+  @{Name = (T "Renew.Table.San"); Expression = { $_.SANs } }, `
+  @{Name = (T "Renew.Table.OutDir"); Expression = { $_.OutDir } } |
   Format-Table -AutoSize
 
-
+  Write-Host ""
+  if ($interactive) {
+    Write-Host ""
+    Write-Host (T "Renew.PressAnyKeyToReturn") -NoNewline
+    try { $null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") } catch { }
+    Write-Host ""
+    $script:returnToOrgMenu = $true
+  }
+}  # end while

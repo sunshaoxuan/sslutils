@@ -10,7 +10,7 @@
 - クライアント証明書と中間証明書の自動結合
 - 中間証明書の自動選択（issuer/subject による一致判定）
 - 既に結合済みの証明書の検出とスキップ
-- 一括処理モード（old/ と new/ 配下を自動走査）
+- 一括処理モード（new/ 配下を自動走査）
 - 改行コードの正規化（LF統一）
 
 .PARAMETER ClientCert
@@ -45,7 +45,7 @@ OpenSSL 実行ファイルのパス
 
 .EXAMPLE
 .\Merge-CertificateChain.ps1
-old\ と new\ 配下のすべての証明書を自動結合
+new\ 配下のすべての .cer 証明書を自動結合
 
 .EXAMPLE
 .\Merge-CertificateChain.ps1 -ClientCert .\client.cer -IntermediateCert .\intermediate.cer
@@ -62,7 +62,7 @@ fullchain に交差ルートを追加
 #>
 
 param(
-  # 省略した場合：old\ と new\ を走査して一括処理します
+  # 省略した場合：new\ を走査して一括処理します
   [Parameter(Mandatory = $false, Position = 0)]
   [string]$ClientCert = "",
 
@@ -99,7 +99,7 @@ param(
 
   # 出力言語（既定: ja）
   [Parameter(Mandatory = $false)]
-  [ValidateSet("ja","zh","en")]
+  [ValidateSet("ja", "zh", "en")]
   [string]$Lang = "ja"
 )
 
@@ -110,27 +110,62 @@ $ErrorActionPreference = "Stop"
 try {
   [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
   $OutputEncoding = [Console]::OutputEncoding
-} catch { }
+}
+catch { }
 
 $i18nModule = Join-Path $PSScriptRoot "lib\\i18n.ps1"
 if (-not (Test-Path -LiteralPath $i18nModule -PathType Leaf)) { throw (T "Common.I18nModuleNotFound" @($i18nModule)) }
 . $i18nModule
 $__i18n = Initialize-I18n -Lang $Lang -BaseDir $PSScriptRoot
+$securityModule = Join-Path $PSScriptRoot "lib\security.ps1"
+if (Test-Path -LiteralPath $securityModule -PathType Leaf) { . $securityModule }
 function T([string]$Key, [object[]]$FormatArgs = @()) { return Get-I18nText -I18n $__i18n -Key $Key -FormatArgs $FormatArgs }
 
-# ===== 設定（静的パラメータ表）=====
-# ルート直下に置かれる「中間証明書候補」ファイル名パターン
-$IntermediateCertFileNamePatterns = @(
-  "nii*.cer",
-  "nii*.crt",
-  "nii*.pem",
-  "gs*.cer",
-  "gs*.crt",
-  "gs*.pem",
-  "globalsign*.cer",
-  "globalsign*.crt",
-  "globalsign*.pem"
-)
+# 共通メニューモジュール読み込み
+$menuModule = Join-Path $PSScriptRoot "lib\menu.ps1"
+if (Test-Path -LiteralPath $menuModule -PathType Leaf) { . $menuModule }
+
+# ===== Configuration Loading =====
+$configPath = Join-Path $PSScriptRoot "CertConfig.psd1"
+if (-not (Test-Path -LiteralPath $configPath -PathType Leaf)) {
+  throw (T "Common.FileNotFound" @("Configuration file", $configPath))
+}
+$CertConfig = Import-PowerShellDataFile -Path $configPath
+
+# Helper to get all patterns from config
+function Get-AllCertPatterns() {
+  $patterns = @()
+  if ($CertConfig.Agencies) {
+    foreach ($agency in $CertConfig.Agencies.Values) {
+      if ($agency.Patterns) {
+        $patterns += $agency.Patterns
+      }
+    }
+  }
+  return $patterns
+}
+
+# Helper to get search paths (agencies)
+function Get-CertSearchPaths() {
+  $paths = @()
+  if ($CertConfig.Agencies) {
+    $root = $CertConfig.CertStoreRoot
+    if ([string]::IsNullOrWhiteSpace($root)) { $root = "CertStore" }
+    $rootParams = Join-Path $PSScriptRoot $root
+        
+    foreach ($agency in $CertConfig.Agencies.Values) {
+      if ($agency.Path) {
+        $paths += Join-Path $rootParams $agency.Path
+      }
+    }
+  }
+  return $paths
+}
+
+
+# Intermediate cert patterns from config
+$IntermediateCertFileNamePatterns = @(Get-AllCertPatterns)
+
 
 function Backup-IfExists([string]$path) {
   if ([string]::IsNullOrWhiteSpace($path)) { return }
@@ -172,13 +207,13 @@ if ([string]::IsNullOrWhiteSpace($RootDir)) { $RootDir = $PSScriptRoot }
 if (-not (Test-Path -LiteralPath $RootDir -PathType Container)) { throw (T "MergeCert.RootDirNotFound" @($RootDir)) }
 
 function Resolve-RelPath([string]$baseDir, [string]$fullPath) {
-  $base = (Resolve-Path -LiteralPath $baseDir).Path.TrimEnd('\','/')
+  $base = (Resolve-Path -LiteralPath $baseDir).Path.TrimEnd('\', '/')
   $full = (Resolve-Path -LiteralPath $fullPath).Path
   if ($full.Length -lt $base.Length) { return [IO.Path]::GetFileName($fullPath) }
   if ($full.Substring(0, $base.Length).ToLowerInvariant() -ne $base.ToLowerInvariant()) {
     return [IO.Path]::GetFileName($fullPath)
   }
-  $rel = $full.Substring($base.Length).TrimStart('\','/')
+  $rel = $full.Substring($base.Length).TrimStart('\', '/')
   return $rel
 }
 
@@ -201,7 +236,7 @@ function Run-OpenSsl([string[]]$OpenSslArgs, [switch]$AllowFail) {
 }
 
 function NormalizeLf([string]$s) {
-  return ($s -replace "`r`n","`n" -replace "`r","`n")
+  return ($s -replace "`r`n", "`n" -replace "`r", "`n")
 }
 
 function Get-CertBlockCount([string]$pemText) {
@@ -218,7 +253,8 @@ function Read-TextIfExists([string]$path) {
   if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return "" }
   try {
     return (Get-Content -LiteralPath $path -Raw)
-  } catch {
+  }
+  catch {
     return ""
   }
 }
@@ -250,12 +286,66 @@ function Write-FileIfChanged([string]$path, [string]$content, [string]$outKey) {
 
 function Find-IntermediateCandidates() {
   $found = New-Object System.Collections.Generic.List[string]
-  foreach ($pat in @($IntermediateCertFileNamePatterns)) {
-    if ([string]::IsNullOrWhiteSpace($pat)) { continue }
-    $items = @(Get-ChildItem -LiteralPath $PSScriptRoot -File -Filter $pat -ErrorAction SilentlyContinue)
+  $searchPaths = @(Get-CertSearchPaths)
+  
+  # Add root search if needed, but primarily search in agency folders
+  if ($searchPaths.Count -eq 0) { $searchPaths += $PSScriptRoot }
+
+  foreach ($path in $searchPaths) {
+    if (-not (Test-Path -LiteralPath $path -PathType Container)) { continue }
+      
+    foreach ($pat in @($IntermediateCertFileNamePatterns)) {
+      if ([string]::IsNullOrWhiteSpace($pat)) { continue }
+      $items = @(Get-ChildItem -LiteralPath $path -File -Filter $pat -ErrorAction SilentlyContinue)
+      foreach ($i in $items) { $found.Add($i.FullName) | Out-Null }
+    }
+  }
+  return @($found | Select-Object -Unique)
+}
+
+function Find-RootCandidates() {
+  $found = New-Object System.Collections.Generic.List[string]
+  $searchPaths = @(Get-CertSearchPaths)
+  if ($searchPaths.Count -eq 0) { $searchPaths += $PSScriptRoot }
+
+  foreach ($path in $searchPaths) {
+    if (-not (Test-Path -LiteralPath $path -PathType Container)) { continue }
+    $items = @(Get-ChildItem -LiteralPath $path -File -Include *.cer, *.crt, *.pem -ErrorAction SilentlyContinue)
     foreach ($i in $items) { $found.Add($i.FullName) | Out-Null }
   }
   return @($found | Select-Object -Unique)
+}
+
+function Try-SelectRootCerts([string]$intermediateCertPath) {
+  if ($RootCert.Count -gt 0) {
+    return [PSCustomObject]@{ Status = "ok"; Files = @(Resolve-RootCertFiles $intermediateCertPath) }
+  }
+
+  $cands = @(Find-RootCandidates)
+  if ($cands.Count -eq 0) { return [PSCustomObject]@{ Status = "none"; Files = @() } }
+
+  $canUseOpenSsl = Test-Path -LiteralPath $OpenSsl -PathType Leaf
+  if (-not $canUseOpenSsl) { return [PSCustomObject]@{ Status = "needopenssl"; Files = @() } }
+
+  $issuerLine = (Run-OpenSsl @("x509", "-in", $intermediateCertPath, "-noout", "-issuer", "-nameopt", "RFC2253") -AllowFail | Select-Object -First 1)
+  if ([string]::IsNullOrWhiteSpace($issuerLine)) { return [PSCustomObject]@{ Status = "issuerMissing"; Files = @() } }
+  $issuer = ([string]$issuerLine).Trim().Replace("issuer=", "")
+  if ([string]::IsNullOrWhiteSpace($issuer)) { return [PSCustomObject]@{ Status = "issuerMissing"; Files = @() } }
+
+  $matched = @()
+  foreach ($cand in $cands) {
+    $subjLine = (Run-OpenSsl @("x509", "-in", $cand, "-noout", "-subject", "-nameopt", "RFC2253") -AllowFail | Select-Object -First 1)
+    if ([string]::IsNullOrWhiteSpace($subjLine)) { continue }
+    $subj = ([string]$subjLine).Trim().Replace("subject=", "")
+    if (-not [string]::IsNullOrWhiteSpace($subj) -and $subj -eq $issuer) {
+      $matched += $cand
+    }
+  }
+
+  if ($matched.Count -eq 1) { return [PSCustomObject]@{ Status = "ok"; Files = @($matched[0]) } }
+  if ($matched.Count -gt 1) { return [PSCustomObject]@{ Status = "multi"; Files = @($matched) } }
+
+  return [PSCustomObject]@{ Status = "nomatch"; Files = @() }
 }
 
 function Select-IntermediateCert([string]$clientCertPath) {
@@ -272,13 +362,13 @@ function Select-IntermediateCert([string]$clientCertPath) {
   $canUseOpenSsl = Test-Path -LiteralPath $OpenSsl -PathType Leaf
   if ($canUseOpenSsl) {
     # RFC2253 で正規化して比較（表記揺れ対策）
-    $issuerLine = (Run-OpenSsl @("x509","-in",$clientCertPath,"-noout","-issuer","-nameopt","RFC2253") -AllowFail | Select-Object -First 1)
-    $issuer = ([string]$issuerLine).Trim().Replace("issuer=","")
+    $issuerLine = (Run-OpenSsl @("x509", "-in", $clientCertPath, "-noout", "-issuer", "-nameopt", "RFC2253") -AllowFail | Select-Object -First 1)
+    $issuer = ([string]$issuerLine).Trim().Replace("issuer=", "")
     if (-not [string]::IsNullOrWhiteSpace($issuer)) {
       $matched = @()
       foreach ($cand in $cands) {
-        $subjLine = (Run-OpenSsl @("x509","-in",$cand,"-noout","-subject","-nameopt","RFC2253") -AllowFail | Select-Object -First 1)
-        $subj = ([string]$subjLine).Trim().Replace("subject=","")
+        $subjLine = (Run-OpenSsl @("x509", "-in", $cand, "-noout", "-subject", "-nameopt", "RFC2253") -AllowFail | Select-Object -First 1)
+        $subj = ([string]$subjLine).Trim().Replace("subject=", "")
         if (-not [string]::IsNullOrWhiteSpace($subj) -and $subj -eq $issuer) {
           $matched += $cand
         }
@@ -303,7 +393,7 @@ function Select-IntermediateCert([string]$clientCertPath) {
   throw (T "MergeCert.MultiCandidatesNeedSpecify" @($list))
 }
 
-function Merge-One([string]$clientCertPath) {
+function Merge-One([string]$clientCertPath, [string]$SelectedIntermediate = "", [string[]]$SelectedRootFiles = @(), [switch]$SkipAutoRoot) {
   Assert-ExistsFile $clientCertPath "Client certificate"
   $outPath = Get-OutPathForClientCert $clientCertPath
 
@@ -323,60 +413,193 @@ function Merge-One([string]$clientCertPath) {
 
   $merged = $a
 
-  if ($alreadyMerged -and $SkipIfAlreadyMerged -and -not $Force -and $RootCert.Count -eq 0) {
+  $rootFiles = @()
+  if ($SelectedRootFiles.Count -gt 0) {
+    $rootFiles = @($SelectedRootFiles)
+  }
+  elseif ($RootCert.Count -gt 0) {
+    $rootFiles = @(Resolve-RootCertFiles $clientCertPath)
+  }
+
+  if ($alreadyMerged -and $SkipIfAlreadyMerged -and -not $Force -and $rootFiles.Count -eq 0) {
     Write-Host (T "MergeCert.AlreadyHasChain" @($blockCount))
-  } else {
-    if (-not $alreadyMerged -or $Force) {
+  }
+  else {
+    $selectedIntermediate = $SelectedIntermediate
+    if ([string]::IsNullOrWhiteSpace($selectedIntermediate) -and (-not $alreadyMerged -or $Force)) {
       $selectedIntermediate = Select-IntermediateCert $clientCertPath
+    }
+
+    if (-not $alreadyMerged -or $Force) {
       Assert-ExistsFile $selectedIntermediate "Intermediate certificate"
       Write-Host (T "MergeCert.IntermediateCert" @((Resolve-Path -LiteralPath $selectedIntermediate)))
 
       $b = Get-Content -LiteralPath $selectedIntermediate -Raw
       $b = Normalize-MergedText $b
       $merged = $a + $b
-    } else {
+    }
+    else {
       Write-Host (T "MergeCert.AlreadyHasChain" @($blockCount))
     }
 
-    if ($RootCert.Count -gt 0) {
-      $rootFiles = @(Resolve-RootCertFiles $clientCertPath)
-      if ($rootFiles.Count -gt 0) {
-        $rootResolved = @()
-        foreach ($r in $rootFiles) {
-          $rootText = Normalize-MergedText (Get-Content -LiteralPath $r -Raw)
-          $needle = $rootText.TrimEnd()
-          if (-not $merged.Contains($needle)) {
-            $merged = Normalize-MergedText ($merged + $rootText)
-          }
-          $rootResolved += (Resolve-Path -LiteralPath $r)
+    if ($rootFiles.Count -eq 0 -and -not $SkipAutoRoot -and -not [string]::IsNullOrWhiteSpace($selectedIntermediate)) {
+      $rootFiles = @(Select-RootCerts $selectedIntermediate)
+    }
+
+    if ($rootFiles.Count -gt 0) {
+      $rootResolved = @()
+      foreach ($r in $rootFiles) {
+        $rootText = Normalize-MergedText (Get-Content -LiteralPath $r -Raw)
+        $needle = $rootText.TrimEnd()
+        if (-not $merged.Contains($needle)) {
+          $merged = Normalize-MergedText ($merged + $rootText)
         }
-        Write-Host (T "MergeCert.RootCerts" @(($rootResolved -join "; ")))
+        $rootResolved += (Resolve-Path -LiteralPath $r)
       }
+      Write-Host (T "MergeCert.RootCerts" @(($rootResolved -join "; ")))
     }
   }
 
   $merged = Normalize-MergedText $merged
   Write-FileIfChanged $outPath $merged "MergeCert.OutFile"
 
+  # PFX Generation
+  $keyPath = [IO.Path]::ChangeExtension($clientCertPath, ".key")
+  if (Test-Path -LiteralPath $keyPath -PathType Leaf) {
+    $pfxPath = [IO.Path]::ChangeExtension($outPath, ".pfx")
+    
+    # Passwords
+    $keyDir = Split-Path -Parent $keyPath
+    $searchDirs = @($keyDir, (Split-Path -Parent $keyDir), $PSScriptRoot)
+    $pFiles = @()
+    foreach ($d in $searchDirs) {
+      $pf = Find-PassFile $d
+      if ($pf) { $pFiles += $pf }
+    }
+    $phrases = Collect-Passphrases $pFiles
+    
+    $isEnc = Test-KeyEncrypted $keyPath
+    $generated = $false
+    
+    if (-not $isEnc) {
+      # Plain key -> PFX (no password)
+      Run-OpenSsl @("pkcs12", "-export", "-in", $outPath, "-inkey", $keyPath, "-out", $pfxPath, "-passout", "pass:") -AllowFail | Out-Null
+      if ($LASTEXITCODE -eq 0) { $generated = $true }
+    }
+    else {
+      # Encrypted key -> Try passphrases
+      foreach ($p in $phrases) {
+        With-TempPassFile $p { param($tmp)
+          Run-OpenSsl @("pkcs12", "-export", "-in", $outPath, "-inkey", $keyPath, "-out", $pfxPath, "-passin", "file:$tmp", "-passout", "file:$tmp") -AllowFail | Out-Null
+        }
+        if ($LASTEXITCODE -eq 0) { 
+          $generated = $true
+          break 
+        }
+      }
+    }
+    
+    if ($generated) {
+      Write-Host (T "Common.Info" @("PFX Generated: $([IO.Path]::GetFileName($pfxPath))"))
+    }
+    else {
+      Write-Host (T "Common.Warn" @("Failed to generate PFX (Key missing or password incorrect)")) -ForegroundColor Yellow
+    }
+  }
+
   Write-Host ""
   Write-Host (T "MergeCert.Done")
 }
 
-function Find-ClientCerts([string]$root) {
+function Find-ClientCerts([string]$root, [switch]$OnlyNew, [switch]$OnlyCer) {
   $dirs = @()
-  $old = Join-Path $root "old"
   $new = Join-Path $root "new"
-  if (Test-Path -LiteralPath $old -PathType Container) { $dirs += $old }
-  if (Test-Path -LiteralPath $new -PathType Container) { $dirs += $new }
+  if ($OnlyNew) {
+    if (Test-Path -LiteralPath $new -PathType Container) { $dirs += $new }
+  }
+  else {
+    $old = Join-Path $root "old"
+    if (Test-Path -LiteralPath $old -PathType Container) { $dirs += $old }
+    if (Test-Path -LiteralPath $new -PathType Container) { $dirs += $new }
+  }
   if ($dirs.Count -eq 0) { $dirs += $root }
 
+  $patterns = if ($OnlyCer) { @("*.cer") } else { @("*.cer", "*.crt", "*.pem") }
   $all = New-Object System.Collections.Generic.List[string]
   foreach ($d in $dirs) {
-    foreach ($f in @(Get-ChildItem -LiteralPath $d -Recurse -File -Include *.cer,*.crt,*.pem -ErrorAction SilentlyContinue)) {
+    foreach ($f in @(Get-ChildItem -LiteralPath $d -Recurse -File -Include $patterns -ErrorAction SilentlyContinue)) {
       $all.Add($f.FullName) | Out-Null
     }
   }
   return @($all | Select-Object -Unique)
+}
+
+function Get-MergePlan([string]$clientCertPath) {
+  Assert-ExistsFile $clientCertPath "Client certificate"
+  $a = Get-Content -LiteralPath $clientCertPath -Raw
+  $a = Normalize-MergedText $a
+  $blockCount = Get-CertBlockCount $a
+  $alreadyMerged = ($blockCount -ge 2)
+
+  $needIntermediate = (-not $alreadyMerged) -or $Force
+  $selectedIntermediate = ""
+  if ($needIntermediate) { $selectedIntermediate = Select-IntermediateCert $clientCertPath }
+
+  $rootFiles = @()
+  $rootStatus = "none"
+  if ($RootCert.Count -gt 0) {
+    $rootFiles = @(Resolve-RootCertFiles $clientCertPath)
+    $rootStatus = if ($rootFiles.Count -gt 0) { "ok" } else { "none" }
+  }
+  elseif (-not [string]::IsNullOrWhiteSpace($selectedIntermediate)) {
+    $rootSel = Try-SelectRootCerts $selectedIntermediate
+    $rootStatus = $rootSel.Status
+    $rootFiles = @($rootSel.Files)
+  }
+
+  # Check PFX
+  $pfxPath = [IO.Path]::ChangeExtension($clientCertPath, ".pfx")
+  $pfxExists = Test-Path -LiteralPath $pfxPath -PathType Leaf
+
+  $action = "Merge2"
+  if ($rootFiles.Count -gt 0) {
+    $action = "Merge3"
+  }
+  elseif ($alreadyMerged -and $SkipIfAlreadyMerged -and -not $Force) {
+    # If PFX is missing, do not skip (we need to run Merge-One to generate PFX)
+    if ($pfxExists) {
+      $action = "Skip"
+    }
+    else {
+      # Treat as Merge2 so the loop calls Merge-One, which will skip merge but generate PFX
+      $action = "Merge2"
+    }
+  }
+
+  return [PSCustomObject]@{
+    Action        = $action
+    BlockCount    = $blockCount
+    AlreadyMerged = $alreadyMerged
+    Intermediate  = $selectedIntermediate
+    RootFiles     = $rootFiles
+    RootStatus    = $rootStatus
+    PfxExists     = $pfxExists
+  }
+}
+
+function Prompt-BatchProceed([string]$message) {
+  Write-Host $message
+  $raw = ""
+  try {
+    $raw = (Read-Host (T "MergeCert.BatchPrompt")).Trim()
+  }
+  catch {
+    return "continue"
+  }
+  if ([string]::IsNullOrWhiteSpace($raw)) { return "continue" }
+  if ($raw -match "^(q|quit|exit)$") { return "quit" }
+  if ($raw -match "^(s|skip)$") { return "skip" }
+  return "continue"
 }
 
 if ([string]::IsNullOrWhiteSpace($ClientCert)) {
@@ -385,18 +608,117 @@ if ([string]::IsNullOrWhiteSpace($ClientCert)) {
   Write-Host (T "MergeCert.RootDir" @((Resolve-Path -LiteralPath $RootDir)))
   Write-Host (T "MergeCert.OutDir" @((Resolve-Path -LiteralPath $OutDir)))
 
-  $targets = @(Find-ClientCerts $RootDir)
+  $targets = @(Find-ClientCerts $RootDir -OnlyNew -OnlyCer)
   if ($targets.Count -eq 0) {
     Write-Host (T "MergeCert.NoTargets")
     exit 0
   }
 
+  $targetItems = New-Object System.Collections.Generic.List[string]
   foreach ($t in $targets) {
+    $rel = Resolve-RelPath $RootDir $t
+    if ($rel -match "^(?i)new[\\/](.+)$") { $rel = $matches[1] }
+    $targetItems.Add($rel) | Out-Null
+  }
+  $targetItems.Add((T "MergeCert.BatchMenuQuit")) | Out-Null
+
+  while ($true) {
+    $pick = Show-MenuSelect -title (T "MergeCert.BatchCertMenuTitle") -items $targetItems
+    if ($null -eq $pick) { break }
+    if ($pick -eq $targetItems.Count) { break }  # Last item is Quit
+
+    $t = $targets[$pick - 1]  # Show-MenuSelect returns 1-based
     try {
-      Merge-One $t
-    } catch {
+      $plan = Get-MergePlan $t
+      $actionText = switch ($plan.Action) {
+        "Merge3" { (T "MergeCert.BatchPlanMerge3") }
+        "Merge2" { (T "MergeCert.BatchPlanMerge2") }
+        "Skip" { (T "MergeCert.BatchPlanSkip") }
+        default { (T "MergeCert.BatchPlanMerge2") }
+      }
+
+      Write-Host ""
+      $targetName = [IO.Path]::GetFileName($t)
+      Write-Host (T "MergeCert.BatchTarget" @($targetName)) -ForegroundColor White
+      if (-not [string]::IsNullOrWhiteSpace($plan.Intermediate)) {
+        $interName = [IO.Path]::GetFileName($plan.Intermediate)
+        Write-Host (T "MergeCert.BatchIntermediate" @($interName))
+      }
+      elseif ($plan.Action -ne "Skip") {
+        Write-Host (T "MergeCert.BatchIntermediate" @((T "MergeCert.BatchIntermediateAuto")))
+      }
+      if ($plan.RootFiles.Count -gt 0) {
+        $rootNames = @($plan.RootFiles | ForEach-Object { [IO.Path]::GetFileName($_) })
+        Write-Host (T "MergeCert.BatchRoot" @(($rootNames -join "; ")))
+      }
+
+      $actions = New-Object System.Collections.Generic.List[object]
+      $menuItems = New-Object System.Collections.Generic.List[string]
+      $merge2Text = (T "MergeCert.BatchMenuMerge2")
+      $merge3Text = (T "MergeCert.BatchMenuMerge3")
+      if ($plan.Action -eq "Merge3") { $merge3Text = (T "MergeCert.BatchMenuMerge3Rec") }
+      
+      if ($plan.AlreadyMerged -and $plan.Action -ne "Skip") {
+        $merge2Text = "{0} (PFX Only)" -f $merge2Text
+      }
+
+      $actions.Add("Merge2") | Out-Null
+      $menuItems.Add($merge2Text) | Out-Null
+
+      if ($plan.RootStatus -eq "ok" -and $plan.RootFiles.Count -gt 0) {
+        $actions.Add("Merge3") | Out-Null
+        $menuItems.Add($merge3Text) | Out-Null
+      }
+
+      $actions.Add("Skip") | Out-Null
+      $menuItems.Add((T "MergeCert.BatchMenuSkip")) | Out-Null
+
+      $actions.Add("Back") | Out-Null
+      $menuItems.Add((T "MergeCert.BatchMenuBack")) | Out-Null
+
+      $actions.Add("Quit") | Out-Null
+      $menuItems.Add((T "MergeCert.BatchMenuQuit")) | Out-Null
+
+      $title = (T "MergeCert.BatchMenuTitle")
+      $choice = Show-MenuSelect -title $title -items $menuItems
+      if ($null -eq $choice) { break }
+      $selectedAction = $actions[$choice - 1]  # Show-MenuSelect returns 1-based
+      if ($selectedAction -eq "Quit") { break }
+      if ($selectedAction -eq "Back") { continue }
+      if ($selectedAction -eq "Skip") { continue }
+
+      $skipAutoRoot = $true
+      $selIntermediate = $plan.Intermediate
+      $selRoots = @()
+      if ($selectedAction -eq "Merge3") {
+        if (-not [string]::IsNullOrWhiteSpace($selIntermediate)) {
+          $rootSel = Try-SelectRootCerts $selIntermediate
+          if ($rootSel.Status -ne "ok" -or $rootSel.Files.Count -eq 0) {
+            switch ($rootSel.Status) {
+              "needopenssl" { throw (T "MergeCert.RootNeedOpenSsl") }
+              "issuerMissing" { throw (T "MergeCert.RootIssuerMissing" @($selIntermediate)) }
+              "multi" {
+                $list = ($rootSel.Files | ForEach-Object { "- " + $_ }) -join "`n"
+                throw (T "MergeCert.MultiRootMatched" @($list))
+              }
+              "nomatch" { throw (T "MergeCert.RootRequired") }
+              default { throw (T "MergeCert.RootRequired") }
+            }
+          }
+          $selRoots = @($rootSel.Files)
+        }
+        if ($selRoots.Count -eq 0) {
+          throw (T "MergeCert.RootRequired")
+        }
+      }
+
+      Merge-One $t -SelectedIntermediate $selIntermediate -SelectedRootFiles $selRoots -SkipAutoRoot:$skipAutoRoot
+      Read-Host "Press Enter to continue..."
+    }
+    catch {
       Write-Host (T "Common.ErrorNg" @($t))
       Write-Host (T "Common.ErrorNg" @($_.Exception.Message))
+      Read-Host "Press Enter to continue..."
     }
   }
   exit 0

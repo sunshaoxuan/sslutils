@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
 証明書・秘密鍵・CSR ファイルの基本情報を表示するスクリプト
 
@@ -82,13 +82,6 @@ param(
   [Parameter(Mandatory = $false)]
   [switch]$Detail,
 
-  # 旧来の表形式で表示（既定はツリー表示）
-  [Parameter(Mandatory = $false)]
-  [switch]$Table,
-
-  # 罫線つきの表形式（証明書のみ）
-  [Parameter(Mandatory = $false)]
-  [switch]$PrettyTable,
 
   # 出力言語（既定: ja）
   [Parameter(Mandatory = $false)]
@@ -103,31 +96,66 @@ $ErrorActionPreference = "Stop"
 try {
   [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
   $OutputEncoding = [Console]::OutputEncoding
-} catch { }
+}
+catch { }
 
 $i18nModule = Join-Path $PSScriptRoot "lib\\i18n.ps1"
-if (-not (Test-Path -LiteralPath $i18nModule -PathType Leaf)) { throw (T "Common.I18nModuleNotFound" @($i18nModule)) }
 . $i18nModule
 $__i18n = Initialize-I18n -Lang $Lang -BaseDir $PSScriptRoot
-function T([string]$Key, [object[]]$FormatArgs = @()) { return Get-I18nText -I18n $__i18n -Key $Key -FormatArgs $FormatArgs }
+$securityModule = Join-Path $PSScriptRoot "lib\security.ps1"
+if (Test-Path -LiteralPath $securityModule -PathType Leaf) { . $securityModule }
+
+function T([string]$Key, $ArgList = @()) {
+  # 明示的に配列化して Get-I18nText に渡す
+  $arr = if ($null -eq $ArgList) { @() } else { @($ArgList) }
+  $res = Get-I18nText -I18n $__i18n -Key $Key -FormatArgs $arr
+  return [string]$res
+}
+
+if (-not (Test-Path -LiteralPath $i18nModule -PathType Leaf)) { throw (T "Common.I18nModuleNotFound" @($i18nModule)) }
 
 $FixedPassFileName = "passphrase.txt"
 
-# ===== 設定（静的パラメータ表）=====
-# 中間証明書が「ルート直下に別ファイルで置かれている」運用を想定し、候補ファイル名をここで管理します。
-# 例: NII Open Domain CA 系が nii*.cer のような名前で置かれている場合。
-# 将来ファイル名が変わったら、この配列を編集するだけでチェック結果を調整できます。
-$IntermediateCertFileNamePatterns = @(
-  "nii*.cer",
-  "nii*.crt",
-  "nii*.pem",
-  "gs*.cer",
-  "gs*.crt",
-  "gs*.pem",
-  "globalsign*.cer",
-  "globalsign*.crt",
-  "globalsign*.pem"
-)
+# ===== Configuration Loading =====
+$configPath = Join-Path $PSScriptRoot "CertConfig.psd1"
+if (-not (Test-Path -LiteralPath $configPath -PathType Leaf)) {
+  throw (T "Common.FileNotFound" @("Configuration file", $configPath))
+}
+$CertConfig = Import-PowerShellDataFile -Path $configPath
+
+# Helper to get all patterns from config
+function Get-AllCertPatterns() {
+  $patterns = @()
+  if ($CertConfig.Agencies) {
+    foreach ($agency in $CertConfig.Agencies.Values) {
+      if ($agency.Patterns) {
+        $patterns += $agency.Patterns
+      }
+    }
+  }
+  return $patterns
+}
+
+# Helper to get search paths (agencies)
+function Get-CertSearchPaths() {
+  $paths = @()
+  if ($CertConfig.Agencies) {
+    $root = $CertConfig.CertStoreRoot
+    if ([string]::IsNullOrWhiteSpace($root)) { $root = "CertStore" }
+    $rootParams = Join-Path $PSScriptRoot $root
+        
+    foreach ($agency in $CertConfig.Agencies.Values) {
+      if ($agency.Path) {
+        $paths += Join-Path $rootParams $agency.Path
+      }
+    }
+  }
+  return $paths
+}
+
+# Intermediate cert patterns from config
+$IntermediateCertFileNamePatterns = @(Get-AllCertPatterns)
+
 
 function Format-YesNo([bool]$b) {
   if ($b) { return (T "Common.Yes") }
@@ -179,12 +207,13 @@ function Get-CertContainerInfo([string]$certPath) {
   # 形式判定（PEM/DER）と、PEM の場合は証明書ブロック数を数える
   try {
     $bytes = [System.IO.File]::ReadAllBytes($certPath)
-  } catch {
+  }
+  catch {
     return [PSCustomObject]@{
-      Format = "UNKNOWN"
-      CertBlocks = 0
+      Format        = "UNKNOWN"
+      CertBlocks    = 0
       HasPrivateKey = $false
-      IsPkcs7 = $false
+      IsPkcs7       = $false
     }
   }
 
@@ -196,10 +225,10 @@ function Get-CertContainerInfo([string]$certPath) {
 
   if (-not $isPem) {
     return [PSCustomObject]@{
-      Format = "DER"
-      CertBlocks = 0
+      Format        = "DER"
+      CertBlocks    = 0
       HasPrivateKey = $false
-      IsPkcs7 = $false
+      IsPkcs7       = $false
     }
   }
 
@@ -212,10 +241,10 @@ function Get-CertContainerInfo([string]$certPath) {
   if ($isPkcs7) { $fmt = "PKCS7" }
 
   return [PSCustomObject]@{
-    Format = $fmt
-    CertBlocks = $blocks
+    Format        = $fmt
+    CertBlocks    = $blocks
     HasPrivateKey = [bool]$hasKey
-    IsPkcs7 = [bool]$isPkcs7
+    IsPkcs7       = [bool]$isPkcs7
   }
 }
 
@@ -246,7 +275,8 @@ function Find-ChainFileForCert([string]$certPath, [string]$explicit, [string[]]$
       foreach ($c in $cands) {
         $p = if ([string]::IsNullOrWhiteSpace($relDir)) {
           (Join-Path $m.Target $c)
-        } else {
+        }
+        else {
           (Join-Path (Join-Path $m.Target $relDir) $c)
         }
         if (Test-Path -LiteralPath $p -PathType Leaf) { return (Resolve-Path -LiteralPath $p).Path }
@@ -277,36 +307,78 @@ function Get-ChainFileSummary([string]$chainPath) {
   }
   $info = Get-CertContainerInfo $chainPath
   return [PSCustomObject]@{
-    Found = $true
-    Format = $info.Format
+    Found      = $true
+    Format     = $info.Format
     CertBlocks = [string]$info.CertBlocks
   }
 }
 
 function Find-IntermediateCertFiles() {
   $found = New-Object System.Collections.Generic.List[string]
-  foreach ($pat in @($IntermediateCertFileNamePatterns)) {
-    if ([string]::IsNullOrWhiteSpace($pat)) { continue }
-    $items = @(Get-ChildItem -LiteralPath $PSScriptRoot -File -Filter $pat -ErrorAction SilentlyContinue)
-    foreach ($i in $items) { $found.Add($i.FullName) | Out-Null }
+  $searchPaths = @(Get-CertSearchPaths)
+  if ($searchPaths.Count -eq 0) { $searchPaths += $PSScriptRoot }
+
+  foreach ($path in $searchPaths) {
+    if (-not (Test-Path -LiteralPath $path -PathType Container)) { continue }
+      
+    foreach ($pat in @($IntermediateCertFileNamePatterns)) {
+      if ([string]::IsNullOrWhiteSpace($pat)) { continue }
+      $items = @(Get-ChildItem -LiteralPath $path -File -Filter $pat -ErrorAction SilentlyContinue)
+      foreach ($i in $items) { $found.Add($i.FullName) | Out-Null }
+    }
   }
   return @($found | Select-Object -Unique)
 }
 
 function Get-IssuerRfc2253FromCert([string]$certPath) {
   try {
-    $out = Run-OpenSsl @("x509","-in",$certPath,"-noout","-issuer","-nameopt","RFC2253")
+    $out = Run-OpenSsl @("x509", "-in", $certPath, "-noout", "-issuer", "-nameopt", "RFC2253")
     $line = ($out | Select-Object -First 1)
-    return ([string]$line).Trim().Replace("issuer=","")
-  } catch { return "" }
+    return ([string]$line).Trim().Replace("issuer=", "")
+  }
+  catch { return "" }
 }
 
 function Get-SubjectRfc2253FromCert([string]$certPath) {
   try {
-    $out = Run-OpenSsl @("x509","-in",$certPath,"-noout","-subject","-nameopt","RFC2253")
+    $out = Run-OpenSsl @("x509", "-in", $certPath, "-noout", "-subject", "-nameopt", "RFC2253")
     $line = ($out | Select-Object -First 1)
-    return ([string]$line).Trim().Replace("subject=","")
-  } catch { return "" }
+    return ([string]$line).Trim().Replace("subject=", "")
+  }
+  catch { return "" }
+}
+
+function Get-SubjectAltNamesFromCert([string]$certPath) {
+  $out = @()
+  try {
+    $out = Run-OpenSsl @("x509", "-in", $certPath, "-noout", "-ext", "subjectAltName")
+  }
+  catch {
+    $out = @()
+  }
+  if ($out.Count -eq 0) {
+    try {
+      $out = Run-OpenSsl @("x509", "-in", $certPath, "-noout", "-text")
+    }
+    catch {
+      return ""
+    }
+  }
+
+  $items = New-Object System.Collections.Generic.List[string]
+  foreach ($line in $out) {
+    foreach ($m in [regex]::Matches([string]$line, "(DNS|IP Address|IP):\s*([^,]+)")) {
+      $t = $m.Groups[1].Value
+      $v = $m.Groups[2].Value.Trim()
+      if ([string]::IsNullOrWhiteSpace($v)) { continue }
+      if ($t -eq "IP Address") { $t = "IP" }
+      $items.Add(("{0}={1}" -f $t, $v)) | Out-Null
+    }
+  }
+
+  $uniq = @($items | Select-Object -Unique)
+  if ($uniq.Count -eq 0) { return "" }
+  return ($uniq -join "; ")
 }
 
 function Get-CertChainSummary([string]$certPath) {
@@ -315,14 +387,14 @@ function Get-CertChainSummary([string]$certPath) {
 
   if ($info.IsPkcs7) {
     return [PSCustomObject]@{
-      Format = $format
-      CertBlocks = ""
-      HasChain = ""
-      FinalUse = "UNKNOWN_PKCS7"
+      Format                = $format
+      CertBlocks            = ""
+      HasChain              = ""
+      FinalUse              = "UNKNOWN_PKCS7"
       ExternalIntermediates = ""
-      HasPrivateKey = $info.HasPrivateKey
-      Issuer = ""
-      IssuerCN = ""
+      HasPrivateKey         = $info.HasPrivateKey
+      Issuer                = ""
+      IssuerCN              = ""
     }
   }
 
@@ -347,27 +419,27 @@ function Get-CertChainSummary([string]$certPath) {
     $extText = if ($extIntermediates.Count -gt 0) { ($extIntermediates | ForEach-Object { [IO.Path]::GetFileName($_) } | Sort-Object | Select-Object -Unique) -join ";" } else { "" }
 
     return [PSCustomObject]@{
-      Format = $format
-      CertBlocks = [string]$info.CertBlocks
-      HasChain = $hasChain
-      FinalUse = if ($hasChain) { "FULLCHAIN_GUESS" } else { "SINGLE_CERT" }
+      Format                = $format
+      CertBlocks            = [string]$info.CertBlocks
+      HasChain              = $hasChain
+      FinalUse              = if ($hasChain) { "FULLCHAIN_GUESS" } else { "SINGLE_CERT" }
       ExternalIntermediates = $extText
-      HasPrivateKey = $info.HasPrivateKey
-      Issuer = $issuer
-      IssuerCN = $issuerCN
+      HasPrivateKey         = $info.HasPrivateKey
+      Issuer                = $issuer
+      IssuerCN              = $issuerCN
     }
   }
 
   # DER の場合：ブロック数を数えられないため不明扱い
   return [PSCustomObject]@{
-    Format = $format
-    CertBlocks = ""
-    HasChain = ""
-    FinalUse = "UNKNOWN_DER"
+    Format                = $format
+    CertBlocks            = ""
+    HasChain              = ""
+    FinalUse              = "UNKNOWN_DER"
     ExternalIntermediates = ""
-    HasPrivateKey = $false
-    Issuer = ""
-    IssuerCN = ""
+    HasPrivateKey         = $false
+    Issuer                = ""
+    IssuerCN              = ""
   }
 }
 
@@ -382,12 +454,13 @@ function Format-CertFormat([string]$fmt) {
 
 function Get-RelPathIfUnder([string]$baseDir, [string]$fullPath) {
   try {
-    $base = (Resolve-Path -LiteralPath $baseDir).Path.TrimEnd('\','/')
+    $base = (Resolve-Path -LiteralPath $baseDir).Path.TrimEnd('\', '/')
     $full = (Resolve-Path -LiteralPath $fullPath).Path
     if ($full.Length -lt $base.Length) { return "" }
     if ($full.Substring(0, $base.Length).ToLowerInvariant() -ne $base.ToLowerInvariant()) { return "" }
-    return $full.Substring($base.Length).TrimStart('\','/')
-  } catch {
+    return $full.Substring($base.Length).TrimStart('\', '/')
+  }
+  catch {
     return ""
   }
 }
@@ -402,98 +475,14 @@ function Format-FinalUse([string]$code) {
   }
 }
 
-function Normalize-Cell([object]$v) {
-  if ($null -eq $v) { return "" }
-  return ([string]$v)
-}
-
-function Get-DisplayWidth([string]$s) {
-  if ([string]::IsNullOrEmpty($s)) { return 0 }
-  $w = 0
-  foreach ($ch in $s.ToCharArray()) {
-    $code = [int][char]$ch
-    # Rough CJK wide char detection
-    if (
-      ($code -ge 0x1100 -and $code -le 0x115F) -or
-      ($code -ge 0x2E80 -and $code -le 0xA4CF) -or
-      ($code -ge 0xAC00 -and $code -le 0xD7A3) -or
-      ($code -ge 0xF900 -and $code -le 0xFAFF) -or
-      ($code -ge 0xFE10 -and $code -le 0xFE6F) -or
-      ($code -ge 0xFF00 -and $code -le 0xFFEF)
-    ) {
-      $w += 2
-    } else {
-      $w += 1
-    }
-  }
-  return $w
-}
-
-function Pad-DisplayRight([string]$s, [int]$width) {
-  $text = Normalize-Cell $s
-  $w = Get-DisplayWidth $text
-  if ($w -ge $width) { return $text }
-  return $text + (" " * ($width - $w))
-}
-
-function Write-PrettyTable([string]$title, [object[]]$rows, [string[]]$headers, [string[]]$fields) {
-  Write-Host ("---- {0} ----" -f $title)
-  if ($rows.Count -eq 0) {
-    Write-Host (T "Common.NoCertFiles")
-    Write-Host ""
-    return
-  }
-
-  $widths = @()
-  for ($i = 0; $i -lt $headers.Count; $i++) {
-    $w = Get-DisplayWidth $headers[$i]
-    foreach ($r in $rows) {
-      $val = Normalize-Cell ($r | Select-Object -ExpandProperty $fields[$i] -ErrorAction SilentlyContinue)
-      $vw = Get-DisplayWidth $val
-      if ($vw -gt $w) { $w = $vw }
-    }
-    $widths += $w
-  }
-
-  function Line([string]$sep, [string]$fill, [int[]]$ws) {
-    $parts = @()
-    foreach ($w in $ws) {
-      $parts += ($fill * ($w + 2))
-    }
-    return ($sep + ($parts -join $sep) + $sep)
-  }
-
-  $top = Line "+" "-" $widths
-  $mid = Line "+" "-" $widths
-  $bot = Line "+" "-" $widths
-  Write-Host $top
-
-  $headerCells = @()
-  for ($i = 0; $i -lt $headers.Count; $i++) {
-    $headerCells += (" {0} " -f (Pad-DisplayRight $headers[$i] $widths[$i]))
-  }
-  Write-Host ("|" + ($headerCells -join "|") + "|")
-  Write-Host $mid
-
-  foreach ($r in $rows) {
-    $cells = @()
-    for ($i = 0; $i -lt $fields.Count; $i++) {
-      $val = Normalize-Cell ($r | Select-Object -ExpandProperty $fields[$i] -ErrorAction SilentlyContinue)
-      $cells += (" {0} " -f (Pad-DisplayRight $val $widths[$i]))
-    }
-    Write-Host ("|" + ($cells -join "|") + "|")
-  }
-  Write-Host $bot
-  Write-Host ""
-}
-
 function Get-NotAfterFromCert([string]$certPath) {
   try {
-    $out = Run-OpenSsl @("x509","-in",$certPath,"-noout","-dates")
+    $out = Run-OpenSsl @("x509", "-in", $certPath, "-noout", "-dates")
     $line = ($out | Where-Object { $_ -match "^notAfter=" } | Select-Object -First 1)
     if (-not $line) { return "" }
-    return ([string]$line).Trim().Replace("notAfter=","")
-  } catch {
+    return ([string]$line).Trim().Replace("notAfter=", "")
+  }
+  catch {
     return ""
   }
 }
@@ -502,7 +491,8 @@ function Write-Tag([string]$text, [string]$color) {
   if ([string]::IsNullOrWhiteSpace($text)) { return }
   try {
     Write-Host -NoNewline ("[{0}]" -f $text) -ForegroundColor $color
-  } catch {
+  }
+  catch {
     Write-Host -NoNewline ("[{0}]" -f $text)
   }
 }
@@ -522,9 +512,10 @@ function Try-TestKeyReadable([string]$keyPath, [string[]]$passphrases) {
   $isEnc = Test-KeyEncrypted $keyPath
   if (-not $isEnc) {
     try {
-      Run-OpenSsl @("rsa","-in",$keyPath,"-noout","-text") | Out-Null
+      Run-OpenSsl @("rsa", "-in", $keyPath, "-noout", "-text") | Out-Null
       return (T "Common.Success")
-    } catch {
+    }
+    catch {
       return (T "Common.Failed")
     }
   }
@@ -537,82 +528,196 @@ function Try-TestKeyReadable([string]$keyPath, [string[]]$passphrases) {
     try {
       With-TempPassFile $p {
         param($tmpPass)
-        Run-OpenSsl @("rsa","-in",$keyPath,"-noout","-text","-passin",("file:{0}" -f $tmpPass)) | Out-Null
+        Run-OpenSsl @("rsa", "-in", $keyPath, "-noout", "-text", "-passin", ("file:{0}" -f $tmpPass)) | Out-Null
       } | Out-Null
       return (T "Common.Success")
-    } catch { }
+    }
+    catch { }
   }
   return (T "Common.Failed")
 }
 
-function Get-Passphrase([string]$passFilePath) {
-  if ([string]::IsNullOrWhiteSpace($passFilePath)) { return "" }
-  if (-not (Test-Path -LiteralPath $passFilePath -PathType Leaf)) { return "" }
-  $line = (Get-Content -LiteralPath $passFilePath -TotalCount 1 -ErrorAction SilentlyContinue)
-  if ($null -eq $line) { return "" }
-  $arr = @($line)
-  if ($arr.Count -eq 0) { return "" }
-  $first = $arr[0]
-  if ($null -eq $first) { return "" }
-  return ([string]$first).Trim()
+
+
+# メニューモジュールを読み込む
+$menuModule = Join-Path $PSScriptRoot "lib\\menu.ps1"
+if (Test-Path -LiteralPath $menuModule -PathType Leaf) {
+  . $menuModule
 }
 
-function With-TempPassFile([string]$passphrase, [scriptblock]$action) {
-  if ([string]::IsNullOrWhiteSpace($passphrase)) {
-    return & $action ""
+function Get-OrgEntries([string]$folderPath) {
+  $orgDirs = @(Get-ChildItem -LiteralPath $folderPath -Directory -ErrorAction SilentlyContinue)
+  
+  $list = New-Object System.Collections.ArrayList
+  
+  # -Include の非互換性を避けるため、全ファイルを取得してからフィルタする
+  $rootAll = @(Get-ChildItem -LiteralPath $folderPath -File -ErrorAction SilentlyContinue)
+  $rootFiles = @($rootAll | Where-Object { $_.Name -match "\.(cer|crt|pem|csr|key|pfx)$" })
+
+  if ($rootFiles.Count -gt 0) {
+    $list.Add([PSCustomObject]@{ Name = "(root)"; FullName = $folderPath }) | Out-Null
   }
-  $tmp = [IO.Path]::Combine([IO.Path]::GetTempPath(), ("ssl_maker_pass_{0}.txt" -f ([Guid]::NewGuid().ToString("N"))))
+  foreach ($d in $orgDirs) { $list.Add($d) | Out-Null }
+  return @($list)
+}
+
+function Get-OrgFiles([string]$orgPath, [string]$orgName, [bool]$hasOrgSubdirs) {
+  $list = New-Object System.Collections.ArrayList
+  
+  $recurse = if ($orgName -eq "(root)" -and $hasOrgSubdirs) { $false } else { $true }
+  
+  if ($recurse) {
+    $candidates = @(Get-ChildItem -LiteralPath $orgPath -Recurse -File -ErrorAction SilentlyContinue)
+  }
+  else {
+    $candidates = @(Get-ChildItem -LiteralPath $orgPath -File -ErrorAction SilentlyContinue)
+  }
+
+  $found = @($candidates | Where-Object { $_.Name -match "\.(cer|crt|pem|csr|key|pfx)$" })
+  foreach ($f in $found) { $list.Add($f) | Out-Null }
+  
+  return @($list | Select-Object -Unique)
+}
+
+function Get-RelPathUnder([string]$basePath, [string]$fullPath) {
   try {
-    Set-Content -LiteralPath $tmp -Value $passphrase -NoNewline -Encoding ASCII
-    return & $action $tmp
-  } finally {
-    Remove-Item -Force -ErrorAction SilentlyContinue -LiteralPath $tmp
+    $base = [string]$basePath
+    $full = [string]$fullPath
+    if ($full.StartsWith($base, [System.StringComparison]::OrdinalIgnoreCase)) {
+      $rel = $full.Substring($base.Length).TrimStart('\', '/')
+      if (-not [string]::IsNullOrWhiteSpace($rel)) { return $rel }
+    }
   }
+  catch { }
+  return [IO.Path]::GetFileName($fullPath)
 }
 
-function Find-PassFile([string]$dir) {
-  # 誤検出防止のため、パスワードファイル名は固定（推奨: passphrase.txt）
-  $fixed = Join-Path $dir $FixedPassFileName
-  if (Test-Path -LiteralPath $fixed -PathType Leaf) { return $fixed }
-  return ""
+function Get-PassFilesForOrg([string]$orgPath, [string]$folderPath, [string]$oldRootForNew, [string]$orgName) {
+  $passFiles = @()
+  $passFiles += (Find-PassFile $orgPath)
+  $passFiles += (Find-PassFile $folderPath)
+  $passFiles += (Find-PassFile $PSScriptRoot)
+  if (-not [string]::IsNullOrWhiteSpace($oldRootForNew)) {
+    $passFiles += (Find-PassFile $oldRootForNew)
+    if ($orgName -ne "(root)") { $passFiles += (Find-PassFile (Join-Path $oldRootForNew $orgName)) }
+  }
+  return $passFiles
 }
 
-function Collect-Passphrases([string[]]$passFiles) {
-  $phrases = New-Object System.Collections.Generic.List[string]
-  foreach ($f in @($passFiles)) {
-    $p = Get-Passphrase $f
-    if (-not [string]::IsNullOrWhiteSpace($p)) { $phrases.Add($p) | Out-Null }
+function Show-InteractiveMenu([string]$oldDir, [string]$newDir) {
+  $mergedDir = Join-Path $PSScriptRoot "merged\new"
+  
+  try { $null = $host.UI.RawUI } catch {
+    Show-Folder $oldDir (T "Label.Old") ""
+    Show-Folder $newDir (T "Label.New") $oldDir
+    if (Test-Path -LiteralPath $mergedDir -PathType Container) {
+      Show-Folder $mergedDir (T "Label.Merged") ""
+    }
+    return
   }
-  if (-not [string]::IsNullOrWhiteSpace($env:PASS_FILE)) {
-    $p = Get-Passphrase $env:PASS_FILE
-    if (-not [string]::IsNullOrWhiteSpace($p)) { $phrases.Add($p) | Out-Null }
-  }
-  return ($phrases | Select-Object -Unique)
-}
 
-function Test-KeyEncrypted([string]$keyPath) {
+  # カーソルを隠す
+  try { [Console]::CursorVisible = $false } catch { }
+
   try {
-    $head = @(Get-Content -LiteralPath $keyPath -TotalCount 40 -ErrorAction Stop)
-  } catch {
-    return $false
+    while ($true) {
+      $rootItems = @(
+        ("{0}" -f (T "Label.Old")),
+        ("{0}" -f (T "Label.New")),
+        ("{0}" -f (T "Label.Merged")),
+        ("[ {0} ]" -f (T "Common.MenuQuit"))
+      )
+      $rootSel = Show-MenuSelect -title (T "CheckBasic.Menu.RootTitle") -items $rootItems -helpText (T "CheckBasic.Menu.Instruction")
+      if ($null -eq $rootSel -or $rootSel -eq $rootItems.Count) { return }
+  
+      $label = switch ($rootSel) {
+        1 { (T "Label.Old") }
+        2 { (T "Label.New") }
+        3 { (T "Label.Merged") }
+      }
+      $folder = switch ($rootSel) {
+        1 { $oldDir }
+        2 { $newDir }
+        3 { $mergedDir }
+      }
+      $oldRootForNew = if ($rootSel -eq 2) { $oldDir } else { "" }
+  
+      if (-not (Test-Path -LiteralPath $folder -PathType Container)) {
+        Write-Host (T "Common.FolderNotFound" @($label, $folder))
+        continue
+      }
+  
+      while ($true) {
+        $orgEntries = @(Get-OrgEntries $folder)
+        
+        if ($orgEntries.Count -eq 0) {
+          Write-Host (T "Common.NoTargetFiles")
+          break
+        }
+        $hasOrgSubdirs = @($orgEntries | Where-Object { $_.Name -ne "(root)" }).Count -gt 0
+  
+        $orgItems = @()
+        for ($i = 0; $i -lt $orgEntries.Count; $i++) {
+          $org = $orgEntries[$i]
+          $orgFiles = @(Get-OrgFiles $org.FullName $org.Name $hasOrgSubdirs)
+          $count = $orgFiles.Count
+          $orgItems += ("{0} (files={1})" -f $org.Name, $count)
+        }
+        $orgItems += ("[ {0} ]" -f (T "Common.MenuBack"))
+        
+        $orgSel = Show-MenuSelect -title (T "CheckBasic.Menu.OrgTitle" $label) -items $orgItems -helpText (T "CheckBasic.Menu.Instruction")
+        if ($null -eq $orgSel -or $orgSel -eq $orgItems.Count) { break }
+  
+        $org = $orgEntries[$orgSel - 1]
+        $files = @(Get-OrgFiles $org.FullName $org.Name $hasOrgSubdirs)
+        if ($files.Count -eq 0) {
+          Write-Host (T "Common.NoTargetFiles")
+          continue
+        }
+  
+        while ($true) {
+          $fileItems = @()
+          for ($i = 0; $i -lt $files.Count; $i++) {
+            $rel = Get-RelPathUnder $org.FullName $files[$i].FullName
+            $fileItems += $rel
+          }
+          $fileItems += ("[ {0} ]" -f (T "Common.MenuBack"))
+          
+          $fileSel = Show-MenuSelect -title (T "CheckBasic.Menu.FileTitle" $org.Name) -items $fileItems -helpText (T "CheckBasic.Menu.Instruction")
+          if ($null -eq $fileSel -or $fileSel -eq $fileItems.Count) { break }
+  
+          $f = $files[$fileSel - 1]
+          $passFiles = Get-PassFilesForOrg $org.FullName $folder $oldRootForNew $org.Name
+          $passphrases = Collect-Passphrases $passFiles
+          Show-OneFile -FilePath $f.FullName -Passphrases $passphrases -PassFiles $passFiles
+          Write-Host (T "CheckBasic.Menu.BackPrompt") -ForegroundColor DarkGray
+          try { $null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") } catch { }
+        }
+      }
+    }
   }
-  $text = ($head -join "`n")
-  if ($text -match "BEGIN ENCRYPTED PRIVATE KEY") { return $true }
-  if ($text -match "Proc-Type:\s*4,ENCRYPTED") { return $true }
-  if ($text -match "\bENCRYPTED\b") { return $true }
-  return $false
+  finally {
+    # 終了時にカーソルと色を戻す
+    try { [Console]::ResetColor() } catch { }
+    try { [Console]::CursorVisible = $true } catch { }
+  }
 }
+
+
+
+
 
 function Try-ShowKeyBit([string]$keyPath, [string[]]$passphrases) {
   # OpenSSL の対話プロンプトを絶対に出さないため、暗号化鍵は必ず -passin で読む
   $isEnc = Test-KeyEncrypted $keyPath
   if (-not $isEnc) {
     try {
-      $out = Run-OpenSsl @("rsa","-in",$keyPath,"-noout","-text")
+      $out = Run-OpenSsl @("rsa", "-in", $keyPath, "-noout", "-text")
       $line = ($out | Select-Object -First 1)
       if ($line) { $line | Write-Output }
       return $true
-    } catch { }
+    }
+    catch { }
   }
 
   foreach ($p in @($passphrases)) {
@@ -620,20 +725,160 @@ function Try-ShowKeyBit([string]$keyPath, [string[]]$passphrases) {
     try {
       With-TempPassFile $p {
         param($tmpPass)
-        $out = Run-OpenSsl @("rsa","-in",$keyPath,"-noout","-text","-passin",("file:{0}" -f $tmpPass))
+        $out = Run-OpenSsl @("rsa", "-in", $keyPath, "-noout", "-text", "-passin", ("file:{0}" -f $tmpPass))
         $line = ($out | Select-Object -First 1)
         if ($line) { $line | Write-Output }
       }
       return $true
-    } catch { }
+    }
+    catch { }
   }
 
   if ($isEnc) {
     Write-Host (T "CheckBasic.Detail.Key.CannotReadNeedPass" @($FixedPassFileName))
-  } else {
+  }
+  else {
     Write-Host (T "CheckBasic.Detail.Key.CannotRead")
   }
   return $false
+}
+
+# === ファイル整合性検証 ===
+function Show-FileMatching([string]$filePath, [string[]]$passphrases = @()) {
+  $dir = [IO.Path]::GetDirectoryName($filePath)
+  if ([string]::IsNullOrWhiteSpace($dir)) { return }
+  
+  # 同一ディレクトリ内の関連ファイルを検索
+  $csrFile = Get-ChildItem -LiteralPath $dir -Filter "*.csr" -File -ErrorAction SilentlyContinue | Select-Object -First 1
+  $keyFile = Get-ChildItem -LiteralPath $dir -Filter "*.key" -File -ErrorAction SilentlyContinue | Select-Object -First 1
+  $cerFile = Get-ChildItem -LiteralPath $dir -Filter "*.cer" -File -ErrorAction SilentlyContinue | Select-Object -First 1
+  if (-not $cerFile) { $cerFile = Get-ChildItem -LiteralPath $dir -Filter "*.crt" -File -ErrorAction SilentlyContinue | Select-Object -First 1 }
+  $tsvFile = Get-ChildItem -LiteralPath $dir -Filter "*.tsv" -File -ErrorAction SilentlyContinue | Select-Object -First 1
+  $pfxFile = Get-ChildItem -LiteralPath $dir -Filter "*.pfx" -File -ErrorAction SilentlyContinue | Select-Object -First 1
+  
+  # 比較には2つ以上のファイルが必要
+  $foundCount = @($csrFile, $keyFile, $cerFile, $tsvFile, $pfxFile | Where-Object { $_ }).Count
+  if ($foundCount -lt 2) { return }
+  
+  Write-Host ""
+  Write-HeaderBar (T "Matching.Title") ""
+  
+  $results = @()
+  
+  # 1. KEY-CSR Modulus Check
+  if ($keyFile -and $csrFile) {
+    try {
+      $keyMod = (Run-OpenSsl @("rsa", "-in", $keyFile.FullName, "-noout", "-modulus") | Out-String) -replace "Modulus=", ""
+      $csrMod = (Run-OpenSsl @("req", "-in", $csrFile.FullName, "-noout", "-modulus") | Out-String) -replace "Modulus=", ""
+      $match = ($keyMod.Trim() -eq $csrMod.Trim())
+      $label = "{0} [{1} / {2}]" -f (T "Matching.KeyCsr"), $keyFile.Name, $csrFile.Name
+      $results += @{ Name = $label; Pass = $match }
+    }
+    catch { $results += @{ Name = (T "Matching.KeyCsr"); Pass = $false } }
+  }
+  
+  # 2. KEY-CER Modulus Check
+  if ($keyFile -and $cerFile) {
+    try {
+      $keyMod = (Run-OpenSsl @("rsa", "-in", $keyFile.FullName, "-noout", "-modulus") | Out-String) -replace "Modulus=", ""
+      $cerMod = (Run-OpenSsl @("x509", "-in", $cerFile.FullName, "-noout", "-modulus") | Out-String) -replace "Modulus=", ""
+      $match = ($keyMod.Trim() -eq $cerMod.Trim())
+      $label = "{0} [{1} / {2}]" -f (T "Matching.KeyCer"), $keyFile.Name, $cerFile.Name
+      $results += @{ Name = $label; Pass = $match }
+    }
+    catch { $results += @{ Name = (T "Matching.KeyCer"); Pass = $false } }
+  }
+  
+  # 3. CSR-TSV Check (CN and CSR content)
+  if ($csrFile -and $tsvFile) {
+    try {
+      # CSRからCNを取得
+      $csrSubj = (Run-OpenSsl @("req", "-in", $csrFile.FullName, "-noout", "-subject") | Out-String)
+      $cnMatch = [regex]::Match($csrSubj, "CN\s*=\s*([^,/\r\n]+)")
+      $csrCn = if ($cnMatch.Success) { $cnMatch.Groups[1].Value.Trim() } else { "" }
+      
+      # Read TSV (Shift-JIS)
+      $sjis = [System.Text.Encoding]::GetEncoding(932)
+      $tsvContent = [System.IO.File]::ReadAllText($tsvFile.FullName, $sjis)
+      $tsvParts = $tsvContent -split "`t"
+      
+      if ($tsvParts.Count -ge 13) {
+        $tsvCn = $tsvParts[10].Trim()
+        $tsvCsr = $tsvParts[6].Trim()
+        
+        # CN一致チェック
+        $cnOk = ($csrCn -eq $tsvCn)
+        $labelCn = "{0} [{1} / {2}]" -f (T "Matching.CsrTsvCn"), $csrFile.Name, $tsvFile.Name
+        $results += @{ Name = $labelCn; Pass = $cnOk }
+        
+        # CSR内容一致チェック
+        $csrLines = Get-Content -LiteralPath $csrFile.FullName
+        $csrBase64 = ($csrLines | Where-Object { $_ -notmatch "^----" }) -join ""
+        $csrOk = ($csrBase64 -eq $tsvCsr)
+        $labelContent = "{0} [{1} / {2}]" -f (T "Matching.CsrTsvContent"), $csrFile.Name, $tsvFile.Name
+        $results += @{ Name = $labelContent; Pass = $csrOk }
+      }
+    }
+    catch { }
+  }
+
+
+  # 4. KEY-PFX Modulus Check
+  if ($keyFile -and $pfxFile) {
+    try {
+      $keyMod = (Run-OpenSsl @("rsa", "-in", $keyFile.FullName, "-noout", "-modulus") | Out-String) -replace "Modulus=", ""
+       
+      $pfxMod = ""
+      foreach ($p in @("") + $passphrases) {
+        $isPass = -not [string]::IsNullOrWhiteSpace($p)
+        try {
+          $certOut = ""
+          if ($isPass) {
+            With-TempPassFile $p { param($tmp)
+              $certOut = Run-OpenSsl @("pkcs12", "-in", $pfxFile.FullName, "-nokeys", "-clcerts", "-passin", "file:$tmp")
+            }
+          }
+          else {
+            $certOut = Run-OpenSsl @("pkcs12", "-in", $pfxFile.FullName, "-nokeys", "-clcerts", "-passin", "pass:")
+          }
+             
+          if (-not [string]::IsNullOrWhiteSpace($certOut)) {
+            $tmpCert = [IO.Path]::GetTempFileName()
+            try {
+              Set-Content -LiteralPath $tmpCert -Value $certOut -Encoding ASCII
+              $pfxMod = (Run-OpenSsl @("x509", "-in", $tmpCert, "-noout", "-modulus") | Out-String) -replace "Modulus=", ""
+            }
+            finally {
+              Remove-Item $tmpCert -Force -ErrorAction SilentlyContinue
+            }
+            if (-not [string]::IsNullOrWhiteSpace($pfxMod)) { break }
+          }
+        }
+        catch {}
+      }
+
+      if (-not [string]::IsNullOrWhiteSpace($pfxMod)) {
+        $match = ($keyMod.Trim() -eq $pfxMod.Trim())
+        $label = "KEY ⇔ PFX [{0} / {1}]" -f $keyFile.Name, $pfxFile.Name
+        $results += @{ Name = $label; Pass = $match }
+      }
+      else {
+        $results += @{ Name = "KEY ⇔ PFX (Locked)"; Pass = $false }
+      }
+    }
+    catch { 
+      $results += @{ Name = "KEY ⇔ PFX (Error)"; Pass = $false } 
+    }
+  }
+  
+  # 結果表示
+  for ($i = 0; $i -lt $results.Count; $i++) {
+    $r = $results[$i]
+    $isLast = ($i -eq ($results.Count - 1))
+    $mark = if ($r.Pass) { "[OK]" } else { "[NG]" }
+    $col = if ($r.Pass) { "Green" } else { "Red" }
+    Write-TreeProp $isLast $r.Name $mark $col
+  }
 }
 
 function Show-OneFile {
@@ -647,210 +892,417 @@ function Show-OneFile {
   )
   Assert-ExistsFile $FilePath "入力ファイル"
 
+  # 画面をクリアして専用ビューとして表示（メニューとの混在を防ぐ）
+  Clear-Host
+
+  # --- Local UI Helpers ---
+  function Write-HeaderBar([string]$title, [string]$path) {
+    Write-Host " " -NoNewline -BackgroundColor White
+    Write-Host (" {0} " -f $title) -NoNewline -BackgroundColor White -ForegroundColor Black
+    Write-Host " " -NoNewline -BackgroundColor White
+    Write-Host (" {0}" -f $path)
+  }
+
+  function Write-TreeProp([bool]$last, [string]$label, [string]$value, [ConsoleColor]$valColor = [ConsoleColor]::Gray) {
+    $mark = if ($last) { "└──" } else { "├──" }
+    Write-Host ("{0} {1}: " -f $mark, $label) -NoNewline -ForegroundColor DarkGray
+    Write-Host $value -ForegroundColor $valColor
+  }
+
+  # Subject や Issuer を階層表示する関数
+  function Write-TreeDN([bool]$last, [string]$label, [string]$dn) {
+    $mark = if ($last) { "└──" } else { "├──" }
+    $prefix = if ($last) { "    " } else { "│   " }
+    
+    Write-Host ("{0} {1}" -f $mark, $label) -ForegroundColor DarkGray
+    
+    # DN を解析 (RFC2253 形式: CN=xxx,O=xxx,L=xxx,ST=xxx,C=xx)
+    # カンマで分割するが、エスケープされたカンマは除外
+    $parts = @()
+    $current = ""
+    $escaped = $false
+    foreach ($c in $dn.ToCharArray()) {
+      if ($escaped) {
+        $current += $c
+        $escaped = $false
+      }
+      elseif ($c -eq '\') {
+        $current += $c
+        $escaped = $true
+      }
+      elseif ($c -eq ',') {
+        if ($current.Trim()) { $parts += $current.Trim() }
+        $current = ""
+      }
+      else {
+        $current += $c
+      }
+    }
+    if ($current.Trim()) { $parts += $current.Trim() }
+    
+    # 各パートを表示
+    for ($i = 0; $i -lt $parts.Count; $i++) {
+      $isLastPart = ($i -eq ($parts.Count - 1))
+      $subMark = if ($isLastPart) { "└──" } else { "├──" }
+      $part = $parts[$i]
+      
+      # キーと値に分割
+      if ($part -match "^([^=]+)=(.*)$") {
+        $key = $Matches[1].Trim()
+        $val = $Matches[2].Trim()
+        # キー名を分かりやすく
+        $keyName = switch ($key) {
+          "CN" { "CN (Common Name)" }
+          "O" { "O (Organization)" }
+          "OU" { "OU (Org Unit)" }
+          "L" { "L (Locality)" }
+          "ST" { "ST (State)" }
+          "C" { "C (Country)" }
+          "emailAddress" { "Email" }
+          default { $key }
+        }
+        Write-Host ("{0}{1} {2}: " -f $prefix, $subMark, $keyName) -NoNewline -ForegroundColor DarkGray
+        Write-Host $val -ForegroundColor Gray
+      }
+      else {
+        Write-Host ("{0}{1} {2}" -f $prefix, $subMark, $part) -ForegroundColor Gray
+      }
+    }
+  }
+
+  function Show-OpenSslDetails([string]$path) {
+    Write-Host ""
+    Write-HeaderBar (T "Label.OpenSslDetails") ""
+    $ext = [IO.Path]::GetExtension($path).ToLowerInvariant()
+    $isCsr = ($ext -eq ".csr")
+
+    try {
+      $raw = @()
+      $sanList = @()
+      if ($isCsr) {
+        $raw = Run-OpenSsl @("req", "-in", $path, "-noout", "-text", "-nameopt", "RFC2253")
+        # Parse SAN from CSR text output
+        $inSanBlock = $false
+        foreach ($line in $raw) {
+          if ($line -match "X509v3 Subject Alternative Name") {
+            $inSanBlock = $true
+            continue
+          }
+          if ($inSanBlock) {
+            # Usually the next line contains "DNS:example.com, IP:1.2.3.4"
+            if ($line -match "DNS:|IP Address:|IP:") {
+              $entries = $line -split ", "
+              foreach ($e in $entries) {
+                $sanList += $e.Trim()
+              }
+              $inSanBlock = $false # Assuming single line for simplicity or end of block
+            }
+          }
+        }
+      }
+      else {
+        $raw = Run-OpenSsl @("x509", "-in", $path, "-noout", "-subject", "-issuer", "-dates", "-nameopt", "RFC2253")
+      }
+
+      $data = @{}
+      foreach ($line in $raw) {
+        if ($line -match "^\s*subject=(.*)") { $data["subject"] = $matches[1] } # Handle potential indent in req -text
+        if ($line -match "^subject=(.*)") { $data["subject"] = $matches[1] } # Fallback for strict match
+        if ($line -match "^issuer=(.*)") { $data["issuer"] = $matches[1] }
+        if ($line -match "^notBefore=(.*)") { $data["notBefore"] = $matches[1] }
+        if ($line -match "^notAfter=(.*)") { $data["notAfter"] = $matches[1] }
+      }
+      
+      $hasSan = ($sanList.Count -gt 0)
+      $isLastParams = if ($isCsr -and -not $hasSan) { $true } else { $false }
+      
+      # For CSR, Subject might be indented in -text output, so we check carefully
+      # Run-OpenSsl for req -subject might be safer for finding subject line specifically if -text is messy, 
+      # but let's try to parse from -text first or reuse the dedicated subject call if needed.
+      # Actually, `req -text` output contains `Subject: ...` not `subject=...` usually. 
+      # Let's verify by just running `req -subject` separately to be safe for Subject, or handle the `Subject:` prefix.
+      
+      # Refinement: Run -subject explicitly for CSR to get clean Subject line, to avoid -text parsing fragility for Subject.
+      if ($isCsr) {
+        $subjRaw = Run-OpenSsl @("req", "-in", $path, "-noout", "-subject", "-nameopt", "RFC2253")
+        if ($subjRaw -match "^subject=(.*)") { $data["subject"] = $matches[1] }
+      }
+
+      Write-TreeDN $isLastParams (T "Label.Subject") ([string]$data["subject"])
+      
+      if (-not $isCsr) {
+        Write-TreeDN $false (T "Label.Issuer") ([string]$data["issuer"])
+        Write-TreeProp $false (T "Label.NotBefore") ([string]$data["notBefore"])
+        Write-TreeProp $true  (T "Label.NotAfter")  ([string]$data["notAfter"])
+      }
+      
+      # CSRのSAN表示
+      if ($isCsr -and $hasSan) {
+        Write-TreeProp $false (T "CheckBasic.Cert.SAN") ""
+        for ($i = 0; $i -lt $sanList.Count; $i++) {
+          $isLast = ($i -eq ($sanList.Count - 1))
+          $mark = if ($isLast) { "└──" } else { "├──" }
+          Write-Host ("│   {0} {1}" -f $mark, $sanList[$i]) -ForegroundColor Gray
+        }
+      }
+    }
+    catch {
+      $cmd = if ($isCsr) { "req" } else { "x509" }
+      Write-Host (T "Common.OpenSslCmdFailed" @($cmd, $_)) -ForegroundColor Red
+    }
+  }
+  # ------------------------
+
   $ext = [IO.Path]::GetExtension($FilePath).ToLowerInvariant()
-  $chainPath = Find-ChainFileForCert $FilePath $ChainFile $script:ChainSearchDirs
-  $chainSum = Get-ChainFileSummary $chainPath
-  Write-Host (T "CheckBasic.Detail.File" @((Resolve-Path -LiteralPath $FilePath)))
+  # ヘッダー表示
+  Write-HeaderBar (T "Label.File") (Resolve-Path -LiteralPath $FilePath)
 
   switch ($ext) {
     ".cer" {
       $sum = Get-CertChainSummary $FilePath
-      if ($PrettyTable) {
-        $chainMode = if ($sum.HasChain -is [bool] -and $sum.HasChain) { "fullchain" } elseif ($chainSum.Found) { "chainfile" } else { "none" }
-        $row = [PSCustomObject]@{
-          Path = Split-Path -Parent $FilePath
-          File = [IO.Path]::GetFileName($FilePath)
-          Expiry = Get-NotAfterFromCert $FilePath
-          Chain = $chainMode
-          ChainFile = if ($chainSum.Found) { [IO.Path]::GetFileName($chainPath) } else { "" }
-          Blocks = $sum.CertBlocks
-          ChainBlocks = if ($chainSum.Found) { $chainSum.CertBlocks } else { "" }
-          Issuer = $sum.IssuerCN
-          Format = Format-CertFormat $sum.Format
-        }
-        Write-PrettyTable (T "CheckBasic.Pretty.CertTitle") @($row) @(
-          (T "CheckBasic.Pretty.Path"),
-          (T "CheckBasic.Pretty.File"),
-          (T "CheckBasic.Pretty.Expiry"),
-          (T "CheckBasic.Pretty.Chain"),
-          (T "CheckBasic.Pretty.ChainFile"),
-          (T "CheckBasic.Pretty.Blocks"),
-          (T "CheckBasic.Pretty.ChainBlocks"),
-          (T "CheckBasic.Pretty.Issuer"),
-          (T "CheckBasic.Pretty.Format")
-        ) @("Path","File","Expiry","Chain","ChainFile","Blocks","ChainBlocks","Issuer","Format")
-        break
+      $san = Get-SubjectAltNamesFromCert $FilePath
+      
+      # [Improvement] Show Filename clearly at the top
+      Write-TreeProp $false (T "CheckBasic.Pretty.File") ([IO.Path]::GetFileName($FilePath)) "Cyan"
+      Write-TreeProp $false (T "CheckBasic.Pretty.Path") (Split-Path -Parent $FilePath) "DarkGray"
+      Write-TreeProp $false (T "Label.FileType") (T "Label.Cert") "Cyan"
+
+      $chainPath = Find-ChainFileForCert $FilePath $ChainFile $script:ChainSearchDirs
+      $chainSum = Get-ChainFileSummary $chainPath
+
+      # Properties
+      Write-TreeProp $false (T "Label.Format") (Format-CertFormat $sum.Format)
+      
+      if (-not [string]::IsNullOrWhiteSpace($sum.CertBlocks)) {
+        Write-TreeProp $false (T "Label.Blocks") $sum.CertBlocks
       }
-      Write-Host ("[{0}] 形式: {1}" -f (T "Label.Cert"), (Format-CertFormat $sum.Format))
-      if (-not [string]::IsNullOrWhiteSpace($sum.CertBlocks)) { Write-Host ("[{0}] 証明書ブロック数: {1}" -f (T "Label.Cert"), $sum.CertBlocks) }
-      if ($sum.HasChain -is [bool]) { Write-Host ("[{0}] 中間証明書同梱: {1}" -f (T "Label.Cert"), (Format-YesNo $sum.HasChain)) }
-      Write-Host ("[{0}] 最終利用: {1}" -f (T "Label.Cert"), (Format-FinalUse $sum.FinalUse))
+      
+      $hasChainStr = if ($sum.HasChain -is [bool]) { Format-YesNo $sum.HasChain } else { "-" }
+      Write-TreeProp $false (T "Label.HasChain") $hasChainStr
+      
+      Write-TreeProp $false (T "Label.FinalUse") (Format-FinalUse $sum.FinalUse) "Cyan"
+
       if ($chainSum.Found) {
-        Write-Host ("[{0}] {1}: {2}" -f (T "Label.Cert"), (T "CheckBasic.Cert.ChainFile"), $chainPath)
-        if (-not [string]::IsNullOrWhiteSpace($chainSum.CertBlocks)) { Write-Host ("[{0}] {1}: {2}" -f (T "Label.Cert"), (T "CheckBasic.Cert.ChainBlocks"), $chainSum.CertBlocks) }
-        Write-Host ("[{0}] {1}: {2}" -f (T "Label.Cert"), (T "CheckBasic.Cert.ChainFormat"), (Format-CertFormat $chainSum.Format))
+        Write-TreeProp $false (T "CheckBasic.Cert.ChainFile") $chainPath
+        if (-not [string]::IsNullOrWhiteSpace($chainSum.CertBlocks)) {
+          Write-TreeProp $false (T "CheckBasic.Cert.ChainBlocks") $chainSum.CertBlocks
+        }
+        Write-TreeProp $false (T "CheckBasic.Cert.ChainFormat") (Format-CertFormat $chainSum.Format)
       }
+
+      if (-not [string]::IsNullOrWhiteSpace($san)) {
+        $sanList = $san -split "; "
+        if ($sanList.Count -eq 1) {
+          Write-TreeProp $false (T "CheckBasic.Cert.SAN") $sanList[0]
+        }
+        else {
+          Write-TreeProp $false (T "CheckBasic.Cert.SAN") ""
+          for ($i = 0; $i -lt $sanList.Count; $i++) {
+            $isLast = ($i -eq ($sanList.Count - 1))
+            $mark = if ($isLast) { "└──" } else { "├──" }
+            Write-Host ("│   {0} {1}" -f $mark, $sanList[$i]) -ForegroundColor Gray
+          }
+        }
+      }
+
       if (-not [string]::IsNullOrWhiteSpace($sum.ExternalIntermediates)) {
-        Write-Host ("[{0}] 外部中間証明書（候補）: {1}" -f (T "Label.Cert"), (($sum.ExternalIntermediates -split ";" | Select-Object -Unique -First 5) -join "; "))
+        $cands = ($sum.ExternalIntermediates -split ";" | Select-Object -Unique -First 5) -join "; "
+        Write-TreeProp $false (T "Label.ExtChainCand") $cands
       }
-      if ($sum.HasPrivateKey) { Write-Host (T "CheckBasic.Detail.Cert.HasPrivateKey") }
-      Run-OpenSsl @("x509","-in",$FilePath,"-noout","-subject","-issuer","-dates") | Write-Output
+
+      $hasKeyStr = if ($sum.HasPrivateKey) { (T "Common.Yes") } else { (T "Common.No") }
+      Write-TreeProp $true (T "CheckBasic.Detail.Cert.HasPrivateKey") $hasKeyStr
+      
+      Show-OpenSslDetails $FilePath
       break
     }
     ".crt" {
       $sum = Get-CertChainSummary $FilePath
-      if ($PrettyTable) {
-        $chainMode = if ($sum.HasChain -is [bool] -and $sum.HasChain) { "fullchain" } elseif ($chainSum.Found) { "chainfile" } else { "none" }
-        $row = [PSCustomObject]@{
-          Path = Split-Path -Parent $FilePath
-          File = [IO.Path]::GetFileName($FilePath)
-          Expiry = Get-NotAfterFromCert $FilePath
-          Chain = $chainMode
-          ChainFile = if ($chainSum.Found) { [IO.Path]::GetFileName($chainPath) } else { "" }
-          Blocks = $sum.CertBlocks
-          ChainBlocks = if ($chainSum.Found) { $chainSum.CertBlocks } else { "" }
-          Issuer = $sum.IssuerCN
-          Format = Format-CertFormat $sum.Format
-        }
-        Write-PrettyTable (T "CheckBasic.Pretty.CertTitle") @($row) @(
-          (T "CheckBasic.Pretty.Path"),
-          (T "CheckBasic.Pretty.File"),
-          (T "CheckBasic.Pretty.Expiry"),
-          (T "CheckBasic.Pretty.Chain"),
-          (T "CheckBasic.Pretty.ChainFile"),
-          (T "CheckBasic.Pretty.Blocks"),
-          (T "CheckBasic.Pretty.ChainBlocks"),
-          (T "CheckBasic.Pretty.Issuer"),
-          (T "CheckBasic.Pretty.Format")
-        ) @("Path","File","Expiry","Chain","ChainFile","Blocks","ChainBlocks","Issuer","Format")
-        break
+      $san = Get-SubjectAltNamesFromCert $FilePath
+      
+      Write-TreeProp $false (T "CheckBasic.Pretty.File") ([IO.Path]::GetFileName($FilePath)) "Cyan"
+      Write-TreeProp $false (T "CheckBasic.Pretty.Path") (Split-Path -Parent $FilePath) "DarkGray"
+      Write-TreeProp $false (T "Label.FileType") (T "Label.Cert") "Cyan"
+
+      $chainPath = Find-ChainFileForCert $FilePath $ChainFile $script:ChainSearchDirs
+      $chainSum = Get-ChainFileSummary $chainPath
+
+      Write-TreeProp $false (T "Label.Format") (Format-CertFormat $sum.Format)
+      if (-not [string]::IsNullOrWhiteSpace($sum.CertBlocks)) {
+        Write-TreeProp $false (T "Label.Blocks") $sum.CertBlocks
       }
-      Write-Host ("[証明書] 形式: {0}" -f $sum.Format)
-      if (-not [string]::IsNullOrWhiteSpace($sum.CertBlocks)) { Write-Host ("[証明書] 証明書ブロック数: {0}" -f $sum.CertBlocks) }
-      if (-not [string]::IsNullOrWhiteSpace($sum.HasChain)) { Write-Host ("[証明書] 中間証明書同梱: {0}" -f $sum.HasChain) }
-      Write-Host ("[証明書] 最終利用: {0}" -f $sum.FinalUse)
+      $hasChainStr = if ($sum.HasChain -is [bool]) { Format-YesNo $sum.HasChain } else { "-" }
+      Write-TreeProp $false (T "Label.HasChain") $hasChainStr
+      
+      Write-TreeProp $false (T "Label.FinalUse") (Format-FinalUse $sum.FinalUse) "Cyan"
+
       if ($chainSum.Found) {
-        Write-Host ("[証明書] {0}: {1}" -f (T "CheckBasic.Cert.ChainFile"), $chainPath)
-        if (-not [string]::IsNullOrWhiteSpace($chainSum.CertBlocks)) { Write-Host ("[証明書] {0}: {1}" -f (T "CheckBasic.Cert.ChainBlocks"), $chainSum.CertBlocks) }
-        Write-Host ("[証明書] {0}: {1}" -f (T "CheckBasic.Cert.ChainFormat"), (Format-CertFormat $chainSum.Format))
+        Write-TreeProp $false (T "CheckBasic.Cert.ChainFile") $chainPath
+        if (-not [string]::IsNullOrWhiteSpace($chainSum.CertBlocks)) {
+          Write-TreeProp $false (T "CheckBasic.Cert.ChainBlocks") $chainSum.CertBlocks
+        }
+        Write-TreeProp $false (T "CheckBasic.Cert.ChainFormat") (Format-CertFormat $chainSum.Format)
       }
+
+      if (-not [string]::IsNullOrWhiteSpace($san)) {
+        $sanList = $san -split "; "
+        if ($sanList.Count -eq 1) {
+          Write-TreeProp $false (T "CheckBasic.Cert.SAN") $sanList[0]
+        }
+        else {
+          Write-TreeProp $false (T "CheckBasic.Cert.SAN") ""
+          for ($i = 0; $i -lt $sanList.Count; $i++) {
+            $isLast = ($i -eq ($sanList.Count - 1))
+            $mark = if ($isLast) { "└──" } else { "├──" }
+            Write-Host ("│   {0} {1}" -f $mark, $sanList[$i]) -ForegroundColor Gray
+          }
+        }
+      }
+
       if (-not [string]::IsNullOrWhiteSpace($sum.ExternalIntermediates)) {
-        Write-Host ("[証明書] 外部中間証明書（候補）: {0}" -f ($sum.ExternalIntermediates -split ";" | ForEach-Object { Join-Path $PSScriptRoot $_ } | Select-Object -Unique -First 5 -Skip 0) -join "; ")
-        Write-Host (T "CheckBasic.Detail.Cert.NoChainHint")
+        $cands = ($sum.ExternalIntermediates -split ";" | Select-Object -Unique -First 5) -join "; "
+        Write-TreeProp $false (T "Label.ExtChainCand") $cands
       }
-      if ($sum.HasPrivateKey) { Write-Host (T "CheckBasic.Detail.Cert.HasPrivateKey") }
-      Run-OpenSsl @("x509","-in",$FilePath,"-noout","-subject","-issuer","-dates") | Write-Output
+      
+      $hasKeyStr = if ($sum.HasPrivateKey) { (T "Common.Yes") } else { (T "Common.No") }
+      Write-TreeProp $true (T "CheckBasic.Detail.Cert.HasPrivateKey") $hasKeyStr
+
+      Show-OpenSslDetails $FilePath
       break
     }
     ".pem" {
       $sum = Get-CertChainSummary $FilePath
-      if ($PrettyTable) {
-        $chainMode = if ($sum.HasChain -is [bool] -and $sum.HasChain) { "fullchain" } elseif ($chainSum.Found) { "chainfile" } else { "none" }
-        $row = [PSCustomObject]@{
-          Path = Split-Path -Parent $FilePath
-          File = [IO.Path]::GetFileName($FilePath)
-          Expiry = Get-NotAfterFromCert $FilePath
-          Chain = $chainMode
-          ChainFile = if ($chainSum.Found) { [IO.Path]::GetFileName($chainPath) } else { "" }
-          Blocks = $sum.CertBlocks
-          ChainBlocks = if ($chainSum.Found) { $chainSum.CertBlocks } else { "" }
-          Issuer = $sum.IssuerCN
-          Format = Format-CertFormat $sum.Format
-        }
-        Write-PrettyTable (T "CheckBasic.Pretty.CertTitle") @($row) @(
-          (T "CheckBasic.Pretty.Path"),
-          (T "CheckBasic.Pretty.File"),
-          (T "CheckBasic.Pretty.Expiry"),
-          (T "CheckBasic.Pretty.Chain"),
-          (T "CheckBasic.Pretty.ChainFile"),
-          (T "CheckBasic.Pretty.Blocks"),
-          (T "CheckBasic.Pretty.ChainBlocks"),
-          (T "CheckBasic.Pretty.Issuer"),
-          (T "CheckBasic.Pretty.Format")
-        ) @("Path","File","Expiry","Chain","ChainFile","Blocks","ChainBlocks","Issuer","Format")
-        break
+      $san = Get-SubjectAltNamesFromCert $FilePath
+      
+      Write-TreeProp $false (T "CheckBasic.Pretty.File") ([IO.Path]::GetFileName($FilePath)) "Cyan"
+      Write-TreeProp $false (T "CheckBasic.Pretty.Path") (Split-Path -Parent $FilePath) "DarkGray"
+      Write-TreeProp $false (T "Label.FileType") (T "Label.Cert") "Cyan"
+
+      $chainPath = Find-ChainFileForCert $FilePath $ChainFile $script:ChainSearchDirs
+      $chainSum = Get-ChainFileSummary $chainPath
+
+      Write-TreeProp $false (T "Label.Format") (Format-CertFormat $sum.Format)
+      if (-not [string]::IsNullOrWhiteSpace($sum.CertBlocks)) {
+        Write-TreeProp $false (T "Label.Blocks") $sum.CertBlocks
       }
-      Write-Host ("[証明書] 形式: {0}" -f $sum.Format)
-      if (-not [string]::IsNullOrWhiteSpace($sum.CertBlocks)) { Write-Host ("[証明書] 証明書ブロック数: {0}" -f $sum.CertBlocks) }
-      if (-not [string]::IsNullOrWhiteSpace($sum.HasChain)) { Write-Host ("[証明書] 中間証明書同梱: {0}" -f $sum.HasChain) }
-      Write-Host ("[証明書] 最終利用: {0}" -f $sum.FinalUse)
+      $hasChainStr = if ($sum.HasChain -is [bool]) { Format-YesNo $sum.HasChain } else { "-" }
+      Write-TreeProp $false (T "Label.HasChain") $hasChainStr
+      
+      Write-TreeProp $false (T "Label.FinalUse") (Format-FinalUse $sum.FinalUse) "Cyan"
+
       if ($chainSum.Found) {
-        Write-Host ("[証明書] {0}: {1}" -f (T "CheckBasic.Cert.ChainFile"), $chainPath)
-        if (-not [string]::IsNullOrWhiteSpace($chainSum.CertBlocks)) { Write-Host ("[証明書] {0}: {1}" -f (T "CheckBasic.Cert.ChainBlocks"), $chainSum.CertBlocks) }
-        Write-Host ("[証明書] {0}: {1}" -f (T "CheckBasic.Cert.ChainFormat"), (Format-CertFormat $chainSum.Format))
+        Write-TreeProp $false (T "CheckBasic.Cert.ChainFile") $chainPath
+        if (-not [string]::IsNullOrWhiteSpace($chainSum.CertBlocks)) {
+          Write-TreeProp $false (T "CheckBasic.Cert.ChainBlocks") $chainSum.CertBlocks
+        }
+        Write-TreeProp $false (T "CheckBasic.Cert.ChainFormat") (Format-CertFormat $chainSum.Format)
       }
+
+      if (-not [string]::IsNullOrWhiteSpace($san)) {
+        $sanList = $san -split "; "
+        if ($sanList.Count -eq 1) {
+          Write-TreeProp $false (T "CheckBasic.Cert.SAN") $sanList[0]
+        }
+        else {
+          Write-TreeProp $false (T "CheckBasic.Cert.SAN") ""
+          for ($i = 0; $i -lt $sanList.Count; $i++) {
+            $isLast = ($i -eq ($sanList.Count - 1))
+            $mark = if ($isLast) { "└──" } else { "├──" }
+            Write-Host ("│   {0} {1}" -f $mark, $sanList[$i]) -ForegroundColor Gray
+          }
+        }
+      }
+      
       if (-not [string]::IsNullOrWhiteSpace($sum.ExternalIntermediates)) {
-        Write-Host ("[証明書] 外部中間証明書（候補）: {0}" -f ($sum.ExternalIntermediates -split ";" | ForEach-Object { Join-Path $PSScriptRoot $_ } | Select-Object -Unique -First 5 -Skip 0) -join "; ")
-        Write-Host (T "CheckBasic.Detail.Cert.NoChainHint")
+        $cands = ($sum.ExternalIntermediates -split ";" | Select-Object -Unique -First 5) -join "; "
+        Write-TreeProp $false (T "Label.ExtChainCand") $cands
       }
-      if ($sum.HasPrivateKey) { Write-Host (T "CheckBasic.Detail.Cert.HasPrivateKey") }
-      Run-OpenSsl @("x509","-in",$FilePath,"-noout","-subject","-issuer","-dates") | Write-Output
+      
+      $hasKeyStr = if ($sum.HasPrivateKey) { (T "Common.Yes") } else { (T "Common.No") }
+      Write-TreeProp $true (T "CheckBasic.Detail.Cert.HasPrivateKey") $hasKeyStr
+
+      Show-OpenSslDetails $FilePath
       break
     }
     ".csr" {
-      if ($PrettyTable) {
-        $subj = ""
-        try {
-          $out = Run-OpenSsl @("req","-in",$FilePath,"-noout","-subject")
-          $subj = (($out | Select-Object -First 1) -replace "^subject=","").Trim()
-        } catch { $subj = "" }
-        $row = [PSCustomObject]@{
-          Path = Split-Path -Parent $FilePath
-          File = [IO.Path]::GetFileName($FilePath)
-          Subject = $subj
-        }
-        Write-PrettyTable (T "CheckBasic.Pretty.CsrTitle") @($row) @(
-          (T "CheckBasic.Pretty.Path"),
-          (T "CheckBasic.Pretty.File"),
-          (T "CheckBasic.Pretty.Subject")
-        ) @("Path","File","Subject")
-        break
-      }
-      Run-OpenSsl @("req","-in",$FilePath,"-noout","-subject") | Write-Output
+      Write-TreeProp $false (T "CheckBasic.Pretty.File") ([IO.Path]::GetFileName($FilePath)) "Cyan"
+      Write-TreeProp $false (T "CheckBasic.Pretty.Path") (Split-Path -Parent $FilePath) "DarkGray"
+      Write-TreeProp $false (T "Label.FileType") (T "Label.Csr") "Cyan"
+      Show-OpenSslDetails $FilePath
       break
     }
     ".key" {
+      Write-TreeProp $false (T "CheckBasic.Pretty.File") ([IO.Path]::GetFileName($FilePath)) "Cyan"
+      Write-TreeProp $false (T "CheckBasic.Pretty.Path") (Split-Path -Parent $FilePath) "DarkGray"
+      Write-TreeProp $false (T "Label.FileType") (T "Label.Key") "Cyan"
       $isEnc = Test-KeyEncrypted $FilePath
       $existingPassFiles = @($PassFiles | Where-Object { -not [string]::IsNullOrWhiteSpace($_) -and (Test-Path -LiteralPath $_ -PathType Leaf) } | Select-Object -Unique)
-      $passFileText = if ($existingPassFiles.Count -gt 0) { ($existingPassFiles -join "; ") } else { "(なし)" }
+      $passFileText = if ($existingPassFiles.Count -gt 0) { ($existingPassFiles -join "; ") } else { (T "Common.None") }
 
-      Write-Host ("[KEY] 暗号化: {0}" -f (Format-YesNo $isEnc))
-      Write-Host ("[KEY] パスワードファイル({0}): {1}" -f $FixedPassFileName, $passFileText)
+      Write-TreeProp $false (T "Label.Encrypted") (Format-YesNo $isEnc)
+      Write-TreeProp $false (T "Label.PassFile") $passFileText
+      
       if (-not [string]::IsNullOrWhiteSpace($env:PASS_FILE)) {
         $envPassExists = Test-Path -LiteralPath $env:PASS_FILE -PathType Leaf
         $envPassName = [IO.Path]::GetFileName($env:PASS_FILE)
-        $envPassExistText = if ($envPassExists) { (T "Common.Exists") } else { (T "Common.NotExists") }
-        Write-Host ("[KEY] 環境変数 PASS_FILE: 設定あり（{0} / {1}）" -f $envPassName, $envPassExistText)
-      } else {
-        Write-Host "[KEY] 環境変数 PASS_FILE: 未設定"
+        $msg = if ($envPassExists) { (T "Common.Exists") } else { (T "Common.NotExists") }
+        Write-TreeProp $false "PASS_FILE" ("{0} ({1})" -f $envPassName, $msg)
       }
-      Write-Host ("[KEY] 無人運用: {0}" -f (Format-AutoModeStatus $isEnc $Passphrases))
-
-      if ($PrettyTable) {
-        $ok = Try-TestKeyReadable $FilePath $Passphrases
-        $usable = @($Passphrases | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count -gt 0
-        $decText = if ($ok -eq (T "Common.Success")) { (T "Common.Success") } elseif ($isEnc -and -not $usable) { (T "CheckBasic.Key.SkipNoPassLong") } else { (T "Common.Failed") }
-        $row = [PSCustomObject]@{
-          Path = Split-Path -Parent $FilePath
-          File = [IO.Path]::GetFileName($FilePath)
-          Encrypted = Format-YesNo $isEnc
-          AutoMode = Format-AutoModeStatus $isEnc $Passphrases
-          Decrypt = $decText
-        }
-        Write-PrettyTable (T "CheckBasic.Pretty.KeyTitle") @($row) @(
-          (T "CheckBasic.Pretty.Path"),
-          (T "CheckBasic.Pretty.File"),
-          (T "CheckBasic.Pretty.Encrypted"),
-          (T "CheckBasic.Pretty.AutoMode"),
-          (T "CheckBasic.Pretty.Decrypt")
-        ) @("Path","File","Encrypted","AutoMode","Decrypt")
-        break
+      else {
+        Write-TreeProp $false "PASS_FILE" (T "Common.NotSet")
       }
+      
+      Write-TreeProp $false (T "Label.AutoMode") (Format-AutoModeStatus $isEnc $Passphrases)
 
       $ok = Try-ShowKeyBit $FilePath $Passphrases
       $usable = @($Passphrases | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count -gt 0
       $decryptStatus = if ($ok) { (T "Common.Success") } elseif ($isEnc -and -not $usable) { (T "CheckBasic.Key.SkipNoPassLong") } else { (T "Common.Failed") }
-      Write-Host ("[KEY] 復号チェック: {0}" -f $decryptStatus)
+      
+      $col = if ($ok) { [ConsoleColor]::Green } else { [ConsoleColor]::Red }
+      Write-TreeProp $true (T "Label.DecryptCheck") $decryptStatus $col
+      break
+    }
+    ".pfx" {
+      Write-TreeProp $false (T "CheckBasic.Pretty.File") ([IO.Path]::GetFileName($FilePath)) "Cyan"
+      Write-TreeProp $false (T "CheckBasic.Pretty.Path") (Split-Path -Parent $FilePath) "DarkGray"
+      Write-TreeProp $false (T "Label.FileType") "PFX" "Cyan"
+      
+      $pfxOk = $false
+      $pfxInfo = ""
+      
+      try {
+        $out = Run-OpenSsl @("pkcs12", "-info", "-in", $FilePath, "-nokeys", "-clcerts", "-passin", "pass:")
+        $pfxInfo = $out
+        $pfxOk = $true
+      }
+      catch {}
+      
+      if (-not $pfxOk) {
+        foreach ($p in $Passphrases) {
+          if ([string]::IsNullOrWhiteSpace($p)) { continue }
+          try {
+            With-TempPassFile $p { param($tmp)
+              $out = Run-OpenSsl @("pkcs12", "-info", "-in", $FilePath, "-nokeys", "-clcerts", "-passin", "file:$tmp")
+            }
+            $pfxInfo = $out
+            $pfxOk = $true
+            break
+          }
+          catch {}
+        }
+      }
+      
+      if ($pfxOk) {
+        $subj = ($pfxInfo | Select-String "subject=") | Select-Object -First 1
+        if ($subj) {
+          $s = $subj.ToString().Trim().Replace("subject=", "")
+          Write-TreeProp $false "Subject" $s
+        }
+        Write-TreeProp $true (T "Label.DecryptCheck") (T "Common.Success") "Green"
+      }
+      else {
+        Write-TreeProp $true (T "Label.DecryptCheck") (T "Common.Failed") "Red"
+      }
       break
     }
     default {
@@ -858,10 +1310,15 @@ function Show-OneFile {
       return
     }
   }
+
+  # 同一ディレクトリ内のファイル整合性を検証
+  Show-FileMatching $FilePath $Passphrases
+
   Write-Host ""
 }
 
-function Show-Folder([string]$folderPath, [string]$label, [string]$oldRootForNew = "") {
+
+function Show-Folder([string]$folderPath, [string]$label, [string]$oldRootForNew = "", [string[]]$TargetOrgs = @()) {
   if (-not (Test-Path -LiteralPath $folderPath -PathType Container)) {
     Write-Host (T "Common.FolderNotFound" @($label, $folderPath))
     Write-Host ""
@@ -874,14 +1331,23 @@ function Show-Folder([string]$folderPath, [string]$label, [string]$oldRootForNew
 
   # 機関（第一階層）
   $orgDirs = @(Get-ChildItem -LiteralPath $folderPath -Directory -ErrorAction SilentlyContinue)
-  $rootFiles = @(Get-ChildItem -LiteralPath $folderPath -File -Include *.cer,*.crt,*.pem,*.csr,*.key -ErrorAction SilentlyContinue)
+  $rootFiles = @(Get-ChildItem -LiteralPath $folderPath -File -Include *.cer, *.crt, *.pem, *.csr, *.key -ErrorAction SilentlyContinue)
   if ($rootFiles.Count -gt 0) {
-    $orgDirs = @([PSCustomObject]@{ FullName = $folderPath; Name="(root)" }) + $orgDirs
+    $orgDirs = @([PSCustomObject]@{ FullName = $folderPath; Name = "(root)" }) + $orgDirs
   }
   if ($orgDirs.Count -eq 0) {
     Write-Host (T "Common.NoTargetFiles")
     Write-Host ""
     return
+  }
+
+  if ($TargetOrgs.Count -gt 0) {
+    $orgDirs = @($orgDirs | Where-Object { $TargetOrgs -contains $_.Name })
+    if ($orgDirs.Count -eq 0) {
+      Write-Host (T "Common.NoTargetFiles")
+      Write-Host ""
+      return
+    }
   }
 
   $hasOrgSubdirs = @($orgDirs | Where-Object { $_.Name -ne "(root)" }).Count -gt 0
@@ -904,9 +1370,10 @@ function Show-Folder([string]$folderPath, [string]$label, [string]$oldRootForNew
     $files = @()
     if ($orgName -eq "(root)" -and $hasOrgSubdirs) {
       # (root) は直下のみ（サブフォルダ機関と重複させない）
-      $files = @(Get-ChildItem -LiteralPath $orgPath -File -Include *.cer,*.crt,*.pem,*.csr,*.key -ErrorAction SilentlyContinue)
-    } else {
-      $files = @(Get-ChildItem -LiteralPath $orgPath -Recurse -File -Include *.cer,*.crt,*.pem,*.csr,*.key -ErrorAction SilentlyContinue)
+      $files = @(Get-ChildItem -LiteralPath $orgPath -File -Include *.cer, *.crt, *.pem, *.csr, *.key -ErrorAction SilentlyContinue)
+    }
+    else {
+      $files = @(Get-ChildItem -LiteralPath $orgPath -Recurse -File -Include *.cer, *.crt, *.pem, *.csr, *.key -ErrorAction SilentlyContinue)
     }
     if ($files.Count -eq 0) {
       Write-TreeLine 0 ("{0}\{1}\" -f $label, $orgName) {
@@ -919,7 +1386,8 @@ function Show-Folder([string]$folderPath, [string]$label, [string]$oldRootForNew
       Write-Host ("---- 機関: {0} ----" -f $orgName)
       if ($existingPassFiles.Count -gt 0) {
         Write-Host ("[PASS] パスワードファイル({0}): {1}" -f $FixedPassFileName, ($existingPassFiles -join "; "))
-      } else {
+      }
+      else {
         Write-Host ("[PASS] パスワードファイル({0}): (なし)" -f $FixedPassFileName)
       }
       if (-not [string]::IsNullOrWhiteSpace($env:PASS_FILE)) {
@@ -927,7 +1395,8 @@ function Show-Folder([string]$folderPath, [string]$label, [string]$oldRootForNew
         $envPassName = [IO.Path]::GetFileName($env:PASS_FILE)
         $envPassExistText = if ($envPassExists) { (T "Common.Exists") } else { (T "Common.NotExists") }
         Write-Host ("[PASS] 環境変数 PASS_FILE: 設定あり（{0} / {1}）" -f $envPassName, $envPassExistText)
-      } else {
+      }
+      else {
         Write-Host "[PASS] 環境変数 PASS_FILE: 未設定"
       }
       Write-Host ""
@@ -938,8 +1407,8 @@ function Show-Folder([string]$folderPath, [string]$label, [string]$oldRootForNew
     }
 
     $certRows = New-Object System.Collections.Generic.List[object]
-    $csrRows  = New-Object System.Collections.Generic.List[object]
-    $keyRows  = New-Object System.Collections.Generic.List[object]
+    $csrRows = New-Object System.Collections.Generic.List[object]
+    $keyRows = New-Object System.Collections.Generic.List[object]
     foreach ($f in ($files | Sort-Object FullName)) {
       $ext = [IO.Path]::GetExtension($f.FullName).ToLowerInvariant()
       # 機関フォルダからの相対パス（サブフォルダがある場合でも見やすくする）
@@ -948,36 +1417,41 @@ function Show-Folder([string]$folderPath, [string]$label, [string]$oldRootForNew
         $full = [string]$f.FullName
         $base = [string]$orgPath
         if ($full.StartsWith($base, [System.StringComparison]::OrdinalIgnoreCase)) {
-          $rel = $full.Substring($base.Length).TrimStart('\','/')
+          $rel = $full.Substring($base.Length).TrimStart('\', '/')
           if (-not [string]::IsNullOrWhiteSpace($rel)) { $name = $rel }
         }
-      } catch { }
+      }
+      catch { }
 
-      if ($ext -in @(".cer",".crt",".pem")) {
+      if ($ext -in @(".cer", ".crt", ".pem")) {
         $sum = Get-CertChainSummary $f.FullName
+        $subject = Get-SubjectRfc2253FromCert $f.FullName
+        $san = Get-SubjectAltNamesFromCert $f.FullName
         $chainPath = Find-ChainFileForCert $f.FullName "" $script:ChainSearchDirs
         $chainSum = Get-ChainFileSummary $chainPath
         $notAfter = Get-NotAfterFromCert $f.FullName
         $chainText = ""
         if ($sum.HasChain -is [bool]) { $chainText = Format-YesNo $sum.HasChain }
         $certRows.Add([PSCustomObject]@{
-          File = $name
-          FullPath = $f.FullName
-          Dir = Split-Path -Parent $f.FullName
-          FileName = $f.Name
-          NotAfter = $notAfter
-          Format = Format-CertFormat $sum.Format
-          Blocks = $sum.CertBlocks
-          Chain = $chainText
-          ChainBool = $sum.HasChain
-          ExtIntermediate = $sum.ExternalIntermediates
-          FinalUse = Format-FinalUse $sum.FinalUse
-          FinalUseCode = $sum.FinalUse
-          IssuerCN = $sum.IssuerCN
-          ChainFile = if ($chainSum.Found) { [IO.Path]::GetFileName($chainPath) } else { "" }
-          ChainFileBlocks = if ($chainSum.Found) { $chainSum.CertBlocks } else { "" }
-          ChainFileFormat = if ($chainSum.Found) { Format-CertFormat $chainSum.Format } else { "" }
-        }) | Out-Null
+            File            = $name
+            FullPath        = $f.FullName
+            Dir             = Split-Path -Parent $f.FullName
+            FileName        = $f.Name
+            NotAfter        = $notAfter
+            Format          = Format-CertFormat $sum.Format
+            Blocks          = $sum.CertBlocks
+            Chain           = $chainText
+            ChainBool       = $sum.HasChain
+            ExtIntermediate = $sum.ExternalIntermediates
+            FinalUse        = Format-FinalUse $sum.FinalUse
+            FinalUseCode    = $sum.FinalUse
+            IssuerCN        = $sum.IssuerCN
+            Subject         = $subject
+            SAN             = $san
+            ChainFile       = if ($chainSum.Found) { [IO.Path]::GetFileName($chainPath) } else { "" }
+            ChainFileBlocks = if ($chainSum.Found) { $chainSum.CertBlocks } else { "" }
+            ChainFileFormat = if ($chainSum.Found) { Format-CertFormat $chainSum.Format } else { "" }
+          }) | Out-Null
         continue
       }
 
@@ -986,17 +1460,18 @@ function Show-Folder([string]$folderPath, [string]$label, [string]$oldRootForNew
         $cn = ""
         $note = ""
         try {
-          $out = Run-OpenSsl @("req","-in",$f.FullName,"-noout","-subject")
-          $subj = (($out | Select-Object -First 1) -replace "^subject=","").Trim()
+          $out = Run-OpenSsl @("req", "-in", $f.FullName, "-noout", "-subject")
+          $subj = (($out | Select-Object -First 1) -replace "^subject=", "").Trim()
           if ($subj -match "(?:^|[,/\\s])CN\\s*=\\s*([^,\\/]+)") { $cn = $matches[1].Trim() }
-        } catch { $subj = "" }
+        }
+        catch { $subj = "" }
         if (-not [string]::IsNullOrWhiteSpace($cn)) { $note = "CN=$cn" } else { $note = $subj }
         $csrRows.Add([PSCustomObject]@{
-          File = $name
-          Dir = Split-Path -Parent $f.FullName
-          FileName = $f.Name
-          Subject = $note
-        }) | Out-Null
+            File     = $name
+            Dir      = Split-Path -Parent $f.FullName
+            FileName = $f.Name
+            Subject  = $note
+          }) | Out-Null
         continue
       }
 
@@ -1006,125 +1481,26 @@ function Show-Folder([string]$folderPath, [string]$label, [string]$oldRootForNew
         $autoText = Format-AutoModeStatus $isEnc $passphrases
         $decText = Try-TestKeyReadable $f.FullName $passphrases
         $keyRows.Add([PSCustomObject]@{
-          File = $name
-          Dir = Split-Path -Parent $f.FullName
-          FileName = $f.Name
-          Encrypted = $encText
-          AutoMode = $autoText
-          DecryptCheck = $decText
-        }) | Out-Null
+            File         = $name
+            Dir          = Split-Path -Parent $f.FullName
+            FileName     = $f.Name
+            Encrypted    = $encText
+            AutoMode     = $autoText
+            DecryptCheck = $decText
+          }) | Out-Null
         continue
       }
     }
 
-    if ($PrettyTable) {
-      $prettyRows = @()
-      foreach ($r in ($certRows | Sort-Object File)) {
-        $chainMode = if ($r.ChainBool -is [bool] -and $r.ChainBool) { "fullchain" } elseif (-not [string]::IsNullOrWhiteSpace($r.ChainFile)) { "chainfile" } else { "none" }
-        $prettyRows += [PSCustomObject]@{
-          Path = $r.Dir
-          File = $r.FileName
-          Expiry = $r.NotAfter
-          Chain = $chainMode
-          ChainFile = $r.ChainFile
-          Blocks = $r.Blocks
-          ChainBlocks = $r.ChainFileBlocks
-          Issuer = $r.IssuerCN
-          Format = $r.Format
-        }
-      }
-      Write-PrettyTable (T "CheckBasic.Pretty.CertTitle") $prettyRows @(
-        (T "CheckBasic.Pretty.Path"),
-        (T "CheckBasic.Pretty.File"),
-        (T "CheckBasic.Pretty.Expiry"),
-        (T "CheckBasic.Pretty.Chain"),
-        (T "CheckBasic.Pretty.ChainFile"),
-        (T "CheckBasic.Pretty.Blocks"),
-        (T "CheckBasic.Pretty.ChainBlocks"),
-        (T "CheckBasic.Pretty.Issuer"),
-        (T "CheckBasic.Pretty.Format")
-      ) @("Path","File","Expiry","Chain","ChainFile","Blocks","ChainBlocks","Issuer","Format")
 
-      $csrPretty = @()
-      foreach ($r in ($csrRows | Sort-Object File)) {
-        $csrPretty += [PSCustomObject]@{
-          Path = $r.Dir
-          File = $r.FileName
-          Subject = $r.Subject
-        }
-      }
-      Write-PrettyTable (T "CheckBasic.Pretty.CsrTitle") $csrPretty @(
-        (T "CheckBasic.Pretty.Path"),
-        (T "CheckBasic.Pretty.File"),
-        (T "CheckBasic.Pretty.Subject")
-      ) @("Path","File","Subject")
-
-      $keyPretty = @()
-      foreach ($r in ($keyRows | Sort-Object File)) {
-        $keyPretty += [PSCustomObject]@{
-          Path = $r.Dir
-          File = $r.FileName
-          Encrypted = $r.Encrypted
-          AutoMode = $r.AutoMode
-          Decrypt = $r.DecryptCheck
-        }
-      }
-      Write-PrettyTable (T "CheckBasic.Pretty.KeyTitle") $keyPretty @(
-        (T "CheckBasic.Pretty.Path"),
-        (T "CheckBasic.Pretty.File"),
-        (T "CheckBasic.Pretty.Encrypted"),
-        (T "CheckBasic.Pretty.AutoMode"),
-        (T "CheckBasic.Pretty.Decrypt")
-      ) @("Path","File","Encrypted","AutoMode","Decrypt")
-      continue
-    }
-
-    if ($Table) {
-      # 旧来：要点だけを表で表示
-      Write-Host ("---- 機関: {0} ----" -f $orgName)
-      if ($existingPassFiles.Count -gt 0) {
-        Write-Host ("[PASS] パスワードファイル({0}): {1}" -f $FixedPassFileName, ($existingPassFiles -join "; "))
-      } else {
-        Write-Host ("[PASS] パスワードファイル({0}): (なし)" -f $FixedPassFileName)
-      }
-      if (-not [string]::IsNullOrWhiteSpace($env:PASS_FILE)) {
-        $envPassExists = Test-Path -LiteralPath $env:PASS_FILE -PathType Leaf
-        $envPassName = [IO.Path]::GetFileName($env:PASS_FILE)
-        $envPassExistText = if ($envPassExists) { (T "Common.Exists") } else { (T "Common.NotExists") }
-        Write-Host ("[PASS] 環境変数 PASS_FILE: 設定あり（{0} / {1}）" -f $envPassName, $envPassExistText)
-      } else {
-        Write-Host "[PASS] 環境変数 PASS_FILE: 未設定"
-      }
-      Write-Host ""
-    }
-
-    if ($Table) {
-      # 表形式
-      if ($certRows.Count -eq 0) {
-        Write-Host (T "Common.NoCertFiles")
-      }
-      if ($certRows.Count -gt 0) {
-        Write-Host "[証明書]"
-        $certRows | Format-Table -AutoSize | Out-String | Write-Output
-      }
-      if ($csrRows.Count -gt 0) {
-        Write-Host "[CSR]"
-        $csrRows | Format-Table -AutoSize | Out-String | Write-Output
-      }
-      if ($keyRows.Count -gt 0) {
-        Write-Host "[秘密鍵]"
-        $keyRows | Format-Table -AutoSize | Out-String | Write-Output
-      }
-      Write-Host ""
-      continue
-    }
 
     # 既定：ツリー表示（フォルダ -> ファイル、タグは色付き）
     $orgHeader = if ($orgName -eq "(root)") { ("{0}\" -f $label) } else { ("{0}\{1}\" -f $label, $orgName) }
     Write-TreeLine 0 $orgHeader {
       if ($existingPassFiles.Count -gt 0) {
         Write-Tag (T "CheckBasic.PassFilePresent" @($FixedPassFileName)) "Green"
-      } else {
+      }
+      else {
         Write-Tag (T "CheckBasic.PassFileMissing" @($FixedPassFileName)) "DarkYellow"
       }
       if (-not [string]::IsNullOrWhiteSpace($env:PASS_FILE)) {
@@ -1137,7 +1513,8 @@ function Show-Folder([string]$folderPath, [string]$label, [string]$oldRootForNew
     Write-TreeLine 2 (T "Label.Cert") { }
     if ($certRows.Count -eq 0) {
       Write-TreeLine 4 (T "CheckBasic.None") { Write-Tag (T "CheckBasic.NotFound") "DarkYellow" }
-    } else {
+    }
+    else {
       foreach ($r in ($certRows | Sort-Object File)) {
         $chainBool = $r.ChainBool
         $finalCode = [string]$r.FinalUseCode
@@ -1159,26 +1536,35 @@ function Show-Folder([string]$folderPath, [string]$label, [string]$oldRootForNew
             # 厳密一致の候補がある → 使える中間証明書
             $first = ($exti -split ";" | Select-Object -First 1)
             if (-not [string]::IsNullOrWhiteSpace($first)) { Write-Tag (T "CheckBasic.Cert.Candidate" @($first)) "Green" }
-          } elseif ($finalCode -eq "SINGLE_CERT" -and -not [string]::IsNullOrWhiteSpace($issuerCN)) {
+          }
+          elseif ($finalCode -eq "SINGLE_CERT" -and -not [string]::IsNullOrWhiteSpace($issuerCN)) {
             # 候補がないが中間証明書が必要な場合、発行機関を表示（この機関の中間証明書が必要）
             Write-Tag (T "CheckBasic.Cert.Issuer" @($issuerCN)) "Magenta"
           }
           if (-not [string]::IsNullOrWhiteSpace($chainFileName)) {
             if (-not [string]::IsNullOrWhiteSpace($chainBlocks)) {
               Write-Tag (T "CheckBasic.Cert.ChainFileBlocks" @($chainBlocks)) "Green"
-            } else {
+            }
+            else {
               Write-Tag (T "CheckBasic.Cert.ChainFileFound") "Green"
             }
           }
         }
+        if (-not [string]::IsNullOrWhiteSpace([string]$r.Subject)) {
+          Write-TreeLine 6 ("{0} {1}" -f (T "CheckBasic.Detail.Subject"), [string]$r.Subject) { }
+        }
+        if (-not [string]::IsNullOrWhiteSpace([string]$r.SAN)) {
+          Write-TreeLine 6 ("{0} {1}" -f (T "CheckBasic.Detail.SAN"), [string]$r.SAN) { }
+        }
       }
     }
 
-    # CSR
+    # CSR（証明書署名要求）
     Write-TreeLine 2 (T "Label.Csr") { }
     if ($csrRows.Count -eq 0) {
       Write-TreeLine 4 (T "CheckBasic.None") { Write-Tag (T "CheckBasic.NotFound") "DarkYellow" }
-    } else {
+    }
+    else {
       foreach ($r in ($csrRows | Sort-Object File)) {
         Write-TreeLine 4 $r.File {
           if (-not [string]::IsNullOrWhiteSpace([string]$r.Subject)) { Write-Tag ([string]$r.Subject) "Gray" }
@@ -1190,7 +1576,8 @@ function Show-Folder([string]$folderPath, [string]$label, [string]$oldRootForNew
     Write-TreeLine 2 (T "Label.Key") { }
     if ($keyRows.Count -eq 0) {
       Write-TreeLine 4 (T "CheckBasic.None") { Write-Tag (T "CheckBasic.NotFound") "DarkYellow" }
-    } else {
+    }
+    else {
       foreach ($r in ($keyRows | Sort-Object File)) {
         $enc = [string]$r.Encrypted
         $auto = [string]$r.AutoMode
@@ -1212,11 +1599,11 @@ function Show-Folder([string]$folderPath, [string]$label, [string]$oldRootForNew
 
 if (-not [string]::IsNullOrWhiteSpace($Path)) {
   Show-OneFile -FilePath $Path -Passphrases (Collect-Passphrases @(
-    (Find-PassFile (Split-Path -Parent $Path)),
-    (Find-PassFile (Join-Path $PSScriptRoot "old")),
-    (Find-PassFile (Join-Path $PSScriptRoot "new")),
-    (Find-PassFile $PSScriptRoot)
-  )) -PassFiles @(
+      (Find-PassFile (Split-Path -Parent $Path)),
+      (Find-PassFile (Join-Path $PSScriptRoot "old")),
+      (Find-PassFile (Join-Path $PSScriptRoot "new")),
+      (Find-PassFile $PSScriptRoot)
+    )) -PassFiles @(
     (Find-PassFile (Split-Path -Parent $Path)),
     (Find-PassFile (Join-Path $PSScriptRoot "old")),
     (Find-PassFile (Join-Path $PSScriptRoot "new")),
@@ -1228,6 +1615,11 @@ if (-not [string]::IsNullOrWhiteSpace($Path)) {
 # パラメータ未指定：old/new をそれぞれチェック
 $oldDir = Join-Path $PSScriptRoot "old"
 $newDir = Join-Path $PSScriptRoot "new"
+
+if (-not $Detail) {
+  Show-InteractiveMenu $oldDir $newDir
+  exit 0
+}
 
 Show-Folder $oldDir (T "Label.Old") ""
 Show-Folder $newDir (T "Label.New") $oldDir

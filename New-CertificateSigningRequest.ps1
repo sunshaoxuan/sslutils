@@ -34,11 +34,12 @@ CSR と秘密鍵のペアを生成します。
 .PARAMETER WithSAN
 SAN（Subject Alternative Name）を CSR に含める（既定: true / DNS:CN）
 
+
 .PARAMETER PassFile
 パスフレーズファイル（指定すると秘密鍵を AES-256 で暗号化）
 
 .PARAMETER OutDir
-出力ディレクトリ（既定: カレント）
+出ディレクトリ（既定: .\new）
 
 .PARAMETER Overwrite
 既存の <CN>.key / <CN>.csr が存在する場合に、バックアップして再生成
@@ -100,7 +101,7 @@ param(
 
   # 出力ディレクトリ（デフォルト：カレント）
   [Parameter(Mandatory = $false)]
-  [string]$OutDir = ".",
+  [string]$OutDir = "",
 
   # 既存の <CN>.key / <CN>.csr が存在する場合に、バックアップして再生成する
   [Parameter(Mandatory = $false)]
@@ -114,7 +115,7 @@ param(
 
   # 出力言語（既定: ja）
   [Parameter(Mandatory = $false)]
-  [ValidateSet("ja","zh","en")]
+  [ValidateSet("ja", "zh", "en")]
   [string]$Lang = "ja"
 )
 
@@ -126,6 +127,14 @@ if (-not (Test-Path -LiteralPath $i18nModule -PathType Leaf)) { throw (T "Common
 . $i18nModule
 $__i18n = Initialize-I18n -Lang $Lang -BaseDir $PSScriptRoot
 function T([string]$Key, [object[]]$FormatArgs = @()) { return Get-I18nText -I18n $__i18n -Key $Key -FormatArgs $FormatArgs }
+
+if ([string]::IsNullOrWhiteSpace($OutDir)) { $OutDir = Join-Path $PSScriptRoot "new" }
+
+# メニューモジュールを読み込む
+$menuModule = Join-Path $PSScriptRoot "lib\\menu.ps1"
+if (Test-Path -LiteralPath $menuModule -PathType Leaf) {
+  . $menuModule
+}
 
 function Assert-ExistsFile([string]$p, [string]$label) {
   if (-not (Test-Path -LiteralPath $p -PathType Leaf)) {
@@ -177,8 +186,117 @@ function With-TempPassFile([string]$passphrase, [scriptblock]$action) {
   try {
     Set-Content -LiteralPath $tmp -Value $passphrase -NoNewline -Encoding ASCII
     return & $action $tmp
-  } finally {
+  }
+  finally {
     Remove-Item -Force -ErrorAction SilentlyContinue -LiteralPath $tmp
+  }
+}
+
+function Normalize-SanItem([string]$s) {
+  if ([string]::IsNullOrWhiteSpace($s)) { return "" }
+  $t = $s.Trim()
+  if ($t -match "^(DNS|IP|IP Address|URI|EMAIL):") {
+    $prefix = $matches[1]
+    $value = $t.Substring($prefix.Length + 1).Trim()
+    if ([string]::IsNullOrWhiteSpace($value)) { return "" }
+    if ($prefix -eq "IP Address") { $prefix = "IP" }
+    return ("{0}:{1}" -f $prefix, $value)
+  }
+  return ("DNS:{0}" -f $t)
+}
+
+function Build-SanOpt([string[]]$sans) {
+  if ($null -eq $sans -or $sans.Count -eq 0) { return @() }
+  $items = New-Object System.Collections.Generic.List[string]
+  foreach ($s in $sans) {
+    $n = Normalize-SanItem $s
+    if ([string]::IsNullOrWhiteSpace($n)) { continue }
+    $items.Add($n) | Out-Null
+  }
+  $uniq = @($items | Select-Object -Unique)
+  if ($uniq.Count -eq 0) { return @() }
+  $value = "subjectAltName=" + ($uniq -join ",")
+  return @("-addext", $value)
+}
+
+function Parse-SanInput([string]$raw) {
+  if ([string]::IsNullOrWhiteSpace($raw)) { return @() }
+  return @($raw -split "[,;\s]+" | Where-Object { $_ -ne "" })
+}
+
+function Prompt-SanSelection([string]$cn) {
+  # メニューモジュールが利用可能かチェック
+  $useMenu = $false
+  try {
+    if (Get-Command Show-MenuSelect -ErrorAction SilentlyContinue) {
+      $null = $host.UI.RawUI
+      $useMenu = $true
+    }
+  }
+  catch { }
+
+  if ($useMenu) {
+    # 反転表示メニューを使用
+    $items = @(
+      (T "MakeCsr.SanMenuOptionCn"),
+      (T "MakeCsr.SanMenuOptionNone"),
+      (T "MakeCsr.SanMenuOptionDns"),
+      (T "MakeCsr.SanMenuOptionMixed"),
+      ("[ {0} ]" -f (T "Common.MenuCancel"))
+    )
+    $choice = Show-MenuSelect -title (T "MakeCsr.SanMenuTitle") -items $items
+    if ($null -eq $choice -or $choice -eq $items.Count) { 
+      # キャンセル または ESC = デフォルト (CN のみ)
+      return @($cn)
+    }
+    
+    switch ($choice) {
+      1 { return @($cn) }  # CN のみ (SAN なし)
+      2 { return @() }  # SAN なし
+      3 {
+        $raw = (Read-Host (T "MakeCsr.SanInputDns")).Trim()
+        $list = Parse-SanInput $raw
+        return @($cn) + $list
+      }
+      4 {
+        $raw = (Read-Host (T "MakeCsr.SanInputMixed")).Trim()
+        $list = Parse-SanInput $raw
+        return @($cn) + $list
+      }
+      default { return @($cn) }
+    }
+  }
+  else {
+    # フォールバック: 従来の数字入力方式
+    Write-Host ""
+    Write-Host (T "MakeCsr.SanMenuTitle")
+    Write-Host (T "MakeCsr.SanMenuOptionCn")
+    Write-Host (T "MakeCsr.SanMenuOptionNone")
+    Write-Host (T "MakeCsr.SanMenuOptionDns")
+    Write-Host (T "MakeCsr.SanMenuOptionMixed")
+    $choice = ""
+    try {
+      $choice = (Read-Host (T "MakeCsr.SanMenuPrompt")).Trim()
+    }
+    catch {
+      return @($cn)
+    }
+    if ([string]::IsNullOrWhiteSpace($choice)) { $choice = "1" }
+
+    switch ($choice) {
+      "2" { return @() }
+      "3" {
+        $raw = (Read-Host (T "MakeCsr.SanInputDns")).Trim()
+        $list = Parse-SanInput $raw
+        return @($cn) + $list
+      }
+      "4" {
+        $raw = (Read-Host (T "MakeCsr.SanInputMixed")).Trim()
+        $list = Parse-SanInput $raw
+        return @($cn) + $list
+      }
+      default { return @($cn) }
+    }
   }
 }
 
@@ -188,6 +306,12 @@ Ensure-Dir $OutDir
 if ([string]::IsNullOrWhiteSpace($CN)) {
   throw (T "MakeCsr.CnRequired")
 }
+
+$sanItems = @()
+if ($WithSAN) {
+  $sanItems = Prompt-SanSelection $CN
+}
+$sanOpt = Build-SanOpt $sanItems
 
 $subj = $Subject
 if ([string]::IsNullOrWhiteSpace($subj)) {
@@ -201,12 +325,34 @@ $keyPath = Join-Path $OutDir ($CN + ".key")
 $csrPath = Join-Path $OutDir ($CN + ".csr")
 
 if ((Test-Path -LiteralPath $keyPath -PathType Leaf) -or (Test-Path -LiteralPath $csrPath -PathType Leaf)) {
+  $needsOverwrite = $true
   if (-not $Overwrite) {
-    throw (T "MakeCsr.OutExistsNoOverwrite" @((Resolve-Path -LiteralPath $OutDir)))
+    # 対話的に選択
+    $conflictItems = @(
+      (T "Renew.ConflictOverwrite"),
+      (T "Renew.ConflictCancel")
+    )
+    $conflictTitle = (T "Renew.OutExistsPrompt" @((Resolve-Path -LiteralPath $OutDir)))
+    $conflictSel = Show-MenuSelect -title $conflictTitle -items $conflictItems -helpText (T "Renew.MenuPrompt")
+    
+    if ($null -eq $conflictSel -or $conflictSel -eq 2) {
+      # キャンセル
+      Write-Host (T "Common.Cancelled")
+      exit 0
+    }
   }
+
+  # Overwrite またはメニューで Overwrite を選択した場合
   # 事故防止：拡張子は維持し、ファイル名にタイムスタンプを入れてバックアップ
-  Backup-IfExists $keyPath
-  Backup-IfExists $csrPath
+  $ts = (Get-Date).ToString("yyyyMMdd_HHmmss")
+  if (Test-Path -LiteralPath $keyPath -PathType Leaf) {
+    try { Rename-Item -Force -ErrorAction Stop -LiteralPath $keyPath -NewName ("{0}.bak_{1}.key" -f $CN, $ts) }
+    catch { throw (T "Renew.BackupKeyFail" @($keyPath)) }
+  }
+  if (Test-Path -LiteralPath $csrPath -PathType Leaf) {
+    try { Rename-Item -Force -ErrorAction Stop -LiteralPath $csrPath -NewName ("{0}.bak_{1}.csr" -f $CN, $ts) }
+    catch { throw (T "Renew.BackupCsrFail" @($csrPath)) }
+  }
 }
 
 if (-not [string]::IsNullOrWhiteSpace($PassFile)) {
@@ -221,20 +367,21 @@ if (-not [string]::IsNullOrWhiteSpace($PassFile)) {
     param($tmpPass)
     Run-OpenSsl @(
       "genpkey",
-      "-algorithm","RSA",
-      "-pkeyopt",("rsa_keygen_bits:{0}" -f $RsaBits),
-      "-out",$keyPath,
+      "-algorithm", "RSA",
+      "-pkeyopt", ("rsa_keygen_bits:{0}" -f $RsaBits),
+      "-out", $keyPath,
       "-aes-256-cbc",
-      "-pass",("file:{0}" -f $tmpPass)
+      "-pass", ("file:{0}" -f $tmpPass)
     ) | Out-Null
 
-    $reqArgs = @("req","-new","-sha256","-key",$keyPath,"-passin",("file:{0}" -f $tmpPass),"-out",$csrPath,"-subj",$subj)
-    if ($WithSAN) { $reqArgs += @("-addext", ("subjectAltName=DNS:{0}" -f $CN)) }
+    $reqArgs = @("req", "-new", "-sha256", "-key", $keyPath, "-passin", ("file:{0}" -f $tmpPass), "-out", $csrPath, "-subj", $subj)
+    if ($sanOpt.Count -gt 0) { $reqArgs += $sanOpt }
     Run-OpenSsl $reqArgs | Out-Null
   } | Out-Null
-} else {
-  $args = @("req","-new","-newkey",("rsa:{0}" -f $RsaBits),"-sha256","-nodes","-keyout",$keyPath,"-out",$csrPath,"-subj",$subj)
-  if ($WithSAN) { $args += @("-addext", ("subjectAltName=DNS:{0}" -f $CN)) }
+}
+else {
+  $args = @("req", "-new", "-newkey", ("rsa:{0}" -f $RsaBits), "-sha256", "-nodes", "-keyout", $keyPath, "-out", $csrPath, "-subj", $subj)
+  if ($sanOpt.Count -gt 0) { $args += $sanOpt }
   Run-OpenSsl $args | Out-Null
 }
 
@@ -242,7 +389,5 @@ Write-Host (T "MakeCsr.DoneKey" @((Resolve-Path -LiteralPath $keyPath)))
 Write-Host (T "MakeCsr.DoneCsr" @((Resolve-Path -LiteralPath $csrPath)))
 Write-Host ""
 Write-Host (T "MakeCsr.PreviewTitle")
-Run-OpenSsl @("req","-in",$csrPath,"-noout","-subject") | Write-Output
-Run-OpenSsl @("req","-in",$csrPath,"-noout","-text") | Select-String -Pattern "Subject Alternative Name" -Context 0,2 | ForEach-Object { $_.ToString() } | Write-Output
-
-
+Run-OpenSsl @("req", "-in", $csrPath, "-noout", "-subject") | Write-Output
+Run-OpenSsl @("req", "-in", $csrPath, "-noout", "-text") | Select-String -Pattern "Subject Alternative Name" -Context 0, 2 | ForEach-Object { $_.ToString() } | Write-Output

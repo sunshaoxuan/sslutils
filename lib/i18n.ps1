@@ -27,8 +27,8 @@ function Initialize-I18n {
   }
 
   return [PSCustomObject]@{
-    Lang = $Lang
-    Ja = $ja
+    Lang      = $Lang
+    Ja        = $ja
     LangTable = $langTable
   }
 }
@@ -48,19 +48,22 @@ function Get-I18nText {
   try {
     if ($null -ne $I18n.LangTable -and $I18n.LangTable.ContainsKey($Key)) {
       $s = $I18n.LangTable[$Key]
-    } elseif ($null -ne $I18n.Ja -and $I18n.Ja.ContainsKey($Key)) {
+    }
+    elseif ($null -ne $I18n.Ja -and $I18n.Ja.ContainsKey($Key)) {
       $s = $I18n.Ja[$Key]
     }
-  } catch { }
+  }
+  catch { }
 
   if ([string]::IsNullOrWhiteSpace([string]$s)) { $s = $Key }
 
-  if ($FormatArgs.Count -gt 0) {
+  if (@($FormatArgs).Count -gt 0) {
     try {
-      return ([string]$s -f $FormatArgs)
-    } catch {
-      return [string]$s
+      if ($null -ne $s) {
+        return ([string]$s -f $FormatArgs)
+      }
     }
+    catch { }
   }
   return [string]$s
 }
