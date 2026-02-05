@@ -36,7 +36,8 @@ function Show-MenuSelect {
     if ($null -eq $items -or $items.Count -eq 0) { return $null }
   
     $index = 0
-    $readOpts = [System.Management.Automation.Host.ReadKeyOptions]5 # NoEcho, IncludeKeyDown
+    # IncludeKeyDown(4) + NoEcho(2) + AllowCtrlC(1) = 7
+    $readOpts = [System.Management.Automation.Host.ReadKeyOptions]"IncludeKeyDown,NoEcho,AllowCtrlC"
 
     $oldCursorVisible = $true
     try {
@@ -47,7 +48,15 @@ function Show-MenuSelect {
 
     try {
         while ($true) {
-            Clear-Host
+            # Ensure no stray input affects rendering
+            try { $host.UI.RawUI.FlushInputBuffer() } catch { }
+            
+            try { [Console]::Clear() } catch { Clear-Host }
+            try { [Console]::SetCursorPosition(0, 0) } catch { }
+            
+            # Top margin
+            Write-Host ""
+            
             Write-Host $title
             if (-not [string]::IsNullOrWhiteSpace($helpText)) { Write-Host $helpText }
             Write-Host ""
@@ -98,10 +107,24 @@ function Show-MenuSelect {
             catch { return $null }
         
             switch ($key.VirtualKeyCode) {
-                38 { if ($index -le 0) { $index = $items.Count - 1 } else { $index-- } }  # Up
-                40 { if ($index -ge ($items.Count - 1)) { $index = 0 } else { $index++ } }  # Down
-                13 { Clear-Host; return [int]($index + 1) }  # Enter
-                27 { Clear-Host; return $null }  # ESC
+                38 {
+                    # Up
+                    $index--
+                    if ($index -lt 0) { $index = $items.Count - 1 }
+                }
+                40 {
+                    # Down
+                    $index++
+                    if ($index -ge $items.Count) { $index = 0 }
+                }
+                13 {
+                    # Enter
+                    return ($index + 1)
+                }
+                27 {
+                    # Esc
+                    return $null
+                }
             }
         }
     }
@@ -112,11 +135,67 @@ function Show-MenuSelect {
 
 <#
 .SYNOPSIS
-はい/いいえの選択メニューを表示
+ESCキーでキャンセル可能なテキスト入力
 #>
-function Show-YesNoMenu([string]$prompt) {
-    # 互換性のため UTF-8 互換の書き方を維持
-    $items = @("はい", "いいえ")
-    $sel = Show-MenuSelect -title $prompt -items $items
-    return ($sel -eq 1)
+function Read-HostWithEsc {
+    param([string]$Prompt = "Input")
+    
+    Write-Host "$($Prompt): " -NoNewline
+    $buffer = New-Object System.Text.StringBuilder
+    $startX = $host.UI.RawUI.CursorPosition.X
+    $startY = $host.UI.RawUI.CursorPosition.Y
+    
+    # Ensure clean slate
+    try { $host.UI.RawUI.FlushInputBuffer() } catch { }
+
+    while ($true) {
+        $key = $host.UI.RawUI.ReadKey("IncludeKeyDown,NoEcho")
+        
+        # ESC (VirtualKeyCode 27)
+        if ($key.VirtualKeyCode -eq 27) {
+            Write-Host "" # Newline
+            return $null
+        }
+        
+        # Enter (VirtualKeyCode 13)
+        if ($key.VirtualKeyCode -eq 13) {
+            Write-Host "" # Newline
+            return $buffer.ToString()
+        }
+        
+        # Backspace (VirtualKeyCode 8)
+        if ($key.VirtualKeyCode -eq 8) {
+            if ($buffer.Length -gt 0) {
+                $buffer.Length--
+                # Handle visual backspace
+                $pos = $host.UI.RawUI.CursorPosition
+                if ($pos.X -gt 0) {
+                    $pos.X--
+                    $host.UI.RawUI.CursorPosition = $pos
+                    Write-Host " " -NoNewline
+                    $host.UI.RawUI.CursorPosition = $pos
+                }
+            }
+            continue
+        }
+        
+        # Valid char (check if char is not null/control)
+        if ($key.Character -ne 0 -and -not [char]::IsControl($key.Character)) {
+            $buffer.Append($key.Character) | Out-Null
+            Write-Host $key.Character -NoNewline
+        }
+    }
+}
+
+<#
+.SYNOPSIS
+任意キー待機
+#>
+function Pause-AnyKey {
+    param([string]$Message = "Press any key to continue...")
+    
+    Write-Host $Message -NoNewline
+    $host.UI.RawUI.FlushInputBuffer()
+    $null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    Write-Host ""
 }

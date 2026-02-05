@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.1] - 2026-02-05
+### Fixed
+- **Let's Encrypt**: Fixed an issue where the script would exit immediately (flash close) if the input buffer contained residual key presses. Implemented robust `Flush` + `Sleep` + `ReadKey` logic.
+- **Let's Encrypt**: Improved "Press any key" prompt reliability and neutralized the exit message (no longer displays "Completed" on cancellation).
+- **I18n**: Fixed incorrect "Completed" message logic in `Request-LetsEncryptCertificate.ps1` to only appear on actual success.
+
 ## [1.2.0] - 2026-02-05
 ### Added
 - **Global**: Unified `SSL-Toolkit.ps1` menu interface.

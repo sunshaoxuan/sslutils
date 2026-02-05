@@ -57,6 +57,7 @@ $tools = @(
         DescJa = "証明書情報を確認"
         DescZh = "查看证书信息"
         DescEn = "View Certificate Info"
+        Wait   = $false
     },
     @{
         Name   = "New-CSR-FromOld"
@@ -64,6 +65,7 @@ $tools = @(
         DescJa = "既存証明書からCSR更新"
         DescZh = "从旧证书续期CSR"
         DescEn = "Renew CSR from Old Certificate"
+        Wait   = $true
     },
     @{
         Name   = "New-CSR"
@@ -71,6 +73,7 @@ $tools = @(
         DescJa = "新規CSR作成"
         DescZh = "创建新CSR"
         DescEn = "Create New CSR"
+        Wait   = $true
     },
     @{
         Name   = "Merge-Chain"
@@ -78,6 +81,7 @@ $tools = @(
         DescJa = "証明書チェーン結合"
         DescZh = "合并证书链"
         DescEn = "Merge Certificate Chain"
+        Wait   = $true
     },
     @{
         Name   = "Convert-Key"
@@ -85,6 +89,7 @@ $tools = @(
         DescJa = "秘密鍵を平文に変換"
         DescZh = "密钥转换为明文"
         DescEn = "Convert Key to Plaintext"
+        Wait   = $true
     },
     @{
         Name   = "Export-Modulus"
@@ -92,6 +97,7 @@ $tools = @(
         DescJa = "証明書モジュラス出力"
         DescZh = "导出证书模数"
         DescEn = "Export Certificate Modulus"
+        Wait   = $true
     },
     @{
         Name   = "Repair-PEM"
@@ -99,6 +105,7 @@ $tools = @(
         DescJa = "PEMファイル修復"
         DescZh = "修复PEM文件"
         DescEn = "Repair PEM File"
+        Wait   = $true
     },
     @{
         Name   = "Rename-Folders"
@@ -106,6 +113,7 @@ $tools = @(
         DescJa = "組織フォルダリネーム"
         DescZh = "重命名组织文件夹"
         DescEn = "Rename Organization Folders"
+        Wait   = $true
     },
     @{
         Name   = "New-ServerList"
@@ -113,6 +121,7 @@ $tools = @(
         DescJa = "サーバー一覧作成"
         DescZh = "生成服务器列表"
         DescEn = "Generate Server List"
+        Wait   = $true
     },
     @{
         Name   = "Sync-ToMerged"
@@ -120,6 +129,7 @@ $tools = @(
         DescJa = "new→merged同期 (key,csr,tsv)"
         DescZh = "同步到merged (key,csr,tsv)"
         DescEn = "Sync to Merged (key,csr,tsv)"
+        Wait   = $true
     },
     @{
         Name   = "Let's Encrypt"
@@ -127,6 +137,7 @@ $tools = @(
         DescJa = "Let's Encrypt証明書取得"
         DescZh = "获取Let's Encrypt证书"
         DescEn = "Request Let's Encrypt Certificate"
+        Wait   = $true
     }
 )
 
@@ -138,8 +149,66 @@ function Get-ToolDesc($tool) {
     }
 }
 
+function Get-EastAsianWidth([string]$str) {
+    $len = 0
+    $charArr = $str.ToCharArray()
+    foreach ($c in $charArr) {
+        # 簡易的な判定: ASCIIは1、それ以外は2
+        if ([int]$c -le 127) { $len += 1 } else { $len += 2 }
+    }
+    return $len
+}
+
+function Format-BoxedLine([string]$text, [int]$innerContentWidth) {
+    if ([string]::IsNullOrEmpty($text)) {
+        return "  ║" + (" " * $innerContentWidth) + "║"
+    }
+    
+    $visualLen = Get-EastAsianWidth $text
+    $padTotal = $innerContentWidth - $visualLen
+    
+    if ($padTotal -lt 0) { $padTotal = 0 } # Should not happen if width is sufficient
+    
+    # Center alignment
+    $padLeft = [math]::Floor($padTotal / 2)
+    $padRight = $padTotal - $padLeft
+    
+    return "  ║" + (" " * $padLeft) + $text + (" " * $padRight) + "║"
+}
+
 function Get-BannerText {
-    return (T "Toolkit.Banner" @($ToolkitVersion))
+    $title = (T "Toolkit.Banner.Title")
+    $verRaw = (T "Toolkit.Banner.Version" @($ToolkitVersion))
+    
+    # Calculate required width
+    # Min width 63 to match previous design, but expand if text is longer
+    $minWidth = 63
+    $titleLen = Get-EastAsianWidth $title
+    $verLen = Get-EastAsianWidth $verRaw
+    
+    # Ensure inner width is at least minWidth + some padding
+    $contentWidth = $minWidth
+    if ($titleLen + 4 -gt $contentWidth) { $contentWidth = $titleLen + 4 }
+    if ($verLen + 4 -gt $contentWidth) { $contentWidth = $verLen + 4 }
+    
+    # Odd/Even adjustment to ensure centering matches properly
+    if ($contentWidth % 2 -ne 0) { $contentWidth++ }
+
+    $topBorder = "  ╔" + ("═" * $contentWidth) + "╗"
+    $bottomBorder = "  ╚" + ("═" * $contentWidth) + "╝"
+    $emptyLine = Format-BoxedLine "" $contentWidth
+    $titleLine = Format-BoxedLine $title $contentWidth
+    $verLine = Format-BoxedLine $verRaw $contentWidth
+
+    $banner = @"
+$topBorder
+$emptyLine
+$titleLine
+$verLine
+$emptyLine
+$bottomBorder
+"@
+    return $banner
 }
 
 function Show-MainMenu {
@@ -180,10 +249,13 @@ try {
         $fullTitle = (Get-BannerText) + "`n" + $titleText
         $selection = Show-MenuSelect -title $fullTitle -items $menuItems
         
-        if ($null -eq $selection -or $selection -eq $menuItems.Count -or $selection -eq ($menuItems.Count - 1)) {
+        if ($null -eq $selection -or $selection -eq $menuItems.Count) {
             # 終了
-            Clear-Host
+            try { [Console]::Clear() } catch { Clear-Host }
+            try { [Console]::SetCursorPosition(0, 0) } catch { }
+            
             Write-Host ""
+            
             $exitMsg = switch ($Lang) {
                 "zh" { "感谢您的使用！" }
                 "en" { "Thank you for using SSL Toolkit!" }
@@ -225,19 +297,25 @@ try {
         Write-Host ""
         
         try {
+            try { $host.UI.RawUI.FlushInputBuffer() } catch { }
             & $scriptPath -Lang $Lang
         }
         catch {
             Write-Host ""
             Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red
-            Write-Host ""
-            $pressKeyMsg = switch ($Lang) {
-                "zh" { "按任意键返回菜单..." }
-                "en" { "Press any key to return to menu..." }
-                default { "任意のキーを押してメニューに戻る..." }
+        }
+        finally {
+            # 99 = Skip Pause (Sub-menu return / Cancelled)
+            if ($selectedTool.Wait -and $LASTEXITCODE -ne 99) {
+                Write-Host ""
+                $pressKeyMsg = switch ($Lang) {
+                    "zh" { "按任意键返回菜单..." }
+                    "en" { "Press any key to return to menu..." }
+                    default { "任意のキーを押してメニューに戻る..." }
+                }
+                Write-Host $pressKeyMsg -ForegroundColor DarkGray
+                try { $null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") } catch { }
             }
-            Write-Host $pressKeyMsg -ForegroundColor DarkGray
-            try { $null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") } catch { }
         }
     }
 }

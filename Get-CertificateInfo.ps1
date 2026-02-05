@@ -970,11 +970,12 @@ function Show-OneFile {
     }
   }
 
-  function Show-OpenSslDetails([string]$path) {
+  function Show-OpenSslDetails([string]$path, [string[]]$passphrases = @()) {
     Write-Host ""
     Write-HeaderBar (T "Label.OpenSslDetails") ""
     $ext = [IO.Path]::GetExtension($path).ToLowerInvariant()
     $isCsr = ($ext -eq ".csr")
+    $isPfx = ($ext -eq ".pfx")
 
     try {
       $raw = @()
@@ -998,6 +999,40 @@ function Show-OneFile {
               $inSanBlock = $false # Assuming single line for simplicity or end of block
             }
           }
+        }
+      }
+      elseif ($isPfx) {
+        # Try to extract cert from PFX
+        $certPem = ""
+        foreach ($p in @("") + $passphrases) {
+          try {
+            if ([string]::IsNullOrWhiteSpace($p)) {
+              $certPem = Run-OpenSsl @("pkcs12", "-in", $path, "-nokeys", "-clcerts", "-passin", "pass:") | Out-String
+            }
+            else {
+              With-TempPassFile $p { param($tmp)
+                $certPem = Run-OpenSsl @("pkcs12", "-in", $path, "-nokeys", "-clcerts", "-passin", "file:$tmp") | Out-String
+              }
+            }
+            if (-not [string]::IsNullOrWhiteSpace($certPem)) { break }
+          }
+          catch {}
+        }
+        
+        if (-not [string]::IsNullOrWhiteSpace($certPem)) {
+          # Use temporary file to pipe to x509 (Run-OpenSsl wrapper doesn't support direct pipe input easily without mod)
+          $tmpCert = [IO.Path]::GetTempFileName()
+          try {
+            Set-Content -LiteralPath $tmpCert -Value $certPem -Encoding ASCII
+            $raw = Run-OpenSsl @("x509", "-in", $tmpCert, "-noout", "-subject", "-issuer", "-dates", "-nameopt", "RFC2253")
+          }
+          finally {
+            Remove-Item $tmpCert -Force -ErrorAction SilentlyContinue
+          }
+        }
+        else {
+          Write-Host (T "CheckBasic.Detail.Key.CannotReadNeedPass" @("PassFile")) -ForegroundColor Red
+          return
         }
       }
       else {
@@ -1055,7 +1090,7 @@ function Show-OneFile {
 
   $ext = [IO.Path]::GetExtension($FilePath).ToLowerInvariant()
   # ヘッダー表示
-  Write-HeaderBar (T "Label.File") (Resolve-Path -LiteralPath $FilePath)
+  Write-HeaderBar (T "Label.File") ""
 
   switch ($ext) {
     ".cer" {
@@ -1303,6 +1338,8 @@ function Show-OneFile {
       else {
         Write-TreeProp $true (T "Label.DecryptCheck") (T "Common.Failed") "Red"
       }
+      
+      Show-OpenSslDetails $FilePath $Passphrases
       break
     }
     default {

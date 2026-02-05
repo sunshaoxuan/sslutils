@@ -87,7 +87,7 @@ param(
 
   # 出力言語（既定: ja）
   [Parameter(Mandatory = $false)]
-  [ValidateSet("ja","zh","en")]
+  [ValidateSet("ja", "zh", "en")]
   [string]$Lang = "ja"
 )
 
@@ -98,7 +98,8 @@ $ErrorActionPreference = "Stop"
 try {
   [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
   $OutputEncoding = [Console]::OutputEncoding
-} catch { }
+}
+catch { }
 
 $i18nModule = Join-Path $PSScriptRoot "lib\\i18n.ps1"
 if (-not (Test-Path -LiteralPath $i18nModule -PathType Leaf)) { throw (T "Common.I18nModuleNotFound" @($i18nModule)) }
@@ -154,7 +155,8 @@ function With-TempPassFile([string]$passphrase, [scriptblock]$action) {
   try {
     Set-Content -LiteralPath $tmp -Value $passphrase -NoNewline -Encoding ASCII
     return & $action $tmp
-  } finally {
+  }
+  finally {
     Remove-Item -Force -ErrorAction SilentlyContinue -LiteralPath $tmp
   }
 }
@@ -162,7 +164,8 @@ function With-TempPassFile([string]$passphrase, [scriptblock]$action) {
 function Test-KeyEncrypted([string]$keyPath) {
   try {
     $head = @(Get-Content -LiteralPath $keyPath -TotalCount 60 -ErrorAction Stop)
-  } catch {
+  }
+  catch {
     return $false
   }
   $text = ($head -join "`n")
@@ -202,7 +205,8 @@ function Get-KeyCandidates([string]$p) {
     $newDir = Join-Path $PSScriptRoot "new"
     if (Test-Path -LiteralPath $newDir -PathType Container) {
       $p = $newDir
-    } else {
+    }
+    else {
       $p = "."
     }
   }
@@ -211,15 +215,11 @@ function Get-KeyCandidates([string]$p) {
     return @((Resolve-Path -LiteralPath $p).Path)
   }
   if (Test-Path -LiteralPath $p -PathType Container) {
-    $recurse = $Recurse.IsPresent
-    if (-not $Recurse.IsPresent) {
+    if (-not $Recurse) {
       # new/old の構造は階層が深いので、未指定でも再帰をデフォルト ON
-      $recurse = $true
-    }
-    if ($recurse) {
       return @((Get-ChildItem -LiteralPath $p -Recurse -File -Filter "*.key" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName))
     }
-    return @((Get-ChildItem -LiteralPath $p -File -Filter "*.key" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName))
+    return @((Get-ChildItem -LiteralPath $p -Recurse -File -Filter "*.key" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName))
   }
   throw (T "DecryptKey.PathNotFound" @($p))
 }
@@ -266,7 +266,8 @@ function Decrypt-OneKey([string]$keyPath) {
   $existingPassFiles = @($passFiles | Where-Object { -not [string]::IsNullOrWhiteSpace($_) -and (Test-Path -LiteralPath $_ -PathType Leaf) } | Select-Object -Unique)
   if ($existingPassFiles.Count -gt 0) {
     Write-Host (T "DecryptKey.PassFilesLine" @($FixedPassFileName, ($existingPassFiles -join "; ")))
-  } else {
+  }
+  else {
     Write-Host (T "DecryptKey.PassFilesLine" @($FixedPassFileName, (T "CheckBasic.None")))
   }
   if (-not [string]::IsNullOrWhiteSpace($env:PASS_FILE)) {
@@ -274,7 +275,8 @@ function Decrypt-OneKey([string]$keyPath) {
     $envPassExistText = if ($envPassExists) { (T "Common.Exists") } else { (T "Common.NotExists") }
     $envPassName = [IO.Path]::GetFileName($env:PASS_FILE)
     Write-Host (T "DecryptKey.PassEnvLine" @($envPassName, $envPassExistText))
-  } else {
+  }
+  else {
     Write-Host (T "DecryptKey.PassEnvUnset")
   }
 
@@ -313,15 +315,16 @@ function Decrypt-OneKey([string]$keyPath) {
       With-TempPassFile $p {
         param($tmpPass)
         # まずは汎用の pkey を試す（PKCS#8 等に強い）
-        Run-OpenSsl @("pkey","-in",$srcKeyPath,"-out",$out,"-passin",("file:{0}" -f $tmpPass)) -AllowFail | Out-Null
+        Run-OpenSsl @("pkey", "-in", $srcKeyPath, "-out", $out, "-passin", ("file:{0}" -f $tmpPass)) -AllowFail | Out-Null
         if ($LASTEXITCODE -ne 0) {
           # フォールバック：rsa
-          Run-OpenSsl @("rsa","-in",$srcKeyPath,"-out",$out,"-passin",("file:{0}" -f $tmpPass)) | Out-Null
+          Run-OpenSsl @("rsa", "-in", $srcKeyPath, "-out", $out, "-passin", ("file:{0}" -f $tmpPass)) | Out-Null
         }
       } | Out-Null
       $done = $true
       break
-    } catch { }
+    }
+    catch { }
   }
 
   if (-not $done) {
@@ -349,7 +352,8 @@ if (@($keys).Count -eq 0) {
 foreach ($k in $keys) {
   try {
     Decrypt-OneKey $k
-  } catch {
+  }
+  catch {
     Write-Host (T "DecryptKey.NgPath" @($k))
     Write-Host (T "DecryptKey.NgMsg" @($_.Exception.Message))
     Write-Host ""

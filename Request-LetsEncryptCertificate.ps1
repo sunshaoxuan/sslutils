@@ -51,11 +51,11 @@ example.com の証明書を申請
 #>
 
 param(
-  [Parameter(Mandatory = $true)]
-  [string]$Domain,
+  [Parameter(Mandatory = $false)]
+  [string]$Domain = "",
 
-  [Parameter(Mandatory = $true)]
-  [string]$Email,
+  [Parameter(Mandatory = $false)]
+  [string]$Email = "",
 
   [Parameter(Mandatory = $false)]
   [string]$ServerChallengeDir = "C:\acme-webroot\.well-known\acme-challenge",
@@ -83,12 +83,39 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+# Ensure clean buffer on start
+try { $host.UI.RawUI.FlushInputBuffer() } catch { }
+
 # i18n 初期化
 $i18nModule = Join-Path $PSScriptRoot "lib\i18n.ps1"
 if (-not (Test-Path -LiteralPath $i18nModule -PathType Leaf)) { throw "i18n module not found: $i18nModule" }
 . $i18nModule
 $__i18n = Initialize-I18n -Lang $Lang -BaseDir $PSScriptRoot
 function T([string]$Key, [object[]]$FormatArgs = @()) { return Get-I18nText -I18n $__i18n -Key $Key -FormatArgs $FormatArgs }
+
+# Exit with Pause helper
+function Pause-And-Exit([int]$ExitCode = 99) {
+  Write-Host ""
+  
+  # Flush input buffer (robust method for Console)
+  if ($Host.Name -eq 'ConsoleHost') {
+    while ([Console]::KeyAvailable) { $null = [Console]::ReadKey($true) }
+  }
+  else {
+    try { $host.UI.RawUI.FlushInputBuffer() } catch { }
+  }
+
+  Write-Host (T "LE.PressAnyKeyToReturn") -ForegroundColor Cyan -NoNewline
+  
+  # Wait for Any Key
+  if ($Host.Name -eq 'ConsoleHost') {
+    $null = [Console]::ReadKey($true)
+  }
+  else {
+    $null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+  }
+  exit $ExitCode
+}
 
 # Docker コマンドの存在確認
 function Assert-CommandExists([string]$cmd) {
@@ -140,66 +167,111 @@ function Export-CertificateFromContainer([string]$dstDir, [string]$leMount, [str
   return 0
 }
 
-# === メイン処理 ===
-
-Assert-CommandExists "docker"
-
-# 作業ディレクトリ構築（既存ディレクトリを再利用、-Clean 指定時は削除）
-$safeDomain = $Domain.Replace('*', '_').Replace('\', '_').Replace('/', '_').Replace(':', '_')
-$Base = Join-Path $PSScriptRoot ("le-work-" + $safeDomain)
-$Work = Join-Path $Base "work"
-$Challenges = Join-Path $Work "challenges"
-$LetsEncrypt = Join-Path $Base "letsencrypt"
-$Logs = Join-Path $Base "logs"
-
-# 既存ディレクトリの処理
-if (Test-Path -LiteralPath $Base -PathType Container) {
-  if ($Clean) {
-    Write-Host (T "LE.CleaningWorkDir" @($Base)) -ForegroundColor Yellow
-    Remove-Item -LiteralPath $Base -Recurse -Force -ErrorAction Stop
-    New-Item -ItemType Directory -Force -Path $Challenges, $LetsEncrypt, $Logs | Out-Null
-  } else {
-    Write-Host (T "LE.ReusingWorkDir" @($Base)) -ForegroundColor Cyan
-    # 既存ディレクトリを再利用（必要なサブディレクトリが無い場合は作成）
-    if (-not (Test-Path -LiteralPath $Challenges -PathType Container)) {
-      New-Item -ItemType Directory -Force -Path $Challenges | Out-Null
-    }
-    if (-not (Test-Path -LiteralPath $LetsEncrypt -PathType Container)) {
-      New-Item -ItemType Directory -Force -Path $LetsEncrypt | Out-Null
-    }
-    if (-not (Test-Path -LiteralPath $Logs -PathType Container)) {
-      New-Item -ItemType Directory -Force -Path $Logs | Out-Null
-    }
-  }
-} else {
-  New-Item -ItemType Directory -Force -Path $Challenges, $LetsEncrypt, $Logs | Out-Null
+# メニューモジュールを読み込む
+$menuModule = Join-Path $PSScriptRoot "lib\\menu.ps1"
+if (Test-Path -LiteralPath $menuModule -PathType Leaf) {
+  . $menuModule
 }
 
-# エクスポート先（存在しない場合は自動作成、失敗時はフォールバック）
-if ([string]::IsNullOrWhiteSpace($ExportDir)) {
-  $ExportDir = Join-Path $Base "out"
-}
+# Domain 入力確報 (バッファ対策付き)
 try {
-  if (-not (Test-Path -LiteralPath $ExportDir -PathType Container)) {
-    New-Item -ItemType Directory -Force -Path $ExportDir -ErrorAction Stop | Out-Null
+  if ([string]::IsNullOrWhiteSpace($Domain)) {
+    if (Get-Command Read-HostWithEsc -ErrorAction SilentlyContinue) {
+      Write-Host (T "LE.InputDomainPrompt")
+      # 念のためバッファクリア
+      try { $host.UI.RawUI.FlushInputBuffer() } catch { }
+      $Domain = Read-HostWithEsc (T "Common.Prompt.Domain")
+      if ($null -eq $Domain) { Pause-And-Exit 99 }
+    }
+    else {
+      $Domain = Read-Host (T "Common.Prompt.Domain")
+    }
   }
-} catch {
-  Write-Host (T "LE.ExportDirCreateFailed" @($ExportDir, $FallbackExportDir)) -ForegroundColor Yellow
-  $ExportDir = $FallbackExportDir
+  if ([string]::IsNullOrWhiteSpace($Domain)) { Pause-And-Exit 99 }
+
+  # Email 入力確報
+  if ([string]::IsNullOrWhiteSpace($Email)) {
+    if (Get-Command Read-HostWithEsc -ErrorAction SilentlyContinue) {
+      Write-Host (T "LE.InputEmailPrompt")
+      # 念のためバッファクリア
+      try { $host.UI.RawUI.FlushInputBuffer() } catch { }
+      $Email = Read-HostWithEsc (T "Common.Prompt.Email")
+      if ($null -eq $Email) { Pause-And-Exit 99 }
+    }
+    else {
+      $Email = Read-Host (T "Common.Prompt.Email")
+    }
+  }
+  if ([string]::IsNullOrWhiteSpace($Email)) { Pause-And-Exit 99 }
+
+
+
+
+
+  # === メイン処理 ===
+
+  Assert-CommandExists "docker"
+
+  # 作業ディレクトリ構築（既存ディレクトリを再利用、-Clean 指定時は削除）
+  $safeDomain = $Domain.Replace('*', '_').Replace('\', '_').Replace('/', '_').Replace(':', '_')
+  $Base = Join-Path $PSScriptRoot ("le-work-" + $safeDomain)
+  $Work = Join-Path $Base "work"
+  $Challenges = Join-Path $Work "challenges"
+  $LetsEncrypt = Join-Path $Base "letsencrypt"
+  $Logs = Join-Path $Base "logs"
+
+  # 既存ディレクトリの処理
+  if (Test-Path -LiteralPath $Base -PathType Container) {
+    if ($Clean) {
+      Write-Host (T "LE.CleaningWorkDir" @($Base)) -ForegroundColor Yellow
+      Remove-Item -LiteralPath $Base -Recurse -Force -ErrorAction Stop
+      New-Item -ItemType Directory -Force -Path $Challenges, $LetsEncrypt, $Logs | Out-Null
+    }
+    else {
+      Write-Host (T "LE.ReusingWorkDir" @($Base)) -ForegroundColor Cyan
+      # 既存ディレクトリを再利用（必要なサブディレクトリが無い場合は作成）
+      if (-not (Test-Path -LiteralPath $Challenges -PathType Container)) {
+        New-Item -ItemType Directory -Force -Path $Challenges | Out-Null
+      }
+      if (-not (Test-Path -LiteralPath $LetsEncrypt -PathType Container)) {
+        New-Item -ItemType Directory -Force -Path $LetsEncrypt | Out-Null
+      }
+      if (-not (Test-Path -LiteralPath $Logs -PathType Container)) {
+        New-Item -ItemType Directory -Force -Path $Logs | Out-Null
+      }
+    }
+  }
+  else {
+    New-Item -ItemType Directory -Force -Path $Challenges, $LetsEncrypt, $Logs | Out-Null
+  }
+
+  # エクスポート先（存在しない場合は自動作成、失敗時はフォールバック）
+  if ([string]::IsNullOrWhiteSpace($ExportDir)) {
+    $ExportDir = Join-Path $Base "out"
+  }
   try {
     if (-not (Test-Path -LiteralPath $ExportDir -PathType Container)) {
       New-Item -ItemType Directory -Force -Path $ExportDir -ErrorAction Stop | Out-Null
     }
-  } catch {
-    # 最後の手段：カレントディレクトリ
-    $ExportDir = Join-Path (Get-Location).Path "le-export-$(Get-Date -Format 'yyyyMMdd_HHmmss')"
-    New-Item -ItemType Directory -Force -Path $ExportDir -ErrorAction Stop | Out-Null
-    Write-Host (T "LE.ExportDirFallback" @($ExportDir)) -ForegroundColor Yellow
   }
-}
+  catch {
+    Write-Host (T "LE.ExportDirCreateFailed" @($ExportDir, $FallbackExportDir)) -ForegroundColor Yellow
+    $ExportDir = $FallbackExportDir
+    try {
+      if (-not (Test-Path -LiteralPath $ExportDir -PathType Container)) {
+        New-Item -ItemType Directory -Force -Path $ExportDir -ErrorAction Stop | Out-Null
+      }
+    }
+    catch {
+      # 最後の手段：カレントディレクトリ
+      $ExportDir = Join-Path (Get-Location).Path "le-export-$(Get-Date -Format 'yyyyMMdd_HHmmss')"
+      New-Item -ItemType Directory -Force -Path $ExportDir -ErrorAction Stop | Out-Null
+      Write-Host (T "LE.ExportDirFallback" @($ExportDir)) -ForegroundColor Yellow
+    }
+  }
 
-# hook スクリプト生成（auth.sh / cleanup.sh）
-$authSh = @'
+  # hook スクリプト生成（auth.sh / cleanup.sh）
+  $authSh = @'
 #!/bin/sh
 set -eu
 DOMAIN="${CERTBOT_DOMAIN}"
@@ -250,7 +322,7 @@ while true; do
 done
 '@
 
-$cleanupSh = @'
+  $cleanupSh = @'
 #!/bin/sh
 set -eu
 TOKEN="${CERTBOT_TOKEN}"
@@ -258,162 +330,176 @@ rm -f "/work/challenges/${TOKEN}" || true
 exit 0
 '@
 
-$authPath = Join-Path $Work "auth.sh"
-$cleanupPath = Join-Path $Work "cleanup.sh"
+  $authPath = Join-Path $Work "auth.sh"
+  $cleanupPath = Join-Path $Work "cleanup.sh"
 
-Write-Utf8NoBomLf $authPath $authSh
-Write-Utf8NoBomLf $cleanupPath $cleanupSh
+  Write-Utf8NoBomLf $authPath $authSh
+  Write-Utf8NoBomLf $cleanupPath $cleanupSh
 
-# Docker マウントパス
-$workMount = ConvertTo-DockerPath $Work
-$leMount = ConvertTo-DockerPath $LetsEncrypt
-$logsMount = ConvertTo-DockerPath $Logs
+  # Docker マウントパス
+  $workMount = ConvertTo-DockerPath $Work
+  $leMount = ConvertTo-DockerPath $LetsEncrypt
+  $logsMount = ConvertTo-DockerPath $Logs
 
-Write-Host ""
-Write-Host (T "LE.Ready") -ForegroundColor Cyan
-Write-Host (T "LE.Domain" @($Domain))
-Write-Host (T "LE.ChallengeDir") -ForegroundColor Cyan
-Write-Host ("  " + $Challenges) -ForegroundColor Yellow
-Write-Host (T "LE.ServerChallengeDir") -ForegroundColor Cyan
-Write-Host ("  " + $ServerChallengeDir) -ForegroundColor Yellow
-Write-Host (T "LE.ExportDir") -ForegroundColor Cyan
-Write-Host ("  " + $ExportDir) -ForegroundColor Yellow
-Write-Host ""
+  Write-Host ""
+  Write-Host (T "LE.Ready") -ForegroundColor Cyan
+  Write-Host (T "LE.Domain" @($Domain))
+  Write-Host (T "LE.ChallengeDir") -ForegroundColor Cyan
+  Write-Host ("  " + $Challenges) -ForegroundColor Yellow
+  Write-Host (T "LE.ServerChallengeDir") -ForegroundColor Cyan
+  Write-Host ("  " + $ServerChallengeDir) -ForegroundColor Yellow
+  Write-Host (T "LE.ExportDir") -ForegroundColor Cyan
+  Write-Host ("  " + $ExportDir) -ForegroundColor Yellow
+  Write-Host ""
 
-# Docker マウント自己チェック
-Write-Host (T "LE.DockerMountCheck") -ForegroundColor Cyan
-docker run --rm -v "${workMount}:/work" alpine:3.19 sh -c "ls -la /work && test -f /work/auth.sh && echo OK_AUTH_SH"
-if ($LASTEXITCODE -ne 0) {
-  throw (T "LE.DockerMountFailed")
-}
-
-# certbot 実行
-Write-Host ""
-Write-Host (T "LE.StartingCertbot") -ForegroundColor Cyan
-
-$cmd = @(
-  "run", "--rm", "-it",
-  "-e", "WAIT_TIMEOUT_SEC=$WaitTimeoutSec",
-  "-e", "POLL_INTERVAL_SEC=$PollIntervalSec",
-  "-v", "${workMount}:/work",
-  "-v", "${leMount}:/etc/letsencrypt",
-  "-v", "${logsMount}:/var/log/letsencrypt",
-  "certbot/certbot:latest",
-  "certonly",
-  "--manual",
-  "--preferred-challenges", "http",
-  "--manual-auth-hook", "sh /work/auth.sh",
-  "--manual-cleanup-hook", "sh /work/cleanup.sh",
-  "-d", $Domain,
-  "--agree-tos",
-  "--no-eff-email",
-  "-m", $Email
-)
-
-# certbot 実行（出力は標準出力に表示されるが、エラー検出のためログも確認）
-docker @cmd 2>&1 | Tee-Object -Variable dockerOutput
-$exitCode = $LASTEXITCODE
-
-if ($exitCode -ne 0) {
-  # ログファイルからエラー内容を読み取る（可能な場合）
-  $logPath = Join-Path $Logs "letsencrypt.log"
-  $errorDetails = ""
-  if (Test-Path -LiteralPath $logPath -PathType Leaf) {
-    $logContent = Get-Content -LiteralPath $logPath -Tail 50 -ErrorAction SilentlyContinue
-    $errorDetails = ($logContent -join "`n")
+  # Docker マウント自己チェック
+  Write-Host (T "LE.DockerMountCheck") -ForegroundColor Cyan
+  docker run --rm -v "${workMount}:/work" alpine:3.19 sh -c "ls -la /work && test -f /work/auth.sh && echo OK_AUTH_SH"
+  if ($LASTEXITCODE -ne 0) {
+    throw (T "LE.DockerMountFailed")
   }
 
-  # 出力とログからエラーパターンを検出
-  $allOutput = ($dockerOutput -join "`n") + "`n" + $errorDetails
+  # certbot 実行
+  Write-Host ""
+  Write-Host (T "LE.StartingCertbot") -ForegroundColor Cyan
 
-  # レート制限エラーの検出（例外を投げずに警告のみ）
-  if ($allOutput -match "too many certificates.*already issued" -or
+  $cmd = @(
+    "run", "--rm", "-it",
+    "-e", "WAIT_TIMEOUT_SEC=$WaitTimeoutSec",
+    "-e", "POLL_INTERVAL_SEC=$PollIntervalSec",
+    "-v", "${workMount}:/work",
+    "-v", "${leMount}:/etc/letsencrypt",
+    "-v", "${logsMount}:/var/log/letsencrypt",
+    "certbot/certbot:latest",
+    "certonly",
+    "--manual",
+    "--preferred-challenges", "http",
+    "--manual-auth-hook", "sh /work/auth.sh",
+    "--manual-cleanup-hook", "sh /work/cleanup.sh",
+    "-d", $Domain,
+    "--agree-tos",
+    "--no-eff-email",
+    "-m", $Email
+  )
+
+  # certbot 実行（出力は標準出力に表示されるが、エラー検出のためログも確認）
+  docker @cmd 2>&1 | Tee-Object -Variable dockerOutput
+  $exitCode = $LASTEXITCODE
+
+  if ($exitCode -ne 0) {
+    # ログファイルからエラー内容を読み取る（可能な場合）
+    $logPath = Join-Path $Logs "letsencrypt.log"
+    $errorDetails = ""
+    if (Test-Path -LiteralPath $logPath -PathType Leaf) {
+      $logContent = Get-Content -LiteralPath $logPath -Tail 50 -ErrorAction SilentlyContinue
+      $errorDetails = ($logContent -join "`n")
+    }
+
+    # 出力とログからエラーパターンを検出
+    $allOutput = ($dockerOutput -join "`n") + "`n" + $errorDetails
+
+    # レート制限エラーの検出（例外を投げずに警告のみ）
+    if ($allOutput -match "too many certificates.*already issued" -or
       $allOutput -match "rate.*limit" -or
       $allOutput -match "retry after") {
-    Write-Host ""
-    Write-Host (T "LE.RateLimitError") -ForegroundColor Yellow
-    Write-Host ""
-    if ($allOutput -match "retry after ([0-9-]+ [0-9:]+ UTC)") {
-      Write-Host (T "LE.RateLimitRetryAfter" @($matches[1])) -ForegroundColor Yellow
-    }
-    Write-Host (T "LE.RateLimitHint") -ForegroundColor Cyan
-    Write-Host ""
-    Write-Host (T "LE.RateLimitFailed") -ForegroundColor Yellow
-    exit 1
-  }
-
-  # その他のエラー
-  Write-Host ""
-  Write-Host (T "LE.CertbotFailed" @($exitCode, $logPath)) -ForegroundColor Red
-  if (-not [string]::IsNullOrWhiteSpace($errorDetails)) {
-    Write-Host ""
-    Write-Host (T "LE.ErrorLogTail") -ForegroundColor Yellow
-    Write-Host ($logContent -join "`n")
-  }
-  throw (T "LE.CertbotFailed" @($exitCode, $logPath))
-}
-
-# 証明書エクスポート
-Write-Host ""
-Write-Host (T "LE.Exporting") -ForegroundColor Cyan
-
-$rc = Export-CertificateFromContainer $ExportDir $leMount $safeDomain
-if ($rc -ne 0) {
-  Write-Host (T "LE.ExportFailedTrying" @($ExportDir, $FallbackExportDir)) -ForegroundColor Yellow
-  # フォールバック先の作成を試行
-  try {
-    if (-not (Test-Path -LiteralPath $FallbackExportDir -PathType Container)) {
-      New-Item -ItemType Directory -Force -Path $FallbackExportDir -ErrorAction Stop | Out-Null
-    }
-  } catch {
-    Write-Host (T "LE.ExportDirCreateFailed" @($FallbackExportDir, "current directory")) -ForegroundColor Yellow
-    $FallbackExportDir = Join-Path (Get-Location).Path "le-export-$(Get-Date -Format 'yyyyMMdd_HHmmss')"
-    New-Item -ItemType Directory -Force -Path $FallbackExportDir -ErrorAction Stop | Out-Null
-    Write-Host (T "LE.ExportDirFallback" @($FallbackExportDir)) -ForegroundColor Yellow
-  }
-  
-  $rc2 = Export-CertificateFromContainer $FallbackExportDir $leMount $safeDomain
-  if ($rc2 -ne 0) {
-    # 最後の手段：カレントディレクトリ
-    $finalFallback = Join-Path (Get-Location).Path "le-export-$(Get-Date -Format 'yyyyMMdd_HHmmss')"
-    try {
-      New-Item -ItemType Directory -Force -Path $finalFallback -ErrorAction Stop | Out-Null
-      Write-Host (T "LE.ExportFailedTrying" @($FallbackExportDir, $finalFallback)) -ForegroundColor Yellow
-      $rc3 = Export-CertificateFromContainer $finalFallback $leMount $safeDomain
-      if ($rc3 -ne 0) {
-        Write-Host (T "LE.ExportFailed" @($ExportDir, $FallbackExportDir)) -ForegroundColor Red
-        exit 1
-      } else {
-        $ExportDir = $finalFallback
+      Write-Host ""
+      Write-Host (T "LE.RateLimitError") -ForegroundColor Yellow
+      Write-Host ""
+      if ($allOutput -match "retry after ([0-9-]+ [0-9:]+ UTC)") {
+        Write-Host (T "LE.RateLimitRetryAfter" @($matches[1])) -ForegroundColor Yellow
       }
-    } catch {
-      Write-Host (T "LE.ExportFailed" @($ExportDir, $FallbackExportDir)) -ForegroundColor Red
-      exit 1
+      Write-Host (T "LE.RateLimitHint") -ForegroundColor Cyan
+      Write-Host ""
+      Write-Host (T "LE.RateLimitFailed") -ForegroundColor Yellow
+      throw (T "LE.RateLimitFailed")
+    }
+
+    # その他のエラー
+    Write-Host ""
+    Write-Host (T "LE.CertbotFailed" @($exitCode, $logPath)) -ForegroundColor Red
+    if (-not [string]::IsNullOrWhiteSpace($errorDetails)) {
+      Write-Host ""
+      Write-Host (T "LE.ErrorLogTail") -ForegroundColor Yellow
+      Write-Host ($logContent -join "`n")
+    }
+    throw (T "LE.CertbotFailed" @($exitCode, $logPath))
+  }
+
+  # 証明書エクスポート
+  Write-Host ""
+  Write-Host (T "LE.Exporting") -ForegroundColor Cyan
+
+  $rc = Export-CertificateFromContainer $ExportDir $leMount $safeDomain
+  if ($rc -ne 0) {
+    Write-Host (T "LE.ExportFailedTrying" @($ExportDir, $FallbackExportDir)) -ForegroundColor Yellow
+    # フォールバック先の作成を試行
+    try {
+      if (-not (Test-Path -LiteralPath $FallbackExportDir -PathType Container)) {
+        New-Item -ItemType Directory -Force -Path $FallbackExportDir -ErrorAction Stop | Out-Null
+      }
+    }
+    catch {
+      Write-Host (T "LE.ExportDirCreateFailed" @($FallbackExportDir, "current directory")) -ForegroundColor Yellow
+      $FallbackExportDir = Join-Path (Get-Location).Path "le-export-$(Get-Date -Format 'yyyyMMdd_HHmmss')"
+      New-Item -ItemType Directory -Force -Path $FallbackExportDir -ErrorAction Stop | Out-Null
+      Write-Host (T "LE.ExportDirFallback" @($FallbackExportDir)) -ForegroundColor Yellow
+    }
+  
+    $rc2 = Export-CertificateFromContainer $FallbackExportDir $leMount $safeDomain
+    if ($rc2 -ne 0) {
+      # 最後の手段：カレントディレクトリ
+      $finalFallback = Join-Path (Get-Location).Path "le-export-$(Get-Date -Format 'yyyyMMdd_HHmmss')"
+      try {
+        New-Item -ItemType Directory -Force -Path $finalFallback -ErrorAction Stop | Out-Null
+        Write-Host (T "LE.ExportFailedTrying" @($FallbackExportDir, $finalFallback)) -ForegroundColor Yellow
+        $rc3 = Export-CertificateFromContainer $finalFallback $leMount $safeDomain
+        if ($rc3 -ne 0) {
+          Write-Host (T "LE.ExportFailed" @($ExportDir, $FallbackExportDir)) -ForegroundColor Red
+          # Write-Host handled in catch but good to log here too? Throw will pass message.
+          throw (T "LE.ExportFailed" @($ExportDir, $FallbackExportDir))
+        }
+        else {
+          $ExportDir = $finalFallback
+        }
+      }
+      catch {
+        Write-Host (T "LE.ExportFailed" @($ExportDir, $FallbackExportDir)) -ForegroundColor Red
+        # Write-Host handled in catch
+        throw (T "LE.ExportFailed" @($ExportDir, $FallbackExportDir))
+      }
+    }
+    else {
+      $ExportDir = $FallbackExportDir
     }
   }
-  else {
-    $ExportDir = $FallbackExportDir
-  }
-}
 
-# 最終検証
-$fullchain = Join-Path $ExportDir "fullchain.pem"
-$privkey = Join-Path $ExportDir "privkey.pem"
+  # 最終検証
+  $fullchain = Join-Path $ExportDir "fullchain.pem"
+  $privkey = Join-Path $ExportDir "privkey.pem"
 
-if (-not (Test-Path -LiteralPath $fullchain -PathType Leaf) -or
+  if (-not (Test-Path -LiteralPath $fullchain -PathType Leaf) -or
     -not (Test-Path -LiteralPath $privkey -PathType Leaf)) {
-  Write-Host (T "LE.ExportFilesMissing" @($fullchain, $privkey)) -ForegroundColor Red
-  exit 1
-}
+    Write-Host (T "LE.ExportFilesMissing" @($fullchain, $privkey)) -ForegroundColor Red
+    throw (T "LE.ExportFilesMissing" @($fullchain, $privkey))
+  }
 
-$len1 = (Get-Item $fullchain).Length
-$len2 = (Get-Item $privkey).Length
-if ($len1 -le 0 -or $len2 -le 0) {
-  Write-Host (T "LE.ExportZeroBytes" @($fullchain, $len1, $privkey, $len2)) -ForegroundColor Red
-  exit 1
-}
+  $len1 = (Get-Item $fullchain).Length
+  $len2 = (Get-Item $privkey).Length
+  if ($len1 -le 0 -or $len2 -le 0) {
+    Write-Host (T "LE.ExportZeroBytes" @($fullchain, $len1, $privkey, $len2)) -ForegroundColor Red
+    throw (T "LE.ExportZeroBytes" @($fullchain, $len1, $privkey, $len2))
+  }
 
-Write-Host ""
-Write-Host (T "LE.ExportSuccess" @($fullchain, $len1)) -ForegroundColor Green
-Write-Host (T "LE.ExportSuccess" @($privkey, $len2)) -ForegroundColor Green
-Write-Host ""
+  Write-Host ""
+  Write-Host (T "LE.ExportSuccess" @($fullchain, $len1)) -ForegroundColor Green
+  Write-Host ""
+  Write-Host (T "LE.ExportSuccess" @($privkey, $len2)) -ForegroundColor Green
+  Write-Host ""
+  Write-Host (T "LE.CompletedMsg")
+  Pause-And-Exit 99
+}
+catch {
+  Write-Host ""
+  Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red
+  Pause-And-Exit 99
+}

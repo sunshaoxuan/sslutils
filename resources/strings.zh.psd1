@@ -12,17 +12,13 @@
   "Common.MenuQuit"                          = "退出"
   "Common.Cancelled"                         = "操作已取消"
   "Common.Welcome"                           = "SSL证书管理工具"
+  "Common.PressAnyKey"                       = "按任意键继续..."
+  "Toolkit.ExitConfirmation"                 = "即将退出。按任意键关闭窗口..."
+  "Common.Prompt.Domain"                     = "域名"
+  "Common.Prompt.Email"                      = "电子邮件"
 
-  "Toolkit.Banner"                           = @"
-
-  ╔═══════════════════════════════════════════════════════════════╗
-  ║                                                               ║
-  ║                  SSL 证书管理工具                             ║
-  ║             Ver {0}  Dev: TS2课・技管                         ║
-  ║                                                               ║
-  ╚═══════════════════════════════════════════════════════════════╝
-
-"@
+  "Toolkit.Banner.Title"                     = "SSL 证书管理工具"
+  "Toolkit.Banner.Version"                   = "Ver {0}  https://github.com/sunshaoxuan"
   "Common.FileNotFound"                      = "{0} 不存在: {1}"
   "Common.OpenSslCmdFailed"                  = "OpenSSL 命令失败: {0}`n{1}"
   "Common.Exists"                            = "存在"
@@ -126,19 +122,23 @@
   "CheckBasic.Detail.Cert.NoChainHint"       = "[证书] 备注: 未包含中间证书。如需合并请使用 Merge-CertificateChain.ps1 等。"
 
   # Merge-CertificateChain.ps1
-  "MergeCert.TitleSingle"                    = "========== 证书链合并工具 =========="
-  "MergeCert.TitleBatch"                     = "========== 证书链合并工具（批量） =========="
-  "MergeCert.Step1"                          = "[1] 输入文件检查..."
-  "MergeCert.Step2"                          = "[2] 统一换行并合并..."
-  "MergeCert.ClientCert"                     = "[成功] 客户端证书: {0}"
-  "MergeCert.IntermediateCert"               = "[成功] 中间证书(CA): {0}"
-  "MergeCert.AlreadyHasChain"                = "[信息] 证书可能已包含链（CERT 块数={0}），不再追加中间证书。"
-  "MergeCert.SameAsExistingSkip"             = "[信息] 输出文件内容一致，跳过: {0}"
-  "MergeCert.Done"                           = "[成功] 已生成证书链"
-  "MergeCert.OutFile"                        = "输出文件: {0}"
-  "MergeCert.ChainOutFile"                   = "链文件: {0}"
-  "MergeCert.ChainCert"                      = "[成功] 链证书: {0}"
-  "MergeCert.RootCerts"                      = "[成功] 根证书: {0}"
+  "MergeCert.TitleSingle"                    = "证书链合并工具"
+  "MergeCert.TitleBatch"                     = "证书链合并工具（批量）"
+  "MergeCert.Step1"                          = "输入文件检查"
+  "MergeCert.Step2"                          = "统一换行并合并"
+  "MergeCert.ClientCert"                     = "客户端证书"
+  "MergeCert.IntermediateCert"               = "中间证书(CA)"
+  "MergeCert.AlreadyHasChain"                = "证书可能已包含链（CERT 块数={0}），不再追加中间证书。"
+  "MergeCert.SameAsExistingSkip"             = "输出文件内容一致，跳过: {0}"
+  "MergeCert.Done"                           = "已生成证书链"
+  "MergeCert.OutFile"                        = "输出文件"
+  "MergeCert.ChainOutFile"                   = "链文件"
+  "MergeCert.ChainCert"                      = "链证书"
+  "MergeCert.RootCerts"                      = "根证书"
+  "MergeCert.PfxGenerated"                   = "已生成 PFX"
+  "MergeCert.SyncPrompt"                     = "是否同步其他文件(.key/.csr/.tsv)到合并目录？(y/N)"
+  "MergeCert.Synced"                         = "已同步: {0}"
+  "MergeCert.SyncSkipped"                    = "已跳过同步。"
   "MergeCert.ChainFromClient"                = "[信息] 使用客户端证书中的剩余区块作为链。"
   "MergeCert.NoChainData"                    = "没有可用于链文件的证书数据。"
   "MergeCert.NoCertBlock"                    = "客户端证书中未找到 CERT 区块。"
@@ -224,6 +224,11 @@
   "ShowModulus.CreatedAt"                    = "生成时间: {0}"
   "ShowModulus.SectionCert"                  = "证书 (.cer, .crt, .pem)"
   "ShowModulus.SectionKey"                   = "私钥 (.key)"
+  "ShowModulus.GroupMatch"                   = "【完全匹配 (Matched)】"
+  "ShowModulus.GroupCertOnly"                = "【仅证书 (Cert Only)】"
+  "ShowModulus.GroupKeyOnly"                 = "【仅私钥 (Key Only)】"
+  "ShowModulus.Calculating"                  = "正在计算 Modulus..."
+  "ShowModulus.ModulusHash"                  = "Modulus (SHA256): {0}"
   "ShowModulus.InvalidCert"                  = "[证书无效，或文件内包含多个证书块]"
   "ShowModulus.SkipEncryptedKey"             = "[因私钥已加密而跳过: 请准备 {0} 或指定 -PassFile / 环境变量 PASS_FILE]"
   "ShowModulus.KeyReadError"                 = "[读取私钥失败或格式不正确]"
@@ -378,6 +383,9 @@
   "VerifyMatch.Detail.Modulus"               = "Modulus:"
 
   # Request-LetsEncryptCertificate.ps1
+  # Request-LetsEncryptCertificate.ps1
+  "LE.InputDomainPrompt"                     = "请输入要签发证书的域名。"
+  "LE.InputEmailPrompt"                      = "请输入 Let's Encrypt 注册用的电子邮件地址。"
   "LE.CommandNotFound"                       = "命令未找到: {0}"
   "LE.Ready"                                 = "== 准备就绪 =="
   "LE.Domain"                                = "域名: {0}"
@@ -403,6 +411,8 @@
   "LE.ExportZeroBytes"                       = "导出文件为 0 字节（{0}={1}, {2}={3}）。请检查权限/拦截。"
   "LE.ExportFilesMissing"                    = "找不到导出的文件: {0} 或 {1}"
   "LE.ExportSuccess"                         = "[成功] {0} ({1} bytes)"
+  "LE.CompletedMsg"                          = "Let's Encrypt 证书获取完成。"
+  "LE.PressAnyKeyToReturn"                   = "按任意键返回菜单..."
 
   # Repair-PemFile.ps1
   "RepairPem.ReadFailed"                     = "读取文件失败: {0}"

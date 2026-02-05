@@ -834,7 +834,7 @@ while ($script:returnToOrgMenu) {
   
   if ($interactive) {
     $orgDirs = @(Prompt-SelectOrgs $validCands)
-    if ($null -eq $orgDirs[0]) { break }
+    if ($null -eq $orgDirs[0]) { exit 99 }
   }
 
   if ($Overwrite -and $orgDirs.Count -gt 1) {
@@ -893,6 +893,7 @@ while ($script:returnToOrgMenu) {
         if ($sans.Count -eq 1 -and $sans[0] -eq "__SKIP__") {
           # ユーザーがキャンセル = 機関選択メニューに戻る
           $script:returnToOrgMenu = $true
+          if ($orgDirs.Count -eq 1 -and $sets.Count -eq 1) { exit 99 }
           break  # foreach $set を抜ける
         }
       }
@@ -1003,6 +1004,8 @@ while ($script:returnToOrgMenu) {
           if (($isBatchTask -and $conflictSel -eq 3) -or (-not $isBatchTask -and $conflictSel -eq 2)) {
             # キャンセル / 戻る (batch Choice 3 or single Choice 2)
             $script:returnToOrgMenu = $true
+            # 単一タスクの場合は即終了とみなして99を返す
+            if (-not $isBatchTask) { exit 99 }
             break
           }
               

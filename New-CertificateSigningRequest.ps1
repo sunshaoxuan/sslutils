@@ -73,8 +73,9 @@ Subject を明示指定して CSR 生成
 
 param(
   # 必須：対象FQDN（CN）
-  [Parameter(Mandatory = $true, Position = 0)]
-  [string]$CN,
+  # ESC キャンセル機能に対応するため Optional に変更し、未指定時に Read-HostWithEsc で入力を受け付ける
+  [Parameter(Mandatory = $false, Position = 0)]
+  [string]$CN = "",
 
   # 任意：明示的な Subject（推奨）
   # 例: "/C=JP/ST=Hyogo/L=Kato-city/O=Org Name/CN=example.domain.tld"
@@ -128,13 +129,58 @@ if (-not (Test-Path -LiteralPath $i18nModule -PathType Leaf)) { throw (T "Common
 $__i18n = Initialize-I18n -Lang $Lang -BaseDir $PSScriptRoot
 function T([string]$Key, [object[]]$FormatArgs = @()) { return Get-I18nText -I18n $__i18n -Key $Key -FormatArgs $FormatArgs }
 
-if ([string]::IsNullOrWhiteSpace($OutDir)) { $OutDir = Join-Path $PSScriptRoot "new" }
-
 # メニューモジュールを読み込む
 $menuModule = Join-Path $PSScriptRoot "lib\\menu.ps1"
 if (Test-Path -LiteralPath $menuModule -PathType Leaf) {
   . $menuModule
 }
+
+# CN が空の場合（メニューから起動された場合など）、ECSキャンセルのカスタムプロンプト表示
+# CN が空の場合（メニューから起動された場合など）、ECSキャンセルのカスタムプロンプト表示
+if ([string]::IsNullOrWhiteSpace($CN)) {
+  # DEBUG
+  Write-Host "DEBUG: CN is empty, entering input block" -ForegroundColor Magenta
+  Write-Host "DEBUG: Checking for Read-HostWithEsc..." -ForegroundColor Magenta
+
+  # メニューモジュールの Read-HostWithEsc を利用
+  if (Get-Command Read-HostWithEsc -ErrorAction SilentlyContinue) {
+    Write-Host "DEBUG: Read-HostWithEsc found." -ForegroundColor Magenta
+    Write-Host (T "MakeCsr.InputCnPrompt")
+    Write-Host (T "MakeCsr.InputCnHint") -ForegroundColor Gray
+    
+    # Force Flush again just in case
+    try { $host.UI.RawUI.FlushInputBuffer() } catch { }
+    
+    $CN = Read-HostWithEsc "CN"
+    
+    Write-Host "DEBUG: Read-HostWithEsc returned: '$CN' ($($CN.GetType().Name))" -ForegroundColor Magenta
+        
+    # ESC 押下時は $null が返る -> 99 (キャンセル) で終了
+    if ($null -eq $CN) { 
+      Write-Host "DEBUG: CN was null (ESC detected). Exiting 99." -ForegroundColor Red
+      if ($env:DEBUG_MODE -eq 'true') { Read-Host "Press Enter to exit..." }
+      exit 99 
+    }
+    $CN = $CN.Trim()
+  }
+  else {
+    Write-Host "DEBUG: Read-HostWithEsc NOT found. Using fallback." -ForegroundColor Magenta
+    # フォールバック (通常入力)
+    $CN = Read-Host "CN"
+    Write-Host "DEBUG: Read-Host returned: '$CN'" -ForegroundColor Magenta
+  }
+}
+
+if ([string]::IsNullOrWhiteSpace($CN)) {
+  Write-Host "DEBUG: CN is still empty. Exiting 99." -ForegroundColor Red
+  # Pause to see output
+  Write-Host "Press Enter to exit..."
+  try { $host.UI.RawUI.FlushInputBuffer(); $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") } catch { Read-Host }
+  
+  exit 99
+}
+
+if ([string]::IsNullOrWhiteSpace($OutDir)) { $OutDir = Join-Path $PSScriptRoot "new" }
 
 function Assert-ExistsFile([string]$p, [string]$label) {
   if (-not (Test-Path -LiteralPath $p -PathType Leaf)) {
@@ -303,9 +349,7 @@ function Prompt-SanSelection([string]$cn) {
 Assert-ExistsFile $OpenSsl "OpenSSL"
 Ensure-Dir $OutDir
 
-if ([string]::IsNullOrWhiteSpace($CN)) {
-  throw (T "MakeCsr.CnRequired")
-}
+# (CN check moved to top)
 
 $sanItems = @()
 if ($WithSAN) {
@@ -315,6 +359,23 @@ $sanOpt = Build-SanOpt $sanItems
 
 $subj = $Subject
 if ([string]::IsNullOrWhiteSpace($subj)) {
+  # Load defaults from config if available
+  $configPath = Join-Path $PSScriptRoot "config.json"
+  if (Test-Path -LiteralPath $configPath -PathType Leaf) {
+    try {
+      $cfg = Get-Content -LiteralPath $configPath -Raw -Encoding UTF8 | ConvertFrom-Json
+      if ($cfg.DefaultSubject) {
+        if ([string]::IsNullOrWhiteSpace($C) -and $cfg.DefaultSubject.C) { $C = $cfg.DefaultSubject.C }
+        if ([string]::IsNullOrWhiteSpace($ST) -and $cfg.DefaultSubject.ST) { $ST = $cfg.DefaultSubject.ST }
+        if ([string]::IsNullOrWhiteSpace($L) -and $cfg.DefaultSubject.L) { $L = $cfg.DefaultSubject.L }
+        if ([string]::IsNullOrWhiteSpace($O) -and $cfg.DefaultSubject.O) { $O = $cfg.DefaultSubject.O }
+      }
+    }
+    catch { 
+      Write-Host "Warning: Failed to load config.json: $($_.Exception.Message)" -ForegroundColor Yellow
+    }
+  }
+
   if ([string]::IsNullOrWhiteSpace($C) -or [string]::IsNullOrWhiteSpace($ST) -or [string]::IsNullOrWhiteSpace($L) -or [string]::IsNullOrWhiteSpace($O)) {
     throw (T "MakeCsr.SubjectMissing")
   }

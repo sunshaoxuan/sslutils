@@ -11,18 +11,14 @@
   "Common.MenuAll"                           = "All"
   "Common.MenuQuit"                          = "Quit"
   "Common.Cancelled"                         = "Operation cancelled."
-  "Common.Welcome"                           = "SSL Certificate Management Toolkit"
+  "Common.Welcome"                           = "SSL Certificate Management Tool"
+  "Common.PressAnyKey"                       = "Press any key to continue..."
+  "Toolkit.ExitConfirmation"                 = "Exiting. Press any key to close..."
+  "Common.Prompt.Domain"                     = "Domain"
+  "Common.Prompt.Email"                      = "Email"
 
-  "Toolkit.Banner"                           = @"
-
-  ╔═══════════════════════════════════════════════════════════════╗
-  ║                                                               ║
-  ║           SSL Certificate Management Toolkit                  ║
-  ║             Ver {0}  Dev: TS2 Div. Tech Mgmt                  ║
-  ║                                                               ║
-  ╚═══════════════════════════════════════════════════════════════╝
-
-"@
+  "Toolkit.Banner.Title"                     = "SSL Certificate Management Tool"
+  "Toolkit.Banner.Version"                   = "Ver {0}  https://github.com/sunshaoxuan"
   "Common.FileNotFound"                      = "{0} not found: {1}"
   "Common.OpenSslCmdFailed"                  = "OpenSSL command failed: {0}`n{1}"
   "Common.Exists"                            = "exists"
@@ -125,19 +121,23 @@
   "CheckBasic.Detail.Cert.NoChainHint"       = "[CERT] Note: Intermediate certificate is not included. Use Merge-CertificateChain.ps1 if needed."
 
   # Merge-CertificateChain.ps1
-  "MergeCert.TitleSingle"                    = "========== Certificate chain merge tool =========="
-  "MergeCert.TitleBatch"                     = "========== Certificate chain merge tool (batch) =========="
-  "MergeCert.Step1"                          = "[1] Checking input files..."
-  "MergeCert.Step2"                          = "[2] Normalizing line endings and merging..."
-  "MergeCert.ClientCert"                     = "[OK] Client certificate: {0}"
-  "MergeCert.IntermediateCert"               = "[OK] Intermediate (CA) certificate: {0}"
-  "MergeCert.AlreadyHasChain"                = "[INFO] Certificate may already include a chain (CERT blocks={0}); not appending intermediate."
-  "MergeCert.SameAsExistingSkip"             = "[INFO] Output content is identical; skipping: {0}"
-  "MergeCert.Done"                           = "[OK] Certificate chain created"
-  "MergeCert.OutFile"                        = "Output file: {0}"
-  "MergeCert.ChainOutFile"                   = "Chain file: {0}"
-  "MergeCert.ChainCert"                      = "[OK] Chain certificate: {0}"
-  "MergeCert.RootCerts"                      = "[OK] Root certificate(s): {0}"
+  "MergeCert.TitleSingle"                    = "Certificate Chain Merger"
+  "MergeCert.TitleBatch"                     = "Certificate Chain Merger (Batch)"
+  "MergeCert.Step1"                          = "Checking Input Files"
+  "MergeCert.Step2"                          = "Normalizing & Merging"
+  "MergeCert.ClientCert"                     = "Client Cert"
+  "MergeCert.IntermediateCert"               = "Intermediate Cert"
+  "MergeCert.AlreadyHasChain"                = "Certificate might already have a chain (Blocks={0}). Skipping intermediate append."
+  "MergeCert.SameAsExistingSkip"             = "Output same as existing, skipped: {0}"
+  "MergeCert.Done"                           = "Chain Generation Complete"
+  "MergeCert.OutFile"                        = "Output File"
+  "MergeCert.ChainOutFile"                   = "Chain File"
+  "MergeCert.ChainCert"                      = "Chain Cert"
+  "MergeCert.RootCerts"                      = "Root Certs"
+  "MergeCert.PfxGenerated"                   = "PFX Generated"
+  "MergeCert.SyncPrompt"                     = "Sync related files (.key/.csr/.tsv) to merged directory? (y/N)"
+  "MergeCert.Synced"                         = "Synced: {0}"
+  "MergeCert.SyncSkipped"                    = "Sync skipped."
   "MergeCert.ChainFromClient"                = "[INFO] Using chain from client certificate (remaining blocks)."
   "MergeCert.NoChainData"                    = "No chain data available for chainfile output."
   "MergeCert.NoCertBlock"                    = "No certificate block found in client certificate."
@@ -223,6 +223,11 @@
   "ShowModulus.CreatedAt"                    = "Created at: {0}"
   "ShowModulus.SectionCert"                  = "Certificates (.cer, .crt, .pem)"
   "ShowModulus.SectionKey"                   = "Private keys (.key)"
+  "ShowModulus.GroupMatch"                   = "[ MATCHED PAIR ]"
+  "ShowModulus.GroupCertOnly"                = "[ ORPHAN CERTIFICATE ]"
+  "ShowModulus.GroupKeyOnly"                 = "[ ORPHAN PRIVATE KEY ]"
+  "ShowModulus.Calculating"                  = "Calculating Modulus..."
+  "ShowModulus.ModulusHash"                  = "Modulus (SHA256): {0}"
   "ShowModulus.InvalidCert"                  = "[Invalid certificate or multiple certificates are contained in the file]"
   "ShowModulus.SkipEncryptedKey"             = "[Skipping encrypted key: prepare {0} or specify -PassFile / env PASS_FILE]"
   "ShowModulus.KeyReadError"                 = "[Failed to read key or invalid format]"
@@ -377,6 +382,9 @@
   "VerifyMatch.Detail.Modulus"               = "Modulus:"
 
   # Request-LetsEncryptCertificate.ps1
+  # Request-LetsEncryptCertificate.ps1
+  "LE.InputDomainPrompt"                     = "Enter the domain to issue the certificate for."
+  "LE.InputEmailPrompt"                      = "Enter email address for Let's Encrypt registration."
   "LE.CommandNotFound"                       = "Command not found: {0}"
   "LE.Ready"                                 = "== Ready =="
   "LE.Domain"                                = "Domain: {0}"
@@ -402,6 +410,8 @@
   "LE.ExportZeroBytes"                       = "Exported file is 0 bytes ({0}={1}, {2}={3}). Check permissions/blocking."
   "LE.ExportFilesMissing"                    = "Exported files not found: {0} or {1}"
   "LE.ExportSuccess"                         = "[OK] {0} ({1} bytes)"
+  "LE.CompletedMsg"                          = "Let's Encrypt certificate acquisition completed."
+  "LE.PressAnyKeyToReturn"                   = "Press any key to return to menu..."
 
   # Repair-PemFile.ps1
   "RepairPem.ReadFailed"                     = "Failed to read file: {0}"

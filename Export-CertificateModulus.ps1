@@ -61,7 +61,7 @@ param(
 
   # 出力言語（既定: ja）
   [Parameter(Mandatory = $false)]
-  [ValidateSet("ja","zh","en")]
+  [ValidateSet("ja", "zh", "en")]
   [string]$Lang = "ja"
 )
 
@@ -108,14 +108,16 @@ if (-not [string]::IsNullOrWhiteSpace($PassFile)) {
     throw (T "Common.FileNotFound" @("PassFile", $PassFile))
   }
   $passFileToUse = $PassFile
-} elseif (-not [string]::IsNullOrWhiteSpace($env:PASS_FILE) -and (Test-Path -LiteralPath $env:PASS_FILE -PathType Leaf)) {
+}
+elseif (-not [string]::IsNullOrWhiteSpace($env:PASS_FILE) -and (Test-Path -LiteralPath $env:PASS_FILE -PathType Leaf)) {
   $passFileToUse = $env:PASS_FILE
 }
 
 function Test-KeyEncrypted([string]$keyPath) {
   try {
     $head = @(Get-Content -LiteralPath $keyPath -TotalCount 40 -ErrorAction Stop)
-  } catch {
+  }
+  catch {
     return $false
   }
   $text = ($head -join "`n")
@@ -127,77 +129,121 @@ function Test-KeyEncrypted([string]$keyPath) {
 
 $root = Resolve-Path -LiteralPath $RootDir
 
-$certFiles = Get-ChildItem -LiteralPath $root -Recurse -File -Include *.cer,*.crt,*.pem -ErrorAction SilentlyContinue
-$keyFiles  = Get-ChildItem -LiteralPath $root -Recurse -File -Include *.key -ErrorAction SilentlyContinue
+
+function Get-StringHash([string]$str) {
+  if ([string]::IsNullOrEmpty($str)) { return "" }
+  $md5 = [System.Security.Cryptography.MD5]::Create()
+  $hash = [BitConverter]::ToString($md5.ComputeHash([System.Text.Encoding]::ASCII.GetBytes($str))).Replace("-", "")
+  return $hash
+}
+
+Write-Host (T "ShowModulus.Calculating") -ForegroundColor Cyan
+
+# データ収集用ハッシュ: Key = Modulus, Value = @{ Certs = @(); Keys = @() }
+$modulusGroups = @{}
+
+$certFiles = Get-ChildItem -LiteralPath $root -Recurse -File -Include *.cer, *.crt, *.pem -ErrorAction SilentlyContinue
+$keyFiles = Get-ChildItem -LiteralPath $root -Recurse -File -Include *.key -ErrorAction SilentlyContinue
+
+$certCount = 0
+foreach ($f in $certFiles) {
+  $out = Run-OpenSsl @("x509", "-in", $f.FullName, "-noout", "-modulus")
+  if ($out -and $out -match "Modulus=([A-Fa-f0-9]+)") {
+    $mod = $matches[1].ToUpper()
+    if (-not $modulusGroups.ContainsKey($mod)) {
+      $modulusGroups[$mod] = @{ Certs = @(); Keys = @() }
+    }
+    $modulusGroups[$mod].Certs += $f.FullName
+    $certCount++
+  }
+}
+
+$keyCount = 0
+foreach ($f in $keyFiles) {
+  # OpenSSL の対話プロンプトを絶対に出さないため、暗号化鍵は必ず -passin で読む
+  $isEnc = Test-KeyEncrypted $f.FullName
+  if ($isEnc -and [string]::IsNullOrWhiteSpace($passFileToUse)) {
+    # Skip encrypted key without passfile
+    continue
+  }
+
+  $args = @("rsa", "-in", $f.FullName, "-noout", "-modulus")
+  if ($isEnc -and -not [string]::IsNullOrWhiteSpace($passFileToUse)) {
+    $args = @("rsa", "-in", $f.FullName, "-noout", "-modulus", "-passin", ("file:{0}" -f $passFileToUse))
+  }
+
+  $out = Run-OpenSsl $args
+  if ($out -and $out -match "Modulus=([A-Fa-f0-9]+)") {
+    $mod = $matches[1].ToUpper()
+    if (-not $modulusGroups.ContainsKey($mod)) {
+      $modulusGroups[$mod] = @{ Certs = @(); Keys = @() }
+    }
+    $modulusGroups[$mod].Keys += $f.FullName
+    $keyCount++
+  }
+}
 
 $sb = New-Object System.Text.StringBuilder
-function AddLine([string]$s="") { [void]$sb.AppendLine($s) }
+function AddLine([string]$s = "") { [void]$sb.AppendLine($s) }
 
 AddLine (T "ShowModulus.Title")
 AddLine (T "ShowModulus.CreatedAt" @((Get-Date)))
 AddLine ""
-AddLine ""
-AddLine "================================================"
-AddLine (T "ShowModulus.SectionCert")
-AddLine "================================================"
-AddLine ""
 
-$certCount = 0
-foreach ($f in $certFiles) {
-  AddLine "------------------------------------------------"
-  AddLine ("File: {0}" -f $f.FullName)
+# グループ分け
+$matched = @()
+$orphanCerts = @()
+$orphanKeys = @()
+
+foreach ($mod in $modulusGroups.Keys) {
+  $g = $modulusGroups[$mod]
+  $obj = [PSCustomObject]@{
+    Modulus     = $mod
+    DisplayHash = (Get-StringHash $mod)
+    Certs       = $g.Certs
+    Keys        = $g.Keys
+  }
+    
+  if ($g.Certs.Count -gt 0 -and $g.Keys.Count -gt 0) {
+    $matched += $obj
+  }
+  elseif ($g.Certs.Count -gt 0) {
+    $orphanCerts += $obj
+  }
+  elseif ($g.Keys.Count -gt 0) {
+    $orphanKeys += $obj
+  }
+}
+
+function Write-Group([string]$title, $list) {
+  if ($list.Count -eq 0) { return }
+  AddLine "================================================================================"
+  AddLine $title
+  AddLine "================================================================================"
   AddLine ""
-  $out = Run-OpenSsl @("x509","-in",$f.FullName,"-noout","-modulus")
-  if ($out) {
-    $certCount++
-    $out | ForEach-Object { AddLine $_ }
-  } else {
-    AddLine (T "ShowModulus.InvalidCert")
+    
+  foreach ($item in $list) {
+    AddLine (T "ShowModulus.ModulusHash" @($item.DisplayHash))
+    foreach ($c in $item.Certs) {
+      AddLine ("  [CERT] {0}" -f $c)
+    }
+    foreach ($k in $item.Keys) {
+      AddLine ("  [KEY ] {0}" -f $k)
+    }
+    AddLine "--------------------------------------------------------------------------------"
   }
   AddLine ""
 }
 
-AddLine ""
-AddLine ""
-AddLine "================================================"
-AddLine (T "ShowModulus.SectionKey")
-AddLine "================================================"
-AddLine ""
+Write-Group (T "ShowModulus.GroupMatch") $matched
+Write-Group (T "ShowModulus.GroupCertOnly") $orphanCerts
+Write-Group (T "ShowModulus.GroupKeyOnly") $orphanKeys
 
-$keyCount = 0
-foreach ($f in $keyFiles) {
-  AddLine "------------------------------------------------"
-  AddLine ("File: {0}" -f $f.FullName)
-  AddLine ""
-
-  # OpenSSL の対話プロンプトを絶対に出さないため、暗号化鍵は必ず -passin で読む
-  $isEnc = Test-KeyEncrypted $f.FullName
-  if ($isEnc -and [string]::IsNullOrWhiteSpace($passFileToUse)) {
-    AddLine (T "ShowModulus.SkipEncryptedKey" @($FixedPassFileName))
-    AddLine ""
-    continue
-  }
-
-  $args = @("rsa","-in",$f.FullName,"-noout","-modulus")
-  if ($isEnc -and -not [string]::IsNullOrWhiteSpace($passFileToUse)) {
-    $args = @("rsa","-in",$f.FullName,"-noout","-modulus","-passin",("file:{0}" -f $passFileToUse))
-  }
-
-  $out = Run-OpenSsl $args
-  if ($out) {
-    $keyCount++
-    $out | ForEach-Object { AddLine $_ }
-  } else {
-    AddLine (T "ShowModulus.KeyReadError")
-  }
-  AddLine ""
-}
-
-AddLine ""
 AddLine ""
 AddLine "================================================"
 AddLine (T "ShowModulus.SummaryTitle")
 AddLine "================================================"
+
 AddLine (T "ShowModulus.SummaryCertCount" @($certCount))
 AddLine (T "ShowModulus.SummaryKeyCount" @($keyCount))
 AddLine ""

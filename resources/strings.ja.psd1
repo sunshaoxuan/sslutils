@@ -13,17 +13,13 @@
   "Common.MenuBack"                          = "戻る"
   "Common.Cancelled"                         = "キャンセルされました"
   "Common.Welcome"                           = "SSL 証明書管理ツール"
+  "Common.PressAnyKey"                       = "何かキーを押すと続行します..."
+  "Toolkit.ExitConfirmation"                 = "終了します。何かキーを押すと閉じます..."
+  "Common.Prompt.Domain"                     = "ドメイン"
+  "Common.Prompt.Email"                      = "メールアドレス"
 
-  "Toolkit.Banner"                           = @"
-
-  ╔═══════════════════════════════════════════════════════════════╗
-  ║                                                               ║
-  ║                 SSL 証明書管理ツール                          ║
-  ║               Ver {0}  Dev: TS2課・技管                       ║
-  ║                                                               ║
-  ╚═══════════════════════════════════════════════════════════════╝
-
-"@
+  "Toolkit.Banner.Title"                     = "SSL 証明書管理ツール"
+  "Toolkit.Banner.Version"                   = "Ver {0}  https://github.com/sunshaoxuan"
   "Common.FileNotFound"                      = "{0} が見つかりません: {1}"
   "Common.OpenSslCmdFailed"                  = "OpenSSL コマンド失敗: {0}`n{1}"
   "Common.Exists"                            = "存在"
@@ -125,19 +121,23 @@
   "CheckBasic.Detail.Cert.HasPrivateKey"     = "秘密鍵同梱"
 
   # Merge-CertificateChain.ps1
-  "MergeCert.TitleSingle"                    = "========== 証明書チェーン結合ツール =========="
-  "MergeCert.TitleBatch"                     = "========== 証明書チェーン結合ツール（一括） =========="
-  "MergeCert.Step1"                          = "[1] 入力ファイル確認..."
-  "MergeCert.Step2"                          = "[2] 改行コードを LF に正規化して結合します..."
-  "MergeCert.ClientCert"                     = "[成功] クライアント証明書      : {0}"
-  "MergeCert.IntermediateCert"               = "[成功] 中間（CA）証明書         : {0}"
-  "MergeCert.AlreadyHasChain"                = "[情報] 既に証明書が同梱済みの可能性があります（CERT ブロック数={0}）。中間証明書は追加しません。"
-  "MergeCert.SameAsExistingSkip"             = "[情報] 既存の出力ファイルと内容が同一のためスキップします: {0}"
-  "MergeCert.Done"                           = "[成功] 証明書チェーンを作成しました"
+  "MergeCert.TitleSingle"                    = "証明書チェーン結合ツール"
+  "MergeCert.TitleBatch"                     = "証明書チェーン結合ツール（一括）"
+  "MergeCert.Step1"                          = "入力ファイルの確認"
+  "MergeCert.Step2"                          = "改行コード統一とチェーン結合"
+  "MergeCert.ClientCert"                     = "クライアント証明書"
+  "MergeCert.IntermediateCert"               = "中間証明書(CA)"
+  "MergeCert.AlreadyHasChain"                = "証明書は既にチェーンを含んでいる可能性があります（CERTブロック数={0}）。中間証明書の追加をスキップします。"
+  "MergeCert.SameAsExistingSkip"             = "出力ファイルの内容が既存と同一のためスキップしました: {0}"
+  "MergeCert.Done"                           = "チェーン生成完了"
   "MergeCert.OutFile"                        = "出力ファイル: {0}"
   "MergeCert.ChainOutFile"                   = "チェーンファイル: {0}"
-  "MergeCert.ChainCert"                      = "[成功] チェーン証明書         : {0}"
-  "MergeCert.RootCerts"                      = "[成功] ルート証明書           : {0}"
+  "MergeCert.ChainCert"                      = "チェーン証明書"
+  "MergeCert.RootCerts"                      = "ルート証明書"
+  "MergeCert.PfxGenerated"                   = "PFX 生成完了"
+  "MergeCert.SyncPrompt"                     = "関連ファイル(.key/.csr/.tsv)もマージ先へ同期しますか？(y/N)"
+  "MergeCert.Synced"                         = "同期完了: {0}"
+  "MergeCert.SyncSkipped"                    = "同期をスキップしました。"
   "MergeCert.ChainFromClient"                = "[情報] クライアント証明書内の残りブロックをチェーンとして使用します。"
   "MergeCert.NoChainData"                    = "チェーンファイル用の証明書が見つかりません。"
   "MergeCert.NoCertBlock"                    = "クライアント証明書に CERT ブロックが見つかりません。"
@@ -223,6 +223,11 @@
   "ShowModulus.CreatedAt"                    = "作成日時: {0}"
   "ShowModulus.SectionCert"                  = "証明書 (.cer, .crt, .pem)"
   "ShowModulus.SectionKey"                   = "秘密鍵 (.key)"
+  "ShowModulus.GroupMatch"                   = "【ペア一致 (Matched)】"
+  "ShowModulus.GroupCertOnly"                = "【証明書のみ (Cert Only)】"
+  "ShowModulus.GroupKeyOnly"                 = "【秘密鍵のみ (Key Only)】"
+  "ShowModulus.Calculating"                  = "Modulus 算出中..."
+  "ShowModulus.ModulusHash"                  = "Modulus (SHA256): {0}"
   "ShowModulus.InvalidCert"                  = "[無効な証明書、もしくはファイル内に複数の証明書が含まれています]"
   "ShowModulus.SkipEncryptedKey"             = "[暗号化された秘密鍵のためスキップ: {0} もしくは -PassFile / 環境変数 PASS_FILE を指定してください]"
   "ShowModulus.KeyReadError"                 = "[秘密鍵の読み取りエラー、もしくは形式が不正です]"
@@ -380,6 +385,9 @@
   "VerifyMatch.Detail.Modulus"               = "Modulus:"
 
   # Request-LetsEncryptCertificate.ps1
+  # Request-LetsEncryptCertificate.ps1
+  "LE.InputDomainPrompt"                     = "証明書を発行するドメインを入力してください。"
+  "LE.InputEmailPrompt"                      = "Let's Encrypt 登録用メールアドレスを入力してください。"
   "LE.CommandNotFound"                       = "コマンドが見つかりません: {0}"
   "LE.Ready"                                 = "== 準備完了 =="
   "LE.Domain"                                = "ドメイン: {0}"
@@ -405,6 +413,8 @@
   "LE.ExportZeroBytes"                       = "エクスポートされたファイルが 0 バイトです（{0}={1}, {2}={3}）。権限/ブロックを確認してください。"
   "LE.ExportFilesMissing"                    = "エクスポートされたファイルが見つかりません: {0} または {1}"
   "LE.ExportSuccess"                         = "[成功] {0} ({1} bytes)"
+  "LE.CompletedMsg"                          = "Let's Encrypt 証明書の取得が完了しました。"
+  "LE.PressAnyKeyToReturn"                   = "何かキーを押してメニューに戻ります..."
 
   # Repair-PemFile.ps1
   "RepairPem.ReadFailed"                     = "ファイルの読み取りに失敗しました: {0}"

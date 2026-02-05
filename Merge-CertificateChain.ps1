@@ -393,17 +393,39 @@ function Select-IntermediateCert([string]$clientCertPath) {
   throw (T "MergeCert.MultiCandidatesNeedSpecify" @($list))
 }
 
+# Helper: Pretty Status Output
+function Write-Step([string]$msg) {
+  Write-Host "`n➜ $msg" -ForegroundColor Cyan
+}
+
+function Write-Success([string]$label, [string]$value = "") {
+  Write-Host "  ✔ " -NoNewline -ForegroundColor Green
+  Write-Host "$label" -NoNewline -ForegroundColor White
+  if ($value) { Write-Host ": $value" -ForegroundColor Gray }
+  else { Write-Host "" }
+}
+
+function Write-Info([string]$msg) {
+  Write-Host "  ℹ $msg" -ForegroundColor Gray
+}
+
+function Write-Warn([string]$msg) {
+  Write-Host "  ⚠ $msg" -ForegroundColor Yellow
+}
+
 function Merge-One([string]$clientCertPath, [string]$SelectedIntermediate = "", [string[]]$SelectedRootFiles = @(), [switch]$SkipAutoRoot) {
   Assert-ExistsFile $clientCertPath "Client certificate"
   $outPath = Get-OutPathForClientCert $clientCertPath
 
-  Write-Host ""
-  Write-Host (T "MergeCert.TitleSingle")
-  Write-Host ""
-  Write-Host (T "MergeCert.Step1")
-  Write-Host (T "MergeCert.ClientCert" @((Resolve-Path -LiteralPath $clientCertPath)))
-  Write-Host ""
-  Write-Host (T "MergeCert.Step2")
+  # Header
+  Write-Host "`n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
+  Write-Host "  $((T "MergeCert.TitleSingle"))" -ForegroundColor Cyan
+  Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
+
+  # Step 1: Input Check
+  Write-Step (T "MergeCert.Step1")
+  $clientName = [IO.Path]::GetFileName($clientCertPath)
+  Write-Success (T "MergeCert.ClientCert") $clientName
 
   $a = Get-Content -LiteralPath $clientCertPath -Raw
   $a = Normalize-MergedText $a
@@ -422,9 +444,12 @@ function Merge-One([string]$clientCertPath, [string]$SelectedIntermediate = "", 
   }
 
   if ($alreadyMerged -and $SkipIfAlreadyMerged -and -not $Force -and $rootFiles.Count -eq 0) {
-    Write-Host (T "MergeCert.AlreadyHasChain" @($blockCount))
+    Write-Info (T "MergeCert.AlreadyHasChain" @($blockCount))
   }
   else {
+    # Step 2: Merge
+    Write-Step (T "MergeCert.Step2")
+    
     $selectedIntermediate = $SelectedIntermediate
     if ([string]::IsNullOrWhiteSpace($selectedIntermediate) -and (-not $alreadyMerged -or $Force)) {
       $selectedIntermediate = Select-IntermediateCert $clientCertPath
@@ -432,14 +457,15 @@ function Merge-One([string]$clientCertPath, [string]$SelectedIntermediate = "", 
 
     if (-not $alreadyMerged -or $Force) {
       Assert-ExistsFile $selectedIntermediate "Intermediate certificate"
-      Write-Host (T "MergeCert.IntermediateCert" @((Resolve-Path -LiteralPath $selectedIntermediate)))
+      $interName = [IO.Path]::GetFileName($selectedIntermediate)
+      Write-Success (T "MergeCert.IntermediateCert") $interName
 
       $b = Get-Content -LiteralPath $selectedIntermediate -Raw
       $b = Normalize-MergedText $b
       $merged = $a + $b
     }
     else {
-      Write-Host (T "MergeCert.AlreadyHasChain" @($blockCount))
+      # Already merged info
     }
 
     if ($rootFiles.Count -eq 0 -and -not $SkipAutoRoot -and -not [string]::IsNullOrWhiteSpace($selectedIntermediate)) {
@@ -456,12 +482,29 @@ function Merge-One([string]$clientCertPath, [string]$SelectedIntermediate = "", 
         }
         $rootResolved += (Resolve-Path -LiteralPath $r)
       }
-      Write-Host (T "MergeCert.RootCerts" @(($rootResolved -join "; ")))
+      $rootNames = ($rootResolved | ForEach-Object { [IO.Path]::GetFileName($_) }) -join ", "
+      Write-Success (T "MergeCert.RootCerts") $rootNames
     }
   }
 
   $merged = Normalize-MergedText $merged
-  Write-FileIfChanged $outPath $merged "MergeCert.OutFile"
+  
+  # File Write Logic custom for logging
+  $existing = Read-TextIfExists $outPath
+  $changed = $true
+  if (-not [string]::IsNullOrWhiteSpace($existing)) {
+    $existingNorm = Normalize-MergedText $existing
+    if ($existingNorm -eq $merged) {
+      Write-Info (T "MergeCert.SameAsExistingSkip" @([IO.Path]::GetFileName($outPath)))
+      $changed = $false
+    }
+  }
+
+  if ($changed) {
+    Backup-IfExists $outPath
+    Set-Content -LiteralPath $outPath -Value $merged -NoNewline -Encoding ASCII
+    Write-Success (T "MergeCert.OutFile") ([IO.Path]::GetFileName($outPath))
+  }
 
   # PFX Generation
   $keyPath = [IO.Path]::ChangeExtension($clientCertPath, ".key")
@@ -500,15 +543,31 @@ function Merge-One([string]$clientCertPath, [string]$SelectedIntermediate = "", 
     }
     
     if ($generated) {
-      Write-Host (T "Common.Info" @("PFX Generated: $([IO.Path]::GetFileName($pfxPath))"))
+      Write-Success (T "MergeCert.PfxGenerated") ([IO.Path]::GetFileName($pfxPath))
     }
     else {
-      Write-Host (T "Common.Warn" @("Failed to generate PFX (Key missing or password incorrect)")) -ForegroundColor Yellow
+      Write-Warn (T "Common.Warn" @("Failed to generate PFX"))
+    }
+    
+    # Sync Suggestion
+    Write-Host ""
+    Write-Host (T "MergeCert.SyncPrompt") -ForegroundColor Yellow -NoNewline
+    $syncAns = Read-Host " "
+    if ($syncAns -match "^[yY]") {
+      $sourceDir = Split-Path -Parent $clientCertPath
+      $orgName = [IO.Path]::GetFileName($sourceDir)
+        
+      # Call Sync-ToMerged.ps1 with arguments
+      $syncScript = Join-Path $PSScriptRoot "Sync-ToMerged.ps1"
+      if (Test-Path -LiteralPath $syncScript -PathType Leaf) {
+        # -NoPause to return immediately
+        & $syncScript -Target $orgName -NoPause -Lang $Lang
+      }
     }
   }
 
   Write-Host ""
-  Write-Host (T "MergeCert.Done")
+  Write-Success (T "MergeCert.Done")
 }
 
 function Find-ClientCerts([string]$root, [switch]$OnlyNew, [switch]$OnlyCer) {
@@ -624,8 +683,8 @@ if ([string]::IsNullOrWhiteSpace($ClientCert)) {
 
   while ($true) {
     $pick = Show-MenuSelect -title (T "MergeCert.BatchCertMenuTitle") -items $targetItems
-    if ($null -eq $pick) { break }
-    if ($pick -eq $targetItems.Count) { break }  # Last item is Quit
+    if ($null -eq $pick) { exit 99 }
+    if ($pick -eq $targetItems.Count) { exit 99 }  # Last item is Quit
 
     $t = $targets[$pick - 1]  # Show-MenuSelect returns 1-based
     try {
@@ -681,9 +740,9 @@ if ([string]::IsNullOrWhiteSpace($ClientCert)) {
 
       $title = (T "MergeCert.BatchMenuTitle")
       $choice = Show-MenuSelect -title $title -items $menuItems
-      if ($null -eq $choice) { break }
+      if ($null -eq $choice) { exit 99 }
       $selectedAction = $actions[$choice - 1]  # Show-MenuSelect returns 1-based
-      if ($selectedAction -eq "Quit") { break }
+      if ($selectedAction -eq "Quit") { exit 99 }
       if ($selectedAction -eq "Back") { continue }
       if ($selectedAction -eq "Skip") { continue }
 
@@ -713,15 +772,15 @@ if ([string]::IsNullOrWhiteSpace($ClientCert)) {
       }
 
       Merge-One $t -SelectedIntermediate $selIntermediate -SelectedRootFiles $selRoots -SkipAutoRoot:$skipAutoRoot
-      Read-Host "Press Enter to continue..."
+      Pause-AnyKey (T "Common.PressAnyKey")
     }
     catch {
       Write-Host (T "Common.ErrorNg" @($t))
       Write-Host (T "Common.ErrorNg" @($_.Exception.Message))
-      Read-Host "Press Enter to continue..."
+      Pause-AnyKey (T "Common.PressAnyKey")
     }
   }
-  exit 0
+  exit 99
 }
 
 Merge-One $ClientCert

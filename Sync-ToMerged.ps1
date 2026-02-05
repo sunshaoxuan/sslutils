@@ -19,6 +19,8 @@ new フォルダから merged/new フォルダへコピーします。
 param(
     [switch]$AutoYes = $false,
     [switch]$DryRun = $false,
+    [string]$Target = "",
+    [switch]$NoPause = $false,
     [Parameter(Mandatory = $false)]
     [ValidateSet("ja", "zh", "en")]
     [string]$Lang = "ja"
@@ -42,6 +44,13 @@ if (Test-Path -LiteralPath $i18nModule -PathType Leaf) {
     . $i18nModule
     $__i18n = Initialize-I18n -Lang $Lang -BaseDir $PSScriptRoot
 }
+
+# Menu helper
+$menuModule = Join-Path $PSScriptRoot "lib\menu.ps1"
+if (Test-Path -LiteralPath $menuModule -PathType Leaf) {
+    . $menuModule
+}
+
 function T([string]$Key, $ArgList = @()) {
     if ($null -ne $__i18n) {
         $arr = if ($null -eq $ArgList) { @() } else { @($ArgList) }
@@ -51,6 +60,7 @@ function T([string]$Key, $ArgList = @()) {
 }
 
 function Get-OrgMapping {
+    param([string]$mergedDir)
     # new と merged/new のフォルダ名から組織名をマッピング
     # フォルダ名形式: "組織名 (ホスト名)" または "ドメイン名"
     $mapping = @{}
@@ -102,7 +112,7 @@ function Find-MatchingMergedFolder([string]$newOrgPath, [hashtable]$mapping) {
     return $null
 }
 
-function Sync-FilesToMerged([string]$newOrgPath, [string]$mergedOrgPath) {
+function Sync-FilesToMerged([string]$newOrgPath, [string]$mergedOrgPath, [switch]$DryRun) {
     $extensions = @("*.key", "*.csr", "*.tsv")
     $copied = @()
     
@@ -163,8 +173,16 @@ if (-not (Test-Path $mergedDir)) {
     exit 1
 }
 
-$mapping = Get-OrgMapping
+$mapping = Get-OrgMapping $mergedDir
 $newOrgs = Get-ChildItem -LiteralPath $newDir -Directory -ErrorAction SilentlyContinue
+
+if (-not [string]::IsNullOrWhiteSpace($Target)) {
+    $newOrgs = @($newOrgs | Where-Object { $_.Name -eq $Target })
+    if ($newOrgs.Count -eq 0) {
+        Write-Host "Target not found: $Target" -ForegroundColor Red
+        exit 1
+    }
+}
 
 $totalCopied = 0
 
@@ -182,7 +200,7 @@ foreach ($org in $newOrgs) {
     
     Write-Host "  $orgDisplayName" -NoNewline
     
-    $copied = Sync-FilesToMerged $org.FullName $mergedPath
+    $copied = @(Sync-FilesToMerged $org.FullName $mergedPath -DryRun:$DryRun)
     
     if ($copied.Count -gt 0) {
         $dryRunMark = if ($DryRun) { " [DryRun]" } else { "" }
@@ -207,3 +225,7 @@ if ($DryRun) {
     $summary += " (DryRun)"
 }
 Write-Host $summary -ForegroundColor Cyan
+
+if (-not $NoPause) {
+    Pause-AnyKey (T "Common.PressAnyKey")
+}
