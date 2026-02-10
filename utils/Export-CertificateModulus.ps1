@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
 すべての証明書と秘密鍵の Modulus 値を一覧表示するスクリプト
 
@@ -65,13 +65,13 @@ param(
   [string]$Lang = "ja"
 )
 
-Set-StrictMode -Version Latest
-$ErrorActionPreference = "Stop"
+
+$ToolkitRoot = Split-Path -Parent $PSScriptRoot
 
 $i18nModule = Join-Path $PSScriptRoot "lib\\i18n.ps1"
 if (-not (Test-Path -LiteralPath $i18nModule -PathType Leaf)) { throw (T "Common.I18nModuleNotFound" @($i18nModule)) }
 . $i18nModule
-$__i18n = Initialize-I18n -Lang $Lang -BaseDir $PSScriptRoot
+$__i18n = Initialize-I18n -Lang $Lang -BaseDir $ToolkitRoot
 function T([string]$Key, [object[]]$FormatArgs = @()) { return Get-I18nText -I18n $__i18n -Key $Key -FormatArgs $FormatArgs }
 
 $FixedPassFileName = "passphrase.txt"
@@ -94,7 +94,7 @@ function Assert-ExistsFile([string]$p, [string]$label) {
   }
 }
 
-function Run-OpenSsl([string[]]$OpenSslArgs) {
+function Invoke-OpenSsl([string[]]$OpenSslArgs) {
   $out = & $OpenSsl @OpenSslArgs 2>&1 | ForEach-Object { $_.ToString() }
   if ($LASTEXITCODE -ne 0) { return $null }
   return $out
@@ -147,7 +147,7 @@ $keyFiles = Get-ChildItem -LiteralPath $root -Recurse -File -Include *.key -Erro
 
 $certCount = 0
 foreach ($f in $certFiles) {
-  $out = Run-OpenSsl @("x509", "-in", $f.FullName, "-noout", "-modulus")
+  $out = Invoke-OpenSsl @("x509", "-in", $f.FullName, "-noout", "-modulus")
   if ($out -and $out -match "Modulus=([A-Fa-f0-9]+)") {
     $mod = $matches[1].ToUpper()
     if (-not $modulusGroups.ContainsKey($mod)) {
@@ -172,7 +172,7 @@ foreach ($f in $keyFiles) {
     $args = @("rsa", "-in", $f.FullName, "-noout", "-modulus", "-passin", ("file:{0}" -f $passFileToUse))
   }
 
-  $out = Run-OpenSsl $args
+  $out = Invoke-OpenSsl $args
   if ($out -and $out -match "Modulus=([A-Fa-f0-9]+)") {
     $mod = $matches[1].ToUpper()
     if (-not $modulusGroups.ContainsKey($mod)) {
@@ -262,5 +262,7 @@ Write-Host (T "ShowModulus.SummaryCertCount" @($certCount))
 Write-Host (T "ShowModulus.SummaryKeyCount" @($keyCount))
 Write-Host ""
 Write-Host (T "ShowModulus.SavedTo" @((Resolve-Path -LiteralPath $OutFile)))
+
+
 
 

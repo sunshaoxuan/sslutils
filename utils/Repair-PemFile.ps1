@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
 PEM ファイルのフォーマットを修復・正規化するスクリプト
 
@@ -64,14 +64,14 @@ param(
   [string]$Lang = "ja"
 )
 
-Set-StrictMode -Version Latest
-$ErrorActionPreference = "Stop"
+
+$ToolkitRoot = Split-Path -Parent $PSScriptRoot
 
 # i18n 初期化
 $i18nModule = Join-Path $PSScriptRoot "lib\i18n.ps1"
 if (-not (Test-Path -LiteralPath $i18nModule -PathType Leaf)) { throw "i18n module not found: $i18nModule" }
 . $i18nModule
-$__i18n = Initialize-I18n -Lang $Lang -BaseDir $PSScriptRoot
+$__i18n = Initialize-I18n -Lang $Lang -BaseDir $ToolkitRoot
 function T([string]$Key, [object[]]$FormatArgs = @()) { return Get-I18nText -I18n $__i18n -Key $Key -FormatArgs $FormatArgs }
 
 # ファイル存在確認
@@ -133,7 +133,7 @@ function Repair-Headers([string]$text) {
 }
 
 # PEM 正規化
-function Normalize-Pem([string]$path, [string]$kind) {
+function Format-Pem([string]$path, [string]$kind) {
   $orig = Read-TextRaw $path
   $t = Repair-Headers $orig
 
@@ -216,8 +216,8 @@ try {
 
   Write-Host ""
   Write-Host (T "RepairPem.NormalizeSection") -ForegroundColor Cyan
-  $infoFc = Normalize-Pem $Fullchain "fullchain"
-  $infoPk = Normalize-Pem $Privkey "privkey"
+  $infoFc = Format-Pem $Fullchain "fullchain"
+  $infoPk = Format-Pem $Privkey "privkey"
 
   Write-Host ""
   Write-Host (T "RepairPem.VerifySection") -ForegroundColor Cyan
@@ -251,3 +251,5 @@ catch {
   Write-Host (T "RepairPem.RestoreHint") -ForegroundColor Yellow
   throw
 }
+
+

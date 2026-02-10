@@ -1,8 +1,23 @@
 {
+    "Paths": {
+        "Old": "old",
+        "New": "new",
+        "OutputRoot": "output",
+        "Merged": "output/merged",
+        "SelfSigned": "output/self-signed",
+        "Temp": "temp",
+        "Resources": "resources",
+        "CertConfig": "CertConfig.psd1"
+    },
     "DefaultSubject": {
         "C": "JP",
         "ST": "Tokyo",
         "L": "Chiyoda-ku",
         "O": "Example Corp"
+    },
+    "TimeZoneNames": {
+        "ja": {},
+        "zh": {},
+        "en": {}
     }
 }

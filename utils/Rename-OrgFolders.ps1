@@ -1,4 +1,4 @@
-
+﻿
 # 自動リネームツール：ドメイン名から組織名を取得してフォルダ名を変更する
 # 対象範囲：old, new, merged ディレクトリ
 # ロジック：3つのディレクトリ内の同名フォルダを一括で変更し、整合性を保つ
@@ -9,22 +9,37 @@ param(
     [switch]$DryRun = $false   # 試走のみ（変更は行いません）
 )
 
-$dirsToCheck = @("old", "new", "merged\new")
-$rootPath = $PSScriptRoot
+Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
+$ToolkitRoot = Split-Path -Parent $PSScriptRoot
 
-function Clean-FileName([string]$name) {
+$rootPath = $ToolkitRoot
+$pathsModule = Join-Path $PSScriptRoot "lib\paths.ps1"
+if (Test-Path -LiteralPath $pathsModule -PathType Leaf) { . $pathsModule }
+$ToolkitPaths = if (Get-Command Get-ToolkitPaths -ErrorAction SilentlyContinue) { Get-ToolkitPaths -BaseDir $ToolkitRoot } else { $null }
+$oldDir = if ($null -ne $ToolkitPaths -and -not [string]::IsNullOrWhiteSpace($ToolkitPaths.Old)) { $ToolkitPaths.Old } else { Join-Path $rootPath "old" }
+$newDir = if ($null -ne $ToolkitPaths -and -not [string]::IsNullOrWhiteSpace($ToolkitPaths.New)) { $ToolkitPaths.New } else { Join-Path $rootPath "new" }
+$mergedDir = if ($null -ne $ToolkitPaths -and -not [string]::IsNullOrWhiteSpace($ToolkitPaths.Merged)) { $ToolkitPaths.Merged } else { Join-Path $rootPath "output\merged" }
+$dirsToCheck = @($oldDir, $newDir, $mergedDir)
+
+function Resolve-DirPath([string]$dirItem) {
+    if ([IO.Path]::IsPathRooted($dirItem)) { return $dirItem }
+    return (Join-Path $rootPath $dirItem)
+}
+
+function ConvertTo-SafeFileName([string]$name) {
     # ファイル名に使用できない文字を置換
     $name = $name -replace '[\\/:*?"<>|]', '_'
     # 空白をアンダースコアに置換 (ユーザー要望)
     return $name -replace '\s+', '_'
 }
 
-function Is-Japanese([string]$text) {
+function Test-ContainsJapanese([string]$text) {
     # 簡易チェック: ひらがな、カタカナ、漢字が含まれているか
     return $text -match "[\p{IsHiragana}\p{IsKatakana}\p{IsCJKUnifiedIdeographs}]"
 }
 
-function Refine-OrgName([string]$name) {
+function Resolve-OrgName([string]$name) {
     if ([string]::IsNullOrWhiteSpace($name)) { return $null }
 
     # 1. ブロックリストチェック
@@ -37,7 +52,7 @@ function Refine-OrgName([string]$name) {
     $parts = $name -split "[\s_|\-]+"
     $jpParts = @()
     foreach ($p in $parts) {
-        if (Is-Japanese $p) {
+        if (Test-ContainsJapanese $p) {
             $jpParts += $p
         }
     }
@@ -196,7 +211,7 @@ function Get-OrgFromLocalCert([string]$domain) {
     if (-not (Test-Path -LiteralPath $openssl)) { return $null }
     
     foreach ($d in $dirsToCheck) {
-        $searchPath = Join-Path $rootPath $d
+        $searchPath = Resolve-DirPath $d
         if (-not (Test-Path $searchPath)) { continue }
         
         # 搜索包含该域名的 .cer 文件
@@ -211,7 +226,7 @@ function Get-OrgFromLocalCert([string]$domain) {
                 # 提取 O= 组织名
                 if ($subj -match "O\s*=\s*([^,/\r\n]+)") {
                     $orgName = $matches[1].Trim()
-                    $validName = Refine-OrgName $orgName
+                    $validName = Resolve-OrgName $orgName
                     if ($validName) {
                         return $validName
                     }
@@ -230,7 +245,7 @@ function Find-OrgName([string]$domain) {
     Write-Host "    Checking local certificates..." -NoNewline -ForegroundColor Gray
     $localOrg = Get-OrgFromLocalCert $domain
     if ($localOrg) {
-        if (Is-Japanese $localOrg) {
+        if (Test-ContainsJapanese $localOrg) {
             # 如果证书已经是日文，直接使用
             Write-Host " [LOCAL HIT/JP] -> $localOrg" -ForegroundColor Green
             return @{ Name = $localOrg }
@@ -252,8 +267,8 @@ function Find-OrgName([string]$domain) {
         try {
             $whoisName = Get-WhoisInfo $root
             if ($whoisName) {
-                $validName = Refine-OrgName $whoisName
-                if ($validName -and (Is-Japanese $validName)) {
+                $validName = Resolve-OrgName $whoisName
+                if ($validName -and (Test-ContainsJapanese $validName)) {
                     Write-Host " [WHOIS HIT/JP] -> $validName" -ForegroundColor Green
                     return @{ Name = $validName }
                 }
@@ -285,9 +300,9 @@ function Find-OrgName([string]$domain) {
             $res = Get-WebInfo ("https://" + $checkDomain)
             if ($res) {
                 $candidate = if ($res.ContainsKey("CertOrg")) { $res.CertOrg } else { $res.Title }
-                $validName = Refine-OrgName $candidate
+                $validName = Resolve-OrgName $candidate
                 
-                if ($validName -and (Is-Japanese $validName)) {
+                if ($validName -and (Test-ContainsJapanese $validName)) {
                     Write-Host " [HIT/JP] -> $validName" -ForegroundColor Green
                     return @{ Name = $validName }
                 }
@@ -305,9 +320,9 @@ function Find-OrgName([string]$domain) {
             $resWWW = Get-WebInfo ("https://www." + $checkDomain)
             if ($resWWW) { 
                 $candidate = if ($resWWW.ContainsKey("CertOrg")) { $resWWW.CertOrg } else { $resWWW.Title }
-                $validName = Refine-OrgName $candidate
+                $validName = Resolve-OrgName $candidate
 
-                if ($validName -and (Is-Japanese $validName)) {
+                if ($validName -and (Test-ContainsJapanese $validName)) {
                     Write-Host " (www) [HIT/JP] -> $validName" -ForegroundColor Green
                     return @{ Name = $validName }
                 }
@@ -336,7 +351,7 @@ function Find-OrgName([string]$domain) {
 Write-Host "Scanning directories..." -ForegroundColor Cyan
 $allDomains = @()
 foreach ($d in $dirsToCheck) {
-    $path = Join-Path $rootPath $d
+    $path = Resolve-DirPath $d
     if (Test-Path $path) {
         $subdirs = Get-ChildItem -LiteralPath $path -Directory
         foreach ($s in $subdirs) {
@@ -374,7 +389,7 @@ foreach ($domain in $uniqueDomains) {
     }
 
     $orgName = $info.Name
-    $orgName = Clean-FileName $orgName
+    $orgName = ConvertTo-SafeFileName $orgName
     $orgName = $orgName.Trim('"').Trim("'")
 
     if ($orgName -eq $domain) {
@@ -406,8 +421,9 @@ foreach ($domain in $uniqueDomains) {
     }
 
     foreach ($type in $dirsToCheck) {
-        $oldPath = Join-Path $rootPath $type $domain
-        $newPath = Join-Path $rootPath $type $newName
+        $basePath = Resolve-DirPath $type
+        $oldPath = Join-Path $basePath $domain
+        $newPath = Join-Path $basePath $newName
         
         if (Test-Path -LiteralPath $oldPath) {
             if (Test-Path -LiteralPath $newPath) {
@@ -422,3 +438,5 @@ foreach ($domain in $uniqueDomains) {
 }
 
 Write-Host "`nDone." -ForegroundColor Green
+
+

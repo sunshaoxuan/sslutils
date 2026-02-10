@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
 旧証明書情報から新しい CSR と秘密鍵を生成するスクリプト
 
@@ -114,16 +114,25 @@ param(
   [string]$Lang = "ja"
 )
 
-Set-StrictMode -Version Latest
-$ErrorActionPreference = "Stop"
 
-if ([string]::IsNullOrWhiteSpace($OldDir)) { $OldDir = Join-Path $PSScriptRoot "old" }
-if ([string]::IsNullOrWhiteSpace($NewDir)) { $NewDir = Join-Path $PSScriptRoot "new" }
+$ToolkitRoot = Split-Path -Parent $PSScriptRoot
+
+$pathsModule = Join-Path $PSScriptRoot "lib\paths.ps1"
+if (Test-Path -LiteralPath $pathsModule -PathType Leaf) { . $pathsModule }
+$ToolkitPaths = if (Get-Command Get-ToolkitPaths -ErrorAction SilentlyContinue) { Get-ToolkitPaths -BaseDir $ToolkitRoot } else { $null }
+if ([string]::IsNullOrWhiteSpace($OldDir)) {
+  if ($null -ne $ToolkitPaths -and -not [string]::IsNullOrWhiteSpace($ToolkitPaths.Old)) { $OldDir = $ToolkitPaths.Old }
+  else { $OldDir = Join-Path $ToolkitRoot "old" }
+}
+if ([string]::IsNullOrWhiteSpace($NewDir)) {
+  if ($null -ne $ToolkitPaths -and -not [string]::IsNullOrWhiteSpace($ToolkitPaths.New)) { $NewDir = $ToolkitPaths.New }
+  else { $NewDir = Join-Path $ToolkitRoot "new" }
+}
 
 $i18nModule = Join-Path $PSScriptRoot "lib\\i18n.ps1"
 if (-not (Test-Path -LiteralPath $i18nModule -PathType Leaf)) { throw (T "Common.I18nModuleNotFound" @($i18nModule)) }
 . $i18nModule
-$__i18n = Initialize-I18n -Lang $Lang -BaseDir $PSScriptRoot
+$__i18n = Initialize-I18n -Lang $Lang -BaseDir $ToolkitRoot
 function T([string]$Key, [object[]]$FormatArgs = @()) { return Get-I18nText -I18n $__i18n -Key $Key -FormatArgs $FormatArgs }
 
 # メニューモジュールを読み込む
@@ -141,7 +150,7 @@ function Assert-ExistsFile([string]$path, [string]$label) {
   }
 }
 
-function Ensure-Dir([string]$path) {
+function New-DirectoryIfMissing([string]$path) {
   if (-not (Test-Path -LiteralPath $path -PathType Container)) {
     New-Item -ItemType Directory -Path $path | Out-Null
   }
@@ -159,11 +168,15 @@ function Get-Passphrase([string]$passFilePath) {
   return ([string]$first).Trim()
 }
 
-function With-TempPassFile([string]$passphrase, [scriptblock]$action) {
+function Invoke-TempPassFile([string]$passphrase, [scriptblock]$action) {
   if ([string]::IsNullOrWhiteSpace($passphrase)) {
     return & $action ""
   }
-  $tmp = [IO.Path]::Combine([IO.Path]::GetTempPath(), ("ssl_maker_pass_{0}.txt" -f ([Guid]::NewGuid().ToString("N"))))
+  $tmpRoot = if ($null -ne $ToolkitPaths -and -not [string]::IsNullOrWhiteSpace([string]$ToolkitPaths.Temp)) { [string]$ToolkitPaths.Temp } else { Join-Path $ToolkitRoot "temp" }
+  if (-not (Test-Path -LiteralPath $tmpRoot -PathType Container)) {
+    New-Item -ItemType Directory -Path $tmpRoot -Force | Out-Null
+  }
+  $tmp = Join-Path $tmpRoot ("ssl_maker_pass_{0}.tmp" -f ([Guid]::NewGuid().ToString("N")))
   try {
     Set-Content -LiteralPath $tmp -Value $passphrase -NoNewline -Encoding ASCII
     return & $action $tmp
@@ -180,7 +193,7 @@ function Find-PassFile([string]$dir) {
   return ""
 }
 
-function Run-OpenSsl([string[]]$OpenSslArgs) {
+function Invoke-OpenSsl([string[]]$OpenSslArgs) {
   # PowerShell 5.1 / 7.x 両対応のため、& 呼び出し + 2>&1 で取得（文字列化）
   $out = & $OpenSsl @OpenSslArgs 2>&1 | ForEach-Object { $_.ToString() }
   if ($LASTEXITCODE -ne 0) {
@@ -190,7 +203,7 @@ function Run-OpenSsl([string[]]$OpenSslArgs) {
   return $out
 }
 
-function Parse-SubjectToMap([string]$subjectLine) {
+function ConvertFrom-SubjectToMap([string]$subjectLine) {
   # 例: subject=C=JP, ST=Hyogo, L=Kato-city, O=..., CN=example
   $s = $subjectLine.Trim()
   if ($s.StartsWith("subject=")) { $s = $s.Substring(8) }
@@ -220,7 +233,7 @@ function SubjectMapToSubj([hashtable]$m) {
 }
 
 function Get-CertSubject([string]$certPath) {
-  $out = Run-OpenSsl @("x509", "-in", $certPath, "-noout", "-subject")
+  $out = Invoke-OpenSsl @("x509", "-in", $certPath, "-noout", "-subject")
   $line = ($out | Where-Object { $_ -match "^subject=" } | Select-Object -First 1)
   if (-not $line) { $line = ($out | Select-Object -First 1) }
   return ([string]$line).Trim()
@@ -229,14 +242,14 @@ function Get-CertSubject([string]$certPath) {
 function Get-CertSANs([string]$certPath) {
   $out = @()
   try {
-    $out = @(Run-OpenSsl @("x509", "-in", $certPath, "-noout", "-ext", "subjectAltName"))
+    $out = @(Invoke-OpenSsl @("x509", "-in", $certPath, "-noout", "-ext", "subjectAltName"))
   }
   catch {
     $out = @()
   }
   if ($out.Count -eq 0) {
     try {
-      $out = @(Run-OpenSsl @("x509", "-in", $certPath, "-noout", "-text"))
+      $out = @(Invoke-OpenSsl @("x509", "-in", $certPath, "-noout", "-text"))
     }
     catch {
       return @()
@@ -257,7 +270,7 @@ function Get-CertSANs([string]$certPath) {
 }
 
 function Get-CsrSubject([string]$csrPath) {
-  $out = Run-OpenSsl @("req", "-in", $csrPath, "-noout", "-subject")
+  $out = Invoke-OpenSsl @("req", "-in", $csrPath, "-noout", "-subject")
   $line = ($out | Where-Object { $_ -match "^subject=" } | Select-Object -First 1)
   if (-not $line) { $line = ($out | Select-Object -First 1) }
   return ([string]$line).Trim()
@@ -272,7 +285,7 @@ function Get-RsaBitsFromKey([string]$keyPath) {
       return $null
     }
 
-    $out = Run-OpenSsl @("rsa", "-in", $keyPath, "-noout", "-text")
+    $out = Invoke-OpenSsl @("rsa", "-in", $keyPath, "-noout", "-text")
     foreach ($line in $out) {
       if ($line -match "\((\d+)\s+bit\)") {
         return [int]$matches[1]
@@ -285,7 +298,7 @@ function Get-RsaBitsFromKey([string]$keyPath) {
   }
 }
 
-function Normalize-SanItem([string]$s) {
+function Format-SanItem([string]$s) {
   if ([string]::IsNullOrWhiteSpace($s)) { return "" }
   $t = $s.Trim()
   if ($t -match "^(DNS|IP|IP Address|URI|EMAIL):") {
@@ -302,7 +315,7 @@ function Build-SanOpt([string[]]$sans) {
   if ($null -eq $sans -or $sans.Count -eq 0) { return @() }
   $items = New-Object System.Collections.Generic.List[string]
   foreach ($s in $sans) {
-    $n = Normalize-SanItem $s
+    $n = Format-SanItem $s
     if ([string]::IsNullOrWhiteSpace($n)) { continue }
     $items.Add($n) | Out-Null
   }
@@ -312,12 +325,12 @@ function Build-SanOpt([string[]]$sans) {
   return @("-addext", $value)
 }
 
-function Parse-SanInput([string]$raw) {
+function ConvertFrom-SanInput([string]$raw) {
   if ([string]::IsNullOrWhiteSpace($raw)) { return @() }
   return @($raw -split "[,;\s]+" | Where-Object { $_ -ne "" })
 }
 
-function Prompt-AdjustSans([string]$cn, [string[]]$current) {
+function Read-AdjustSans([string]$cn, [string[]]$current) {
   $currentText = if ($null -eq $current -or $current.Count -eq 0) { (T "CheckBasic.None") } else { ($current -join ", ") }
   
   # メニューモジュールが利用可能かチェック
@@ -351,12 +364,12 @@ function Prompt-AdjustSans([string]$cn, [string[]]$current) {
       2 { return @("DNS:$cn") }  # CN のみ
       3 {
         $raw = (Read-Host (T "Renew.SanInputAppend")).Trim()
-        $list = Parse-SanInput $raw
+        $list = ConvertFrom-SanInput $raw
         return @($current) + $list
       }
       4 {
         $raw = (Read-Host (T "Renew.SanInputReplace")).Trim()
-        $list = Parse-SanInput $raw
+        $list = ConvertFrom-SanInput $raw
         if ($list.Count -eq 0) { return $current }
         return $list
       }
@@ -385,12 +398,12 @@ function Prompt-AdjustSans([string]$cn, [string[]]$current) {
       "2" { return @("DNS:$cn") }
       "3" {
         $raw = (Read-Host (T "Renew.SanInputAppend")).Trim()
-        $list = Parse-SanInput $raw
+        $list = ConvertFrom-SanInput $raw
         return @($current) + $list
       }
       "4" {
         $raw = (Read-Host (T "Renew.SanInputReplace")).Trim()
-        $list = Parse-SanInput $raw
+        $list = ConvertFrom-SanInput $raw
         if ($list.Count -eq 0) { return $current }
         return $list
       }
@@ -455,8 +468,8 @@ function Get-OrgCandidates() {
 
 function Get-NotAfterFromCert([string]$certPath) {
   try {
-    # Run-OpenSsl は既に定義済み
-    $out = @(Run-OpenSsl @("x509", "-in", $certPath, "-noout", "-dates"))
+    # Invoke-OpenSsl は既に定義済み
+    $out = @(Invoke-OpenSsl @("x509", "-in", $certPath, "-noout", "-dates"))
     $line = @($out | Where-Object { $_ -match "^notAfter=" } | Select-Object -First 1)
     if ($line.Count -eq 0 -or [string]::IsNullOrWhiteSpace($line[0])) { return $null }
     $dateStr = ([string]$line[0]).Trim().Replace("notAfter=", "")
@@ -477,7 +490,7 @@ function Get-NotAfterFromCert([string]$certPath) {
 # ==========================================================
 $script:sessionTsvOverwrite = @{}  # Tracks if we have already handled overwrite/backup for a file path in this session
 
-function Parse-LegacyTsv([string]$tsvPath) {
+function ConvertFrom-LegacyTsv([string]$tsvPath) {
   # 戻り値: cn -> UPKI形式の13フィールド全てを含むハッシュ
   # UPKI TSV format (13 Tab-separated fields):
   # [0]=Subject, [1]=SAN数, [2]=空, [3]=SystemID, [4]=空, [5]=空
@@ -539,6 +552,34 @@ function Confirm-TsvData([string]$cn, [hashtable]$legacyData) {
   $result["Software"] = & $ask (T "Renew.TsvLabelSoftware") $result["Software"]
     
   return $result
+}
+
+function Read-TsvGeneration([string]$cn) {
+  if ($NonInteractive) { return $true }
+
+  $useMenu = $false
+  try {
+    if (Get-Command Show-MenuSelect -ErrorAction SilentlyContinue) {
+      $null = $host.UI.RawUI
+      $useMenu = $true
+    }
+  }
+  catch { }
+
+  if ($useMenu) {
+    $items = @(
+      (T "Renew.TsvGenerateYes"),
+      (T "Renew.TsvGenerateNo"),
+      ("[ {0} ]" -f (T "Common.MenuBack"))
+    )
+    $choice = Show-MenuSelect -title (T "Renew.TsvGenerateTitle" @($cn)) -items $items -helpText (T "CheckBasic.Menu.Instruction")
+    if ($null -eq $choice -or $choice -eq $items.Count) { return $false }
+    return ($choice -eq 1)
+  }
+
+  $ans = (Read-Host (T "Renew.TsvGeneratePrompt" @($cn))).Trim()
+  if ([string]::IsNullOrWhiteSpace($ans)) { return $false } # default = No
+  return ($ans -match "^[yY]")
 }
 
 function Export-TsvRow([string]$outPath, [string]$tsvLine) {
@@ -663,7 +704,7 @@ function Get-NewStatusSummary([object]$candidate) {
   return (T "Renew.New.GeneratedWithLatest" @($cnDirs, $csrs.Count, $keys.Count, $latest))
 }
 
-function Prompt-SelectOrgs([object[]]$candidates) {
+function Read-SelectOrgs([object[]]$candidates) {
   # メニューモジュールが利用可能かチェック
   $useMenu = $false
   try {
@@ -775,13 +816,13 @@ function Prompt-SelectOrgs([object[]]$candidates) {
 }
 
 Assert-ExistsFile $OpenSsl "OpenSSL"
-Ensure-Dir $NewDir
+New-DirectoryIfMissing $NewDir
 
 if ($ShowInfo) {
   Write-Host (T "Renew.ShowInfo.OpenSsl" @($OpenSsl))
   Write-Host (T "Renew.ShowInfo.OldDir" @((Resolve-Path -LiteralPath $OldDir)))
   Write-Host (T "Renew.ShowInfo.NewDir" @((Resolve-Path -LiteralPath $NewDir)))
-  Write-Host (T "Renew.ShowInfo.Version" @(((Run-OpenSsl @("version")) -join " ")))
+  Write-Host (T "Renew.ShowInfo.Version" @(((Invoke-OpenSsl @("version")) -join " ")))
   Write-Host ""
   exit 0
 }
@@ -833,7 +874,7 @@ while ($script:returnToOrgMenu) {
   $script:returnToOrgMenu = $false
   
   if ($interactive) {
-    $orgDirs = @(Prompt-SelectOrgs $validCands)
+    $orgDirs = @(Read-SelectOrgs $validCands)
     if ($null -eq $orgDirs[0]) { exit 99 }
   }
 
@@ -867,14 +908,14 @@ while ($script:returnToOrgMenu) {
     foreach ($set in $sets) {
       $certPath = $set.Cert
       $certSubjectLine = Get-CertSubject $certPath
-      $subjectMap = Parse-SubjectToMap $certSubjectLine
+      $subjectMap = ConvertFrom-SubjectToMap $certSubjectLine
 
       $cn = $subjectMap["CN"]
       if ([string]::IsNullOrWhiteSpace($cn)) {
         # フォールバック：証明書の subject が取れない場合、同一セットの CSR から subject を取る
         if (-not [string]::IsNullOrWhiteSpace($set.Csr) -and (Test-Path -LiteralPath $set.Csr -PathType Leaf)) {
           $csrSubjectLine = Get-CsrSubject $set.Csr
-          $subjectMap = Parse-SubjectToMap $csrSubjectLine
+          $subjectMap = ConvertFrom-SubjectToMap $csrSubjectLine
           $cn = $subjectMap["CN"]
         }
         if ([string]::IsNullOrWhiteSpace($cn)) {
@@ -889,7 +930,7 @@ while ($script:returnToOrgMenu) {
         $sans = @("DNS:$cn")
       }
       if (-not $NonInteractive) {
-        $sans = @(Prompt-AdjustSans $cn $sans)
+        $sans = @(Read-AdjustSans $cn $sans)
         if ($sans.Count -eq 1 -and $sans[0] -eq "__SKIP__") {
           # ユーザーがキャンセル = 機関選択メニューに戻る
           $script:returnToOrgMenu = $true
@@ -917,10 +958,10 @@ while ($script:returnToOrgMenu) {
         $bits = $null
         # 暗号化鍵の場合、パスワードで読める可能性がある
         if (-not [string]::IsNullOrWhiteSpace($setPassphrase)) {
-          $bits = With-TempPassFile $setPassphrase {
+          $bits = Invoke-TempPassFile $setPassphrase {
             param($tmpPass)
             try {
-              $out = Run-OpenSsl @("rsa", "-in", $set.Key, "-noout", "-text", "-passin", ("file:{0}" -f $tmpPass))
+              $out = Invoke-OpenSsl @("rsa", "-in", $set.Key, "-noout", "-text", "-passin", ("file:{0}" -f $tmpPass))
               foreach ($line in $out) { if ($line -match "\((\d+)\s+bit\)") { return [int]$matches[1] } }
               return $null
             }
@@ -940,10 +981,10 @@ while ($script:returnToOrgMenu) {
       $orgOut = $orgName
       if ($orgName -eq "(root)") { $orgOut = [IO.Path]::GetFileNameWithoutExtension($certPath) }
       $newOrgDir = Join-Path $NewDir $orgOut
-      Ensure-Dir $newOrgDir
+      New-DirectoryIfMissing $newOrgDir
       $outDir = $newOrgDir
       if ($orgOut -ne $cn) { $outDir = Join-Path $newOrgDir $cn }
-      Ensure-Dir $outDir
+      New-DirectoryIfMissing $outDir
 
       $base = [IO.Path]::GetFileNameWithoutExtension($certPath)
       $outKey = Join-Path $outDir ("{0}.key" -f $base)
@@ -1024,9 +1065,9 @@ while ($script:returnToOrgMenu) {
 
       if (-not [string]::IsNullOrWhiteSpace($setPassphrase)) {
         # OpenSSL 3.x の req は -aes256 を受け付けないため、genpkey + req で生成する
-        With-TempPassFile $setPassphrase {
+        Invoke-TempPassFile $setPassphrase {
           param($tmpPass)
-          Run-OpenSsl @(
+          Invoke-OpenSsl @(
             "genpkey",
             "-algorithm", "RSA",
             "-pkeyopt", ("rsa_keygen_bits:{0}" -f $rsaBits),
@@ -1037,17 +1078,22 @@ while ($script:returnToOrgMenu) {
 
           $reqArgs = @("req", "-new", "-sha256", "-key", $outKey, "-passin", ("file:{0}" -f $tmpPass), "-out", $outCsr, "-subj", $subj)
           if ($sanOpt.Count -gt 0) { $reqArgs += $sanOpt }
-          Run-OpenSsl $reqArgs | Out-Null
+          Invoke-OpenSsl $reqArgs | Out-Null
         } | Out-Null
       }
       else {
         $keyArgs = @("req", "-new", "-newkey", "rsa:$rsaBits", "-sha256", "-nodes", "-keyout", $outKey, "-out", $outCsr, "-subj", $subj)
         if ($sanOpt.Count -gt 0) { $keyArgs += $sanOpt }
-        Run-OpenSsl $keyArgs | Out-Null
+        Invoke-OpenSsl $keyArgs | Out-Null
       }
           
       # --- INTEGRATED TSV GENERATION START ---
       try {
+        $shouldGenerateTsv = Read-TsvGeneration $cn
+        if (-not $shouldGenerateTsv) {
+          Write-Host (T "Renew.TsvSkipped") -ForegroundColor DarkGray
+        }
+        else {
         # 1. Find TSV in Old Directory (Set -> Cert -> Directory)
         $oldCertDir = [IO.Path]::GetDirectoryName($certPath)
         $targetFilter = "*.tsv"
@@ -1059,7 +1105,7 @@ while ($script:returnToOrgMenu) {
         if ($legacyTsvFiles.Count -gt 0) {
           $legFile = $legacyTsvFiles[0]
           $tsvOutName = $legFile.Name
-          $map = Parse-LegacyTsv $legFile.FullName
+          $map = ConvertFrom-LegacyTsv $legFile.FullName
           if ($map.ContainsKey($cn)) {
             $tsvDefaults = $map[$cn]
           }
@@ -1111,6 +1157,7 @@ while ($script:returnToOrgMenu) {
         # 5. Export (Shift-JIS encoding)
         $tsvOutPath = Join-Path $newOrgDir $tsvOutName
         Export-TsvRow $tsvOutPath $tsvLine
+        }
       }
       catch {
         Write-Warning "TSV Generation Failed: $_"
@@ -1156,3 +1203,5 @@ while ($script:returnToOrgMenu) {
     $script:returnToOrgMenu = $true
   }
 }  # end while
+
+

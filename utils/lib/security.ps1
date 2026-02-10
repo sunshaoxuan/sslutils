@@ -1,4 +1,4 @@
-
+﻿
 # Security helper functions
 # Extracted from Get-CertificateInfo.ps1 to be shared with Merge-CertificateChain.ps1
 
@@ -27,11 +27,27 @@ function Get-Passphrase([string]$passFilePath) {
     return ([string]$first).Trim()
 }
 
-function With-TempPassFile([string]$passphrase, [scriptblock]$action) {
+function Invoke-TempPassFile([string]$passphrase, [scriptblock]$action) {
     if ([string]::IsNullOrWhiteSpace($passphrase)) {
         return & $action ""
     }
-    $tmp = [IO.Path]::Combine([IO.Path]::GetTempPath(), ("ssl_maker_pass_{0}.txt" -f ([Guid]::NewGuid().ToString("N"))))
+
+    $tmpRoot = ""
+    $tkPaths = Get-Variable -Name "ToolkitPaths" -ValueOnly -ErrorAction SilentlyContinue
+    if ($null -ne $tkPaths -and -not [string]::IsNullOrWhiteSpace([string]$tkPaths.Temp)) {
+        $tmpRoot = [string]$tkPaths.Temp
+    }
+    else {
+        $base = $PSScriptRoot
+        if ((Split-Path -Leaf $base) -eq "lib") { $base = Split-Path -Parent $base }
+        $tmpRoot = Join-Path $base "temp"
+    }
+
+    if (-not (Test-Path -LiteralPath $tmpRoot -PathType Container)) {
+        New-Item -ItemType Directory -Path $tmpRoot -Force | Out-Null
+    }
+
+    $tmp = Join-Path $tmpRoot ("ssl_maker_pass_{0}.tmp" -f ([Guid]::NewGuid().ToString("N")))
     try {
         Set-Content -LiteralPath $tmp -Value $passphrase -NoNewline -Encoding ASCII
         return & $action $tmp
@@ -41,7 +57,7 @@ function With-TempPassFile([string]$passphrase, [scriptblock]$action) {
     }
 }
 
-function Collect-Passphrases([string[]]$passFiles) {
+function Get-Passphrases([string[]]$passFiles) {
     $phrases = New-Object System.Collections.Generic.List[string]
     foreach ($f in @($passFiles)) {
         $p = Get-Passphrase $f
@@ -67,3 +83,4 @@ function Test-KeyEncrypted([string]$keyPath) {
     if ($text -match "\bENCRYPTED\b") { return $true }
     return $false
 }
+

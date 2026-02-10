@@ -1,4 +1,4 @@
-Set-StrictMode -Version Latest
+﻿Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 function Initialize-I18n {
@@ -57,10 +57,12 @@ function Get-I18nText {
 
   if ([string]::IsNullOrWhiteSpace([string]$s)) { $s = $Key }
 
-  if (@($FormatArgs).Count -gt 0) {
+  $fmt = @()
+  if ($null -ne $FormatArgs) { $fmt = @($FormatArgs) }
+  if ($fmt.Length -gt 0) {
     try {
       if ($null -ne $s) {
-        return ([string]$s -f $FormatArgs)
+        return ([string]$s -f $fmt)
       }
     }
     catch { }

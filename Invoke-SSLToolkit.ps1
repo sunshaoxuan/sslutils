@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
 SSL証明書管理ツールキット - 統合メニュー
 
@@ -7,11 +7,11 @@ SSL証明書管理ツールキット - 統合メニュー
 上下キーで選択し、Enterで実行、ESCで終了します。
 
 .EXAMPLE
-.\SSL-Toolkit.ps1
+.\Invoke-SSLToolkit.ps1
 メインメニューを表示
 
 .EXAMPLE
-.\SSL-Toolkit.ps1 -Lang zh
+.\Invoke-SSLToolkit.ps1 -Lang zh
 中国語でメニューを表示
 #>
 
@@ -24,7 +24,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$ToolkitVersion = "1.2.0"
+$ToolkitVersion = "1.3.4"
 
 # UTF-8出力設定
 try {
@@ -34,10 +34,13 @@ try {
 catch { }
 
 # 共通モジュール読み込み
-$menuModule = Join-Path $PSScriptRoot "lib\menu.ps1"
+$ScriptsDir = Join-Path $PSScriptRoot "utils"
+$LibDir = Join-Path $ScriptsDir "lib"
+
+$menuModule = Join-Path $LibDir "menu.ps1"
 if (Test-Path -LiteralPath $menuModule -PathType Leaf) { . $menuModule }
 
-$i18nModule = Join-Path $PSScriptRoot "lib\i18n.ps1"
+$i18nModule = Join-Path $LibDir "i18n.ps1"
 if (Test-Path -LiteralPath $i18nModule -PathType Leaf) {
     . $i18nModule
     $__i18n = Initialize-I18n -Lang $Lang -BaseDir $PSScriptRoot
@@ -53,7 +56,7 @@ function T([string]$Key, [object[]]$FormatArgs = @()) {
 $tools = @(
     @{
         Name   = "Get-CertificateInfo"
-        Script = "Get-CertificateInfo.ps1"
+        Script = "utils\Get-CertificateInfo.ps1"
         DescJa = "証明書情報を確認"
         DescZh = "查看证书信息"
         DescEn = "View Certificate Info"
@@ -61,7 +64,7 @@ $tools = @(
     },
     @{
         Name   = "New-CSR-FromOld"
-        Script = "New-CertificateSigningRequestFromOld.ps1"
+        Script = "utils\New-CertificateSigningRequestFromOld.ps1"
         DescJa = "既存証明書からCSR更新"
         DescZh = "从旧证书续期CSR"
         DescEn = "Renew CSR from Old Certificate"
@@ -69,7 +72,7 @@ $tools = @(
     },
     @{
         Name   = "New-CSR"
-        Script = "New-CertificateSigningRequest.ps1"
+        Script = "utils\New-CertificateSigningRequest.ps1"
         DescJa = "新規CSR作成"
         DescZh = "创建新CSR"
         DescEn = "Create New CSR"
@@ -77,7 +80,7 @@ $tools = @(
     },
     @{
         Name   = "Merge-Chain"
-        Script = "Merge-CertificateChain.ps1"
+        Script = "utils\Merge-CertificateChain.ps1"
         DescJa = "証明書チェーン結合"
         DescZh = "合并证书链"
         DescEn = "Merge Certificate Chain"
@@ -85,7 +88,7 @@ $tools = @(
     },
     @{
         Name   = "Convert-Key"
-        Script = "Convert-KeyToPlaintext.ps1"
+        Script = "utils\Convert-KeyToPlaintext.ps1"
         DescJa = "秘密鍵を平文に変換"
         DescZh = "密钥转换为明文"
         DescEn = "Convert Key to Plaintext"
@@ -93,7 +96,7 @@ $tools = @(
     },
     @{
         Name   = "Export-Modulus"
-        Script = "Export-CertificateModulus.ps1"
+        Script = "utils\Export-CertificateModulus.ps1"
         DescJa = "証明書モジュラス出力"
         DescZh = "导出证书模数"
         DescEn = "Export Certificate Modulus"
@@ -101,23 +104,15 @@ $tools = @(
     },
     @{
         Name   = "Repair-PEM"
-        Script = "Repair-PemFile.ps1"
+        Script = "utils\Repair-PemFile.ps1"
         DescJa = "PEMファイル修復"
         DescZh = "修复PEM文件"
         DescEn = "Repair PEM File"
         Wait   = $true
     },
     @{
-        Name   = "Rename-Folders"
-        Script = "Rename-OrgFolders.ps1"
-        DescJa = "組織フォルダリネーム"
-        DescZh = "重命名组织文件夹"
-        DescEn = "Rename Organization Folders"
-        Wait   = $true
-    },
-    @{
         Name   = "New-ServerList"
-        Script = "New-ServerList.ps1"
+        Script = "utils\New-ServerList.ps1"
         DescJa = "サーバー一覧作成"
         DescZh = "生成服务器列表"
         DescEn = "Generate Server List"
@@ -125,15 +120,23 @@ $tools = @(
     },
     @{
         Name   = "Sync-ToMerged"
-        Script = "Sync-ToMerged.ps1"
-        DescJa = "new→merged同期 (key,csr,tsv)"
-        DescZh = "同步到merged (key,csr,tsv)"
-        DescEn = "Sync to Merged (key,csr,tsv)"
+        Script = "utils\Sync-ToMerged.ps1"
+        DescJa = "new→output/merged同期 (key,csr,tsv)"
+        DescZh = "同步到output/merged (key,csr,tsv)"
+        DescEn = "Sync to output/merged (key,csr,tsv)"
+        Wait   = $true
+    },
+    @{
+        Name   = "Self-Signed (10Y)"
+        Script = "utils\Request-SelfSignedCertificate.ps1"
+        DescJa = "10年自己署名証明書を作成"
+        DescZh = "生成10年期自签证书"
+        DescEn = "Generate 10-Year Self-Signed Cert"
         Wait   = $true
     },
     @{
         Name   = "Let's Encrypt"
-        Script = "Request-LetsEncryptCertificate.ps1"
+        Script = "utils\Request-LetsEncryptCertificate.ps1"
         DescJa = "Let's Encrypt証明書取得"
         DescZh = "获取Let's Encrypt证书"
         DescEn = "Request Let's Encrypt Certificate"
@@ -229,6 +232,30 @@ function Show-MainMenu {
     return $menuItems
 }
 
+function Invoke-AutoRenameOnStartup {
+    $renameScript = Join-Path $ScriptsDir "Rename-OrgFolders.ps1"
+    if (-not (Test-Path -LiteralPath $renameScript -PathType Leaf)) { return }
+
+    $msg = switch ($Lang) {
+        "zh" { "启动时自动执行：组织文件夹重命名检查..." }
+        "en" { "Startup auto task: organization folder rename check..." }
+        default { "起動時自動処理: 組織フォルダのリネーム確認を実行します..." }
+    }
+    Write-Host $msg -ForegroundColor DarkGray
+
+    try {
+        & $renameScript -AutoYes
+    }
+    catch {
+        $errMsg = switch ($Lang) {
+            "zh" { "自动重命名检查失败，已跳过: {0}" }
+            "en" { "Auto rename check failed and was skipped: {0}" }
+            default { "自動リネーム確認に失敗したためスキップしました: {0}" }
+        }
+        Write-Host ($errMsg -f $_.Exception.Message) -ForegroundColor Yellow
+    }
+}
+
 # メインループ
 try {
     [Console]::CursorVisible = $false
@@ -236,6 +263,8 @@ try {
 catch { }
 
 try {
+    Invoke-AutoRenameOnStartup
+
     while ($true) {
         # Show-Banner call removed as it is now part of the title
         

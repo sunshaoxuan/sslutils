@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
 暗号化された秘密鍵ファイルを復号化して平文鍵を作成するスクリプト
 
@@ -91,8 +91,14 @@ param(
   [string]$Lang = "ja"
 )
 
-Set-StrictMode -Version Latest
-$ErrorActionPreference = "Stop"
+
+$ToolkitRoot = Split-Path -Parent $PSScriptRoot
+
+$pathsModule = Join-Path $PSScriptRoot "lib\paths.ps1"
+if (Test-Path -LiteralPath $pathsModule -PathType Leaf) { . $pathsModule }
+$ToolkitPaths = if (Get-Command Get-ToolkitPaths -ErrorAction SilentlyContinue) { Get-ToolkitPaths -BaseDir $ToolkitRoot } else { $null }
+$toolOldDir = if ($null -ne $ToolkitPaths -and -not [string]::IsNullOrWhiteSpace($ToolkitPaths.Old)) { $ToolkitPaths.Old } else { Join-Path $ToolkitRoot "old" }
+$toolNewDir = if ($null -ne $ToolkitPaths -and -not [string]::IsNullOrWhiteSpace($ToolkitPaths.New)) { $ToolkitPaths.New } else { Join-Path $ToolkitRoot "new" }
 
 # 出力の文字化け対策（環境差異があるため、失敗しても続行）
 try {
@@ -104,7 +110,7 @@ catch { }
 $i18nModule = Join-Path $PSScriptRoot "lib\\i18n.ps1"
 if (-not (Test-Path -LiteralPath $i18nModule -PathType Leaf)) { throw (T "Common.I18nModuleNotFound" @($i18nModule)) }
 . $i18nModule
-$__i18n = Initialize-I18n -Lang $Lang -BaseDir $PSScriptRoot
+$__i18n = Initialize-I18n -Lang $Lang -BaseDir $ToolkitRoot
 function T([string]$Key, [object[]]$FormatArgs = @()) { return Get-I18nText -I18n $__i18n -Key $Key -FormatArgs $FormatArgs }
 
 $FixedPassFileName = "passphrase.txt"
@@ -126,7 +132,7 @@ function Backup-IfExists([string]$path) {
   return $bak
 }
 
-function Run-OpenSsl([string[]]$OpenSslArgs, [switch]$AllowFail) {
+function Invoke-OpenSsl([string[]]$OpenSslArgs, [switch]$AllowFail) {
   $out = & $OpenSsl @OpenSslArgs 2>&1 | ForEach-Object { $_.ToString() }
   if ($LASTEXITCODE -ne 0) {
     if ($AllowFail) { return $out }
@@ -147,11 +153,15 @@ function Get-Passphrase([string]$passFilePath) {
   return ([string]$first).Trim()
 }
 
-function With-TempPassFile([string]$passphrase, [scriptblock]$action) {
+function Invoke-TempPassFile([string]$passphrase, [scriptblock]$action) {
   if ([string]::IsNullOrWhiteSpace($passphrase)) {
     return & $action ""
   }
-  $tmp = [IO.Path]::Combine([IO.Path]::GetTempPath(), ("ssl_maker_pass_{0}.txt" -f ([Guid]::NewGuid().ToString("N"))))
+  $tmpRoot = if ($null -ne $ToolkitPaths -and -not [string]::IsNullOrWhiteSpace([string]$ToolkitPaths.Temp)) { [string]$ToolkitPaths.Temp } else { Join-Path $ToolkitRoot "temp" }
+  if (-not (Test-Path -LiteralPath $tmpRoot -PathType Container)) {
+    New-Item -ItemType Directory -Path $tmpRoot -Force | Out-Null
+  }
+  $tmp = Join-Path $tmpRoot ("ssl_maker_pass_{0}.tmp" -f ([Guid]::NewGuid().ToString("N")))
   try {
     Set-Content -LiteralPath $tmp -Value $passphrase -NoNewline -Encoding ASCII
     return & $action $tmp
@@ -181,7 +191,7 @@ function Find-PassFile([string]$dir) {
   return ""
 }
 
-function Collect-Passphrases([string[]]$passFiles) {
+function Get-Passphrases([string[]]$passFiles) {
   $phrases = New-Object System.Collections.Generic.List[string]
   foreach ($f in @($passFiles)) {
     $p = Get-Passphrase $f
@@ -202,7 +212,7 @@ function Get-DefaultOutPath([string]$keyPath) {
 
 function Get-KeyCandidates([string]$p) {
   if ([string]::IsNullOrWhiteSpace($p)) {
-    $newDir = Join-Path $PSScriptRoot "new"
+    $newDir = $toolNewDir
     if (Test-Path -LiteralPath $newDir -PathType Container) {
       $p = $newDir
     }
@@ -240,7 +250,7 @@ function Get-PassFilesForKey([string]$keyPath) {
   }
 
   # script root / old / new にも固定名があれば拾う
-  foreach ($d in @($PSScriptRoot, (Join-Path $PSScriptRoot "old"), (Join-Path $PSScriptRoot "new"))) {
+  foreach ($d in @($PSScriptRoot, $toolOldDir, $toolNewDir)) {
     $f = Find-PassFile $d
     if (-not [string]::IsNullOrWhiteSpace($f)) { $files.Add($f) | Out-Null }
   }
@@ -248,7 +258,7 @@ function Get-PassFilesForKey([string]$keyPath) {
   return @($files | Select-Object -Unique)
 }
 
-function Decrypt-OneKey([string]$keyPath) {
+function Unprotect-OneKey([string]$keyPath) {
   Assert-ExistsFile $keyPath (T "Label.Key")
 
   $isEnc = Test-KeyEncrypted $keyPath
@@ -280,7 +290,7 @@ function Decrypt-OneKey([string]$keyPath) {
     Write-Host (T "DecryptKey.PassEnvUnset")
   }
 
-  $passphrases = Collect-Passphrases $passFiles
+  $passphrases = Get-Passphrases $passFiles
   if (@($passphrases).Count -eq 0) {
     throw (T "DecryptKey.NoPassphrase" @($FixedPassFileName))
   }
@@ -312,13 +322,13 @@ function Decrypt-OneKey([string]$keyPath) {
   foreach ($p in @($passphrases)) {
     if ([string]::IsNullOrWhiteSpace($p)) { continue }
     try {
-      With-TempPassFile $p {
+      Invoke-TempPassFile $p {
         param($tmpPass)
         # まずは汎用の pkey を試す（PKCS#8 等に強い）
-        Run-OpenSsl @("pkey", "-in", $srcKeyPath, "-out", $out, "-passin", ("file:{0}" -f $tmpPass)) -AllowFail | Out-Null
+        Invoke-OpenSsl @("pkey", "-in", $srcKeyPath, "-out", $out, "-passin", ("file:{0}" -f $tmpPass)) -AllowFail | Out-Null
         if ($LASTEXITCODE -ne 0) {
           # フォールバック：rsa
-          Run-OpenSsl @("rsa", "-in", $srcKeyPath, "-out", $out, "-passin", ("file:{0}" -f $tmpPass)) | Out-Null
+          Invoke-OpenSsl @("rsa", "-in", $srcKeyPath, "-out", $out, "-passin", ("file:{0}" -f $tmpPass)) | Out-Null
         }
       } | Out-Null
       $done = $true
@@ -351,7 +361,7 @@ if (@($keys).Count -eq 0) {
 
 foreach ($k in $keys) {
   try {
-    Decrypt-OneKey $k
+    Unprotect-OneKey $k
   }
   catch {
     Write-Host (T "DecryptKey.NgPath" @($k))
@@ -359,4 +369,6 @@ foreach ($k in $keys) {
     Write-Host ""
   }
 }
+
+
 

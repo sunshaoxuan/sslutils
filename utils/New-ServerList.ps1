@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
 Creates a Server List TSV file from CSRs (supports legacy import and manual edit preservation).
 
@@ -29,6 +29,9 @@ param(
     [string]$OldPath = ".\old",
     # TsvFile not needed, filename deduced from Org name
     [switch]$Interactive = $true,
+    [Parameter(Mandatory = $false)]
+    [ValidateSet("ja", "zh", "en")]
+    [string]$Lang = "ja",
     
     # Defaults for automation/testing
     [string]$DefaultSoftware = $null,
@@ -49,7 +52,7 @@ $Columns = @("Common Name", "SAN Config", "Software", "Contact", "Subject DN", "
 
 # --- Helper Functions ---
 
-function Run-OpenSsl([string[]]$OpenSslArgs) {
+function Invoke-OpenSsl([string[]]$OpenSslArgs) {
     try {
         $pinfo = New-Object System.Diagnostics.ProcessStartInfo
         $pinfo.FileName = $OpenSsl
@@ -66,7 +69,7 @@ function Run-OpenSsl([string[]]$OpenSslArgs) {
 
 function Get-CsrInfo([string]$csrPath) {
     # Extract Subject DN
-    $subjRaw = @(Run-OpenSsl @("req", "-in", $csrPath, "-noout", "-subject", "-nameopt", "RFC2253"))
+    $subjRaw = @(Invoke-OpenSsl @("req", "-in", $csrPath, "-noout", "-subject", "-nameopt", "RFC2253"))
     $subjectDn = ""; $cn = ""
     foreach ($line in $subjRaw) {
         if ($line -match "^subject=(.*)") {
@@ -76,7 +79,7 @@ function Get-CsrInfo([string]$csrPath) {
     }
 
     # Extract SANs
-    $textRaw = @(Run-OpenSsl @("req", "-in", $csrPath, "-noout", "-text", "-nameopt", "RFC2253"))
+    $textRaw = @(Invoke-OpenSsl @("req", "-in", $csrPath, "-noout", "-text", "-nameopt", "RFC2253"))
     $sanList = @()
     $inSanBlock = $false
     foreach ($line in $textRaw) {
@@ -302,3 +305,5 @@ if (Test-Path $TsvFile) {
 Write-Host "`nSaving $($sortedList.Count) records to $TsvFile..." -ForegroundColor Cyan
 $sortedList | Select-Object $Columns | Export-Csv -LiteralPath $TsvFile -Delimiter "`t" -NoTypeInformation -Encoding UTF8
 Write-Host "Done." -ForegroundColor Green
+
+

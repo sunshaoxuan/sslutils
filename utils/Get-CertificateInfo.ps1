@@ -89,8 +89,8 @@ param(
   [string]$Lang = "ja"
 )
 
-Set-StrictMode -Version Latest
-$ErrorActionPreference = "Stop"
+
+$ToolkitRoot = Split-Path -Parent $PSScriptRoot
 
 # 出力の文字化け対策（環境差異があるため、失敗しても続行）
 try {
@@ -101,9 +101,11 @@ catch { }
 
 $i18nModule = Join-Path $PSScriptRoot "lib\\i18n.ps1"
 . $i18nModule
-$__i18n = Initialize-I18n -Lang $Lang -BaseDir $PSScriptRoot
+$__i18n = Initialize-I18n -Lang $Lang -BaseDir $ToolkitRoot
 $securityModule = Join-Path $PSScriptRoot "lib\security.ps1"
 if (Test-Path -LiteralPath $securityModule -PathType Leaf) { . $securityModule }
+$pathsModule = Join-Path $PSScriptRoot "lib\paths.ps1"
+if (Test-Path -LiteralPath $pathsModule -PathType Leaf) { . $pathsModule }
 
 function T([string]$Key, $ArgList = @()) {
   # 明示的に配列化して Get-I18nText に渡す
@@ -115,9 +117,24 @@ function T([string]$Key, $ArgList = @()) {
 if (-not (Test-Path -LiteralPath $i18nModule -PathType Leaf)) { throw (T "Common.I18nModuleNotFound" @($i18nModule)) }
 
 $FixedPassFileName = "passphrase.txt"
+$ToolkitPaths = if (Get-Command Get-ToolkitPaths -ErrorAction SilentlyContinue) { Get-ToolkitPaths -BaseDir $ToolkitRoot } else { $null }
+$toolOldDir = if ($null -ne $ToolkitPaths -and -not [string]::IsNullOrWhiteSpace($ToolkitPaths.Old)) { $ToolkitPaths.Old } else { Join-Path $ToolkitRoot "old" }
+$toolNewDir = if ($null -ne $ToolkitPaths -and -not [string]::IsNullOrWhiteSpace($ToolkitPaths.New)) { $ToolkitPaths.New } else { Join-Path $ToolkitRoot "new" }
+$toolMergedDir = if ($null -ne $ToolkitPaths -and -not [string]::IsNullOrWhiteSpace($ToolkitPaths.Merged)) { $ToolkitPaths.Merged } else { Join-Path $ToolkitRoot "output\merged" }
+$toolSelfSignedDir = if ($null -ne $ToolkitPaths -and -not [string]::IsNullOrWhiteSpace($ToolkitPaths.SelfSigned)) { $ToolkitPaths.SelfSigned } else { Join-Path $ToolkitRoot "output\self-signed" }
+$toolMergedOldDir = if ($null -ne $ToolkitPaths -and -not [string]::IsNullOrWhiteSpace($ToolkitPaths.MergedOld)) { $ToolkitPaths.MergedOld } else { Join-Path $toolMergedDir "old" }
+$toolLegacyMergedNewDir = if ($null -ne $ToolkitPaths -and -not [string]::IsNullOrWhiteSpace($ToolkitPaths.LegacyMergedNew)) { $ToolkitPaths.LegacyMergedNew } else { Join-Path $toolMergedDir "new" }
+$runtimeConfig = $null
+$runtimeConfigPath = Join-Path $ToolkitRoot "config.json"
+if (Test-Path -LiteralPath $runtimeConfigPath -PathType Leaf) {
+  try {
+    $runtimeConfig = Get-Content -LiteralPath $runtimeConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
+  }
+  catch { }
+}
 
 # ===== Configuration Loading =====
-$configPath = Join-Path $PSScriptRoot "CertConfig.psd1"
+$configPath = if ($null -ne $ToolkitPaths -and -not [string]::IsNullOrWhiteSpace([string]$ToolkitPaths.CertConfig)) { [string]$ToolkitPaths.CertConfig } else { Join-Path $ToolkitRoot "CertConfig.psd1" }
 if (-not (Test-Path -LiteralPath $configPath -PathType Leaf)) {
   throw (T "Common.FileNotFound" @("Configuration file", $configPath))
 }
@@ -142,7 +159,7 @@ function Get-CertSearchPaths() {
   if ($CertConfig.Agencies) {
     $root = $CertConfig.CertStoreRoot
     if ([string]::IsNullOrWhiteSpace($root)) { $root = "CertStore" }
-    $rootParams = Join-Path $PSScriptRoot $root
+    $rootParams = Join-Path $ToolkitRoot $root
         
     foreach ($agency in $CertConfig.Agencies.Values) {
       if ($agency.Path) {
@@ -175,7 +192,7 @@ function Assert-ExistsFile([string]$p, [string]$label) {
   }
 }
 
-function Run-OpenSsl([string[]]$OpenSslArgs) {
+function Invoke-OpenSsl([string[]]$OpenSslArgs) {
   $out = & $OpenSsl @OpenSslArgs 2>&1 | ForEach-Object { $_.ToString() }
   if ($LASTEXITCODE -ne 0) {
     throw (T "Common.OpenSslCmdFailed" @(($OpenSslArgs -join " "), (($out | Where-Object { $_ -ne "" }) -join "`n")))
@@ -191,16 +208,18 @@ if (-not [string]::IsNullOrWhiteSpace($ChainFile) -and [string]::IsNullOrWhiteSp
 }
 
 $script:ChainSearchDirs = @(
-  $PSScriptRoot,
-  (Join-Path $PSScriptRoot "old"),
-  (Join-Path $PSScriptRoot "new"),
-  (Join-Path $PSScriptRoot "merged\\old"),
-  (Join-Path $PSScriptRoot "merged\\new")
+  $ToolkitRoot,
+  $toolOldDir,
+  $toolNewDir,
+  $toolMergedOldDir,
+  $toolMergedDir,
+  $toolLegacyMergedNewDir
 ) | Select-Object -Unique
 
 $script:ChainDirMappings = @(
-  @{ Source = (Join-Path $PSScriptRoot "old"); Target = (Join-Path $PSScriptRoot "merged\\old") },
-  @{ Source = (Join-Path $PSScriptRoot "new"); Target = (Join-Path $PSScriptRoot "merged\\new") }
+  @{ Source = $toolOldDir; Target = $toolMergedOldDir },
+  @{ Source = $toolNewDir; Target = $toolMergedDir },
+  @{ Source = $toolNewDir; Target = $toolLegacyMergedNewDir }
 )
 
 function Get-CertContainerInfo([string]$certPath) {
@@ -332,7 +351,7 @@ function Find-IntermediateCertFiles() {
 
 function Get-IssuerRfc2253FromCert([string]$certPath) {
   try {
-    $out = Run-OpenSsl @("x509", "-in", $certPath, "-noout", "-issuer", "-nameopt", "RFC2253")
+    $out = Invoke-OpenSsl @("x509", "-in", $certPath, "-noout", "-issuer", "-nameopt", "RFC2253")
     $line = ($out | Select-Object -First 1)
     return ([string]$line).Trim().Replace("issuer=", "")
   }
@@ -341,7 +360,7 @@ function Get-IssuerRfc2253FromCert([string]$certPath) {
 
 function Get-SubjectRfc2253FromCert([string]$certPath) {
   try {
-    $out = Run-OpenSsl @("x509", "-in", $certPath, "-noout", "-subject", "-nameopt", "RFC2253")
+    $out = Invoke-OpenSsl @("x509", "-in", $certPath, "-noout", "-subject", "-nameopt", "RFC2253")
     $line = ($out | Select-Object -First 1)
     return ([string]$line).Trim().Replace("subject=", "")
   }
@@ -351,14 +370,14 @@ function Get-SubjectRfc2253FromCert([string]$certPath) {
 function Get-SubjectAltNamesFromCert([string]$certPath) {
   $out = @()
   try {
-    $out = Run-OpenSsl @("x509", "-in", $certPath, "-noout", "-ext", "subjectAltName")
+    $out = Invoke-OpenSsl @("x509", "-in", $certPath, "-noout", "-ext", "subjectAltName")
   }
   catch {
     $out = @()
   }
   if ($out.Count -eq 0) {
     try {
-      $out = Run-OpenSsl @("x509", "-in", $certPath, "-noout", "-text")
+      $out = Invoke-OpenSsl @("x509", "-in", $certPath, "-noout", "-text")
     }
     catch {
       return ""
@@ -477,7 +496,7 @@ function Format-FinalUse([string]$code) {
 
 function Get-NotAfterFromCert([string]$certPath) {
   try {
-    $out = Run-OpenSsl @("x509", "-in", $certPath, "-noout", "-dates")
+    $out = Invoke-OpenSsl @("x509", "-in", $certPath, "-noout", "-dates")
     $line = ($out | Where-Object { $_ -match "^notAfter=" } | Select-Object -First 1)
     if (-not $line) { return "" }
     return ([string]$line).Trim().Replace("notAfter=", "")
@@ -485,6 +504,80 @@ function Get-NotAfterFromCert([string]$certPath) {
   catch {
     return ""
   }
+}
+
+function Convert-OpenSslDateToLocal([string]$opensslDate) {
+  if ([string]::IsNullOrWhiteSpace($opensslDate)) { return "" }
+  $raw = ([string]$opensslDate).Trim()
+  $raw = [System.Text.RegularExpressions.Regex]::Replace($raw, "\s+", " ")
+  $culture = [System.Globalization.CultureInfo]::InvariantCulture
+  $styles = [System.Globalization.DateTimeStyles]::AssumeUniversal
+  $dto = [datetimeoffset]::MinValue
+  $ok = [datetimeoffset]::TryParseExact($raw, "MMM d HH:mm:ss yyyy 'GMT'", $culture, $styles, [ref]$dto)
+  if (-not $ok) {
+    $ok = [datetimeoffset]::TryParse($raw, $culture, $styles, [ref]$dto)
+  }
+  if (-not $ok) { return "" }
+  $local = $dto.ToLocalTime()
+  $tz = [System.TimeZoneInfo]::Local
+  $zoneName = Get-LocalizedTimeZoneName $tz
+  return [PSCustomObject]@{
+    LocalTime = $local.ToString("yyyy-MM-dd HH:mm:ss")
+    ZoneName  = $zoneName
+  }
+}
+
+function Get-LocalizedTimeZoneName([System.TimeZoneInfo]$tz) {
+  if ($null -eq $tz) { return "" }
+  $tzId = [string]$tz.Id
+  if ([string]::IsNullOrWhiteSpace($tzId)) { return "" }
+  $canonicalId = Get-CanonicalTimeZoneId $tz
+
+  # 1) config.json override: TimeZoneNames.{lang}.{TimeZoneId}
+  try {
+    if ($null -ne $runtimeConfig -and $null -ne $runtimeConfig.TimeZoneNames) {
+      $langTable = $runtimeConfig.TimeZoneNames.$Lang
+      if ($null -ne $langTable) {
+        $override = $langTable.$canonicalId
+        if ([string]::IsNullOrWhiteSpace([string]$override)) { $override = $langTable.$tzId }
+        if (-not [string]::IsNullOrWhiteSpace([string]$override)) { return [string]$override }
+      }
+    }
+  }
+  catch { }
+
+  # 2) fallback: stable global time zone id (prefer IANA)
+  return $canonicalId
+}
+
+function Get-CanonicalTimeZoneId([System.TimeZoneInfo]$tz) {
+  if ($null -eq $tz) { return "" }
+  $tzId = [string]$tz.Id
+  if ([string]::IsNullOrWhiteSpace($tzId)) { return "" }
+  if ($tzId -match "/") { return $tzId }
+
+  try {
+    $m = [System.TimeZoneInfo].GetMethod("TryConvertWindowsIdToIanaId", [type[]]@([string], [string].MakeByRefType()))
+    if ($null -ne $m) {
+      $args = @($tzId, "")
+      $ok = [bool]$m.Invoke($null, $args)
+      if ($ok -and -not [string]::IsNullOrWhiteSpace([string]$args[1])) {
+        return [string]$args[1]
+      }
+    }
+  }
+  catch { }
+
+  return $tzId
+}
+
+function Format-CertDateForDisplay([string]$opensslDate) {
+  if ([string]::IsNullOrWhiteSpace($opensslDate)) { return "" }
+  $local = Convert-OpenSslDateToLocal $opensslDate
+  if ($null -ne $local -and -not [string]::IsNullOrWhiteSpace([string]$local.LocalTime)) {
+    return ("{0} [{1}] ({2})" -f [string]$local.LocalTime, [string]$local.ZoneName, $opensslDate)
+  }
+  return $opensslDate
 }
 
 function Write-Tag([string]$text, [string]$color) {
@@ -507,12 +600,12 @@ function Write-TreeLine([int]$indent, [string]$name, [scriptblock]$emitTags) {
   Write-Host ""
 }
 
-function Try-TestKeyReadable([string]$keyPath, [string[]]$passphrases) {
+function Test-KeyReadable([string]$keyPath, [string[]]$passphrases) {
   # 対話プロンプトを絶対に出さないため、暗号化鍵は必ず -passin で読む
   $isEnc = Test-KeyEncrypted $keyPath
   if (-not $isEnc) {
     try {
-      Run-OpenSsl @("rsa", "-in", $keyPath, "-noout", "-text") | Out-Null
+      Invoke-OpenSsl @("rsa", "-in", $keyPath, "-noout", "-text") | Out-Null
       return (T "Common.Success")
     }
     catch {
@@ -526,9 +619,9 @@ function Try-TestKeyReadable([string]$keyPath, [string[]]$passphrases) {
   foreach ($p in @($passphrases)) {
     if ([string]::IsNullOrWhiteSpace($p)) { continue }
     try {
-      With-TempPassFile $p {
+      Invoke-TempPassFile $p {
         param($tmpPass)
-        Run-OpenSsl @("rsa", "-in", $keyPath, "-noout", "-text", "-passin", ("file:{0}" -f $tmpPass)) | Out-Null
+        Invoke-OpenSsl @("rsa", "-in", $keyPath, "-noout", "-text", "-passin", ("file:{0}" -f $tmpPass)) | Out-Null
       } | Out-Null
       return (T "Common.Success")
     }
@@ -605,13 +698,17 @@ function Get-PassFilesForOrg([string]$orgPath, [string]$folderPath, [string]$old
 }
 
 function Show-InteractiveMenu([string]$oldDir, [string]$newDir) {
-  $mergedDir = Join-Path $PSScriptRoot "merged\new"
+  $mergedDir = $toolMergedDir
+  $selfSignedDir = $toolSelfSignedDir
   
   try { $null = $host.UI.RawUI } catch {
     Show-Folder $oldDir (T "Label.Old") ""
     Show-Folder $newDir (T "Label.New") $oldDir
     if (Test-Path -LiteralPath $mergedDir -PathType Container) {
       Show-Folder $mergedDir (T "Label.Merged") ""
+    }
+    if (Test-Path -LiteralPath $selfSignedDir -PathType Container) {
+      Show-Folder $selfSignedDir (T "Label.SelfSigned") ""
     }
     return
   }
@@ -625,6 +722,7 @@ function Show-InteractiveMenu([string]$oldDir, [string]$newDir) {
         ("{0}" -f (T "Label.Old")),
         ("{0}" -f (T "Label.New")),
         ("{0}" -f (T "Label.Merged")),
+        ("{0}" -f (T "Label.SelfSigned")),
         ("[ {0} ]" -f (T "Common.MenuQuit"))
       )
       $rootSel = Show-MenuSelect -title (T "CheckBasic.Menu.RootTitle") -items $rootItems -helpText (T "CheckBasic.Menu.Instruction")
@@ -634,11 +732,13 @@ function Show-InteractiveMenu([string]$oldDir, [string]$newDir) {
         1 { (T "Label.Old") }
         2 { (T "Label.New") }
         3 { (T "Label.Merged") }
+        4 { (T "Label.SelfSigned") }
       }
       $folder = switch ($rootSel) {
         1 { $oldDir }
         2 { $newDir }
         3 { $mergedDir }
+        4 { $selfSignedDir }
       }
       $oldRootForNew = if ($rootSel -eq 2) { $oldDir } else { "" }
   
@@ -688,7 +788,7 @@ function Show-InteractiveMenu([string]$oldDir, [string]$newDir) {
   
           $f = $files[$fileSel - 1]
           $passFiles = Get-PassFilesForOrg $org.FullName $folder $oldRootForNew $org.Name
-          $passphrases = Collect-Passphrases $passFiles
+          $passphrases = Get-Passphrases $passFiles
           Show-OneFile -FilePath $f.FullName -Passphrases $passphrases -PassFiles $passFiles
           Write-Host (T "CheckBasic.Menu.BackPrompt") -ForegroundColor DarkGray
           try { $null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") } catch { }
@@ -707,12 +807,12 @@ function Show-InteractiveMenu([string]$oldDir, [string]$newDir) {
 
 
 
-function Try-ShowKeyBit([string]$keyPath, [string[]]$passphrases) {
+function Get-KeyBit([string]$keyPath, [string[]]$passphrases) {
   # OpenSSL の対話プロンプトを絶対に出さないため、暗号化鍵は必ず -passin で読む
   $isEnc = Test-KeyEncrypted $keyPath
   if (-not $isEnc) {
     try {
-      $out = Run-OpenSsl @("rsa", "-in", $keyPath, "-noout", "-text")
+      $out = Invoke-OpenSsl @("rsa", "-in", $keyPath, "-noout", "-text")
       $line = ($out | Select-Object -First 1)
       if ($line) { $line | Write-Output }
       return $true
@@ -723,9 +823,9 @@ function Try-ShowKeyBit([string]$keyPath, [string[]]$passphrases) {
   foreach ($p in @($passphrases)) {
     if ([string]::IsNullOrWhiteSpace($p)) { continue }
     try {
-      With-TempPassFile $p {
+      Invoke-TempPassFile $p {
         param($tmpPass)
-        $out = Run-OpenSsl @("rsa", "-in", $keyPath, "-noout", "-text", "-passin", ("file:{0}" -f $tmpPass))
+        $out = Invoke-OpenSsl @("rsa", "-in", $keyPath, "-noout", "-text", "-passin", ("file:{0}" -f $tmpPass))
         $line = ($out | Select-Object -First 1)
         if ($line) { $line | Write-Output }
       }
@@ -768,8 +868,8 @@ function Show-FileMatching([string]$filePath, [string[]]$passphrases = @()) {
   # 1. KEY-CSR Modulus Check
   if ($keyFile -and $csrFile) {
     try {
-      $keyMod = (Run-OpenSsl @("rsa", "-in", $keyFile.FullName, "-noout", "-modulus") | Out-String) -replace "Modulus=", ""
-      $csrMod = (Run-OpenSsl @("req", "-in", $csrFile.FullName, "-noout", "-modulus") | Out-String) -replace "Modulus=", ""
+      $keyMod = (Invoke-OpenSsl @("rsa", "-in", $keyFile.FullName, "-noout", "-modulus") | Out-String) -replace "Modulus=", ""
+      $csrMod = (Invoke-OpenSsl @("req", "-in", $csrFile.FullName, "-noout", "-modulus") | Out-String) -replace "Modulus=", ""
       $match = ($keyMod.Trim() -eq $csrMod.Trim())
       $label = "{0} [{1} / {2}]" -f (T "Matching.KeyCsr"), $keyFile.Name, $csrFile.Name
       $results += @{ Name = $label; Pass = $match }
@@ -780,8 +880,8 @@ function Show-FileMatching([string]$filePath, [string[]]$passphrases = @()) {
   # 2. KEY-CER Modulus Check
   if ($keyFile -and $cerFile) {
     try {
-      $keyMod = (Run-OpenSsl @("rsa", "-in", $keyFile.FullName, "-noout", "-modulus") | Out-String) -replace "Modulus=", ""
-      $cerMod = (Run-OpenSsl @("x509", "-in", $cerFile.FullName, "-noout", "-modulus") | Out-String) -replace "Modulus=", ""
+      $keyMod = (Invoke-OpenSsl @("rsa", "-in", $keyFile.FullName, "-noout", "-modulus") | Out-String) -replace "Modulus=", ""
+      $cerMod = (Invoke-OpenSsl @("x509", "-in", $cerFile.FullName, "-noout", "-modulus") | Out-String) -replace "Modulus=", ""
       $match = ($keyMod.Trim() -eq $cerMod.Trim())
       $label = "{0} [{1} / {2}]" -f (T "Matching.KeyCer"), $keyFile.Name, $cerFile.Name
       $results += @{ Name = $label; Pass = $match }
@@ -793,7 +893,7 @@ function Show-FileMatching([string]$filePath, [string[]]$passphrases = @()) {
   if ($csrFile -and $tsvFile) {
     try {
       # CSRからCNを取得
-      $csrSubj = (Run-OpenSsl @("req", "-in", $csrFile.FullName, "-noout", "-subject") | Out-String)
+      $csrSubj = (Invoke-OpenSsl @("req", "-in", $csrFile.FullName, "-noout", "-subject") | Out-String)
       $cnMatch = [regex]::Match($csrSubj, "CN\s*=\s*([^,/\r\n]+)")
       $csrCn = if ($cnMatch.Success) { $cnMatch.Groups[1].Value.Trim() } else { "" }
       
@@ -826,7 +926,7 @@ function Show-FileMatching([string]$filePath, [string[]]$passphrases = @()) {
   # 4. KEY-PFX Modulus Check
   if ($keyFile -and $pfxFile) {
     try {
-      $keyMod = (Run-OpenSsl @("rsa", "-in", $keyFile.FullName, "-noout", "-modulus") | Out-String) -replace "Modulus=", ""
+      $keyMod = (Invoke-OpenSsl @("rsa", "-in", $keyFile.FullName, "-noout", "-modulus") | Out-String) -replace "Modulus=", ""
        
       $pfxMod = ""
       foreach ($p in @("") + $passphrases) {
@@ -834,19 +934,19 @@ function Show-FileMatching([string]$filePath, [string[]]$passphrases = @()) {
         try {
           $certOut = ""
           if ($isPass) {
-            With-TempPassFile $p { param($tmp)
-              $certOut = Run-OpenSsl @("pkcs12", "-in", $pfxFile.FullName, "-nokeys", "-clcerts", "-passin", "file:$tmp")
+            Invoke-TempPassFile $p { param($tmp)
+              $certOut = Invoke-OpenSsl @("pkcs12", "-in", $pfxFile.FullName, "-nokeys", "-clcerts", "-passin", "file:$tmp")
             }
           }
           else {
-            $certOut = Run-OpenSsl @("pkcs12", "-in", $pfxFile.FullName, "-nokeys", "-clcerts", "-passin", "pass:")
+            $certOut = Invoke-OpenSsl @("pkcs12", "-in", $pfxFile.FullName, "-nokeys", "-clcerts", "-passin", "pass:")
           }
              
           if (-not [string]::IsNullOrWhiteSpace($certOut)) {
             $tmpCert = [IO.Path]::GetTempFileName()
             try {
               Set-Content -LiteralPath $tmpCert -Value $certOut -Encoding ASCII
-              $pfxMod = (Run-OpenSsl @("x509", "-in", $tmpCert, "-noout", "-modulus") | Out-String) -replace "Modulus=", ""
+              $pfxMod = (Invoke-OpenSsl @("x509", "-in", $tmpCert, "-noout", "-modulus") | Out-String) -replace "Modulus=", ""
             }
             finally {
               Remove-Item $tmpCert -Force -ErrorAction SilentlyContinue
@@ -981,7 +1081,7 @@ function Show-OneFile {
       $raw = @()
       $sanList = @()
       if ($isCsr) {
-        $raw = Run-OpenSsl @("req", "-in", $path, "-noout", "-text", "-nameopt", "RFC2253")
+        $raw = Invoke-OpenSsl @("req", "-in", $path, "-noout", "-text", "-nameopt", "RFC2253")
         # Parse SAN from CSR text output
         $inSanBlock = $false
         foreach ($line in $raw) {
@@ -1007,11 +1107,11 @@ function Show-OneFile {
         foreach ($p in @("") + $passphrases) {
           try {
             if ([string]::IsNullOrWhiteSpace($p)) {
-              $certPem = Run-OpenSsl @("pkcs12", "-in", $path, "-nokeys", "-clcerts", "-passin", "pass:") | Out-String
+              $certPem = Invoke-OpenSsl @("pkcs12", "-in", $path, "-nokeys", "-clcerts", "-passin", "pass:") | Out-String
             }
             else {
-              With-TempPassFile $p { param($tmp)
-                $certPem = Run-OpenSsl @("pkcs12", "-in", $path, "-nokeys", "-clcerts", "-passin", "file:$tmp") | Out-String
+              Invoke-TempPassFile $p { param($tmp)
+                $certPem = Invoke-OpenSsl @("pkcs12", "-in", $path, "-nokeys", "-clcerts", "-passin", "file:$tmp") | Out-String
               }
             }
             if (-not [string]::IsNullOrWhiteSpace($certPem)) { break }
@@ -1020,11 +1120,11 @@ function Show-OneFile {
         }
         
         if (-not [string]::IsNullOrWhiteSpace($certPem)) {
-          # Use temporary file to pipe to x509 (Run-OpenSsl wrapper doesn't support direct pipe input easily without mod)
+          # Use temporary file to pipe to x509 (Invoke-OpenSsl wrapper doesn't support direct pipe input easily without mod)
           $tmpCert = [IO.Path]::GetTempFileName()
           try {
             Set-Content -LiteralPath $tmpCert -Value $certPem -Encoding ASCII
-            $raw = Run-OpenSsl @("x509", "-in", $tmpCert, "-noout", "-subject", "-issuer", "-dates", "-nameopt", "RFC2253")
+            $raw = Invoke-OpenSsl @("x509", "-in", $tmpCert, "-noout", "-subject", "-issuer", "-dates", "-nameopt", "RFC2253")
           }
           finally {
             Remove-Item $tmpCert -Force -ErrorAction SilentlyContinue
@@ -1036,7 +1136,7 @@ function Show-OneFile {
         }
       }
       else {
-        $raw = Run-OpenSsl @("x509", "-in", $path, "-noout", "-subject", "-issuer", "-dates", "-nameopt", "RFC2253")
+        $raw = Invoke-OpenSsl @("x509", "-in", $path, "-noout", "-subject", "-issuer", "-dates", "-nameopt", "RFC2253")
       }
 
       $data = @{}
@@ -1052,14 +1152,14 @@ function Show-OneFile {
       $isLastParams = if ($isCsr -and -not $hasSan) { $true } else { $false }
       
       # For CSR, Subject might be indented in -text output, so we check carefully
-      # Run-OpenSsl for req -subject might be safer for finding subject line specifically if -text is messy, 
+      # Invoke-OpenSsl for req -subject might be safer for finding subject line specifically if -text is messy, 
       # but let's try to parse from -text first or reuse the dedicated subject call if needed.
       # Actually, `req -text` output contains `Subject: ...` not `subject=...` usually. 
       # Let's verify by just running `req -subject` separately to be safe for Subject, or handle the `Subject:` prefix.
       
       # Refinement: Run -subject explicitly for CSR to get clean Subject line, to avoid -text parsing fragility for Subject.
       if ($isCsr) {
-        $subjRaw = Run-OpenSsl @("req", "-in", $path, "-noout", "-subject", "-nameopt", "RFC2253")
+        $subjRaw = Invoke-OpenSsl @("req", "-in", $path, "-noout", "-subject", "-nameopt", "RFC2253")
         if ($subjRaw -match "^subject=(.*)") { $data["subject"] = $matches[1] }
       }
 
@@ -1067,8 +1167,8 @@ function Show-OneFile {
       
       if (-not $isCsr) {
         Write-TreeDN $false (T "Label.Issuer") ([string]$data["issuer"])
-        Write-TreeProp $false (T "Label.NotBefore") ([string]$data["notBefore"])
-        Write-TreeProp $true  (T "Label.NotAfter")  ([string]$data["notAfter"])
+        Write-TreeProp $false (T "Label.NotBefore") (Format-CertDateForDisplay ([string]$data["notBefore"]))
+        Write-TreeProp $true  (T "Label.NotAfter")  (Format-CertDateForDisplay ([string]$data["notAfter"]))
       }
       
       # CSRのSAN表示
@@ -1289,7 +1389,7 @@ function Show-OneFile {
       
       Write-TreeProp $false (T "Label.AutoMode") (Format-AutoModeStatus $isEnc $Passphrases)
 
-      $ok = Try-ShowKeyBit $FilePath $Passphrases
+      $ok = Get-KeyBit $FilePath $Passphrases
       $usable = @($Passphrases | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count -gt 0
       $decryptStatus = if ($ok) { (T "Common.Success") } elseif ($isEnc -and -not $usable) { (T "CheckBasic.Key.SkipNoPassLong") } else { (T "Common.Failed") }
       
@@ -1306,7 +1406,7 @@ function Show-OneFile {
       $pfxInfo = ""
       
       try {
-        $out = Run-OpenSsl @("pkcs12", "-info", "-in", $FilePath, "-nokeys", "-clcerts", "-passin", "pass:")
+        $out = Invoke-OpenSsl @("pkcs12", "-info", "-in", $FilePath, "-nokeys", "-clcerts", "-passin", "pass:")
         $pfxInfo = $out
         $pfxOk = $true
       }
@@ -1316,8 +1416,8 @@ function Show-OneFile {
         foreach ($p in $Passphrases) {
           if ([string]::IsNullOrWhiteSpace($p)) { continue }
           try {
-            With-TempPassFile $p { param($tmp)
-              $out = Run-OpenSsl @("pkcs12", "-info", "-in", $FilePath, "-nokeys", "-clcerts", "-passin", "file:$tmp")
+            Invoke-TempPassFile $p { param($tmp)
+              $out = Invoke-OpenSsl @("pkcs12", "-info", "-in", $FilePath, "-nokeys", "-clcerts", "-passin", "file:$tmp")
             }
             $pfxInfo = $out
             $pfxOk = $true
@@ -1402,7 +1502,7 @@ function Show-Folder([string]$folderPath, [string]$label, [string]$oldRootForNew
       if ($orgName -ne "(root)") { $passFiles += (Find-PassFile (Join-Path $oldRootForNew $orgName)) }
     }
     $existingPassFiles = @($passFiles | Where-Object { -not [string]::IsNullOrWhiteSpace($_) -and (Test-Path -LiteralPath $_ -PathType Leaf) } | Select-Object -Unique)
-    $passphrases = Collect-Passphrases $passFiles
+    $passphrases = Get-Passphrases $passFiles
 
     $files = @()
     if ($orgName -eq "(root)" -and $hasOrgSubdirs) {
@@ -1467,6 +1567,7 @@ function Show-Folder([string]$folderPath, [string]$label, [string]$oldRootForNew
         $chainPath = Find-ChainFileForCert $f.FullName "" $script:ChainSearchDirs
         $chainSum = Get-ChainFileSummary $chainPath
         $notAfter = Get-NotAfterFromCert $f.FullName
+        $notAfterLocal = Format-CertDateForDisplay $notAfter
         $chainText = ""
         if ($sum.HasChain -is [bool]) { $chainText = Format-YesNo $sum.HasChain }
         $certRows.Add([PSCustomObject]@{
@@ -1475,6 +1576,7 @@ function Show-Folder([string]$folderPath, [string]$label, [string]$oldRootForNew
             Dir             = Split-Path -Parent $f.FullName
             FileName        = $f.Name
             NotAfter        = $notAfter
+            NotAfterLocal   = $notAfterLocal
             Format          = Format-CertFormat $sum.Format
             Blocks          = $sum.CertBlocks
             Chain           = $chainText
@@ -1497,7 +1599,7 @@ function Show-Folder([string]$folderPath, [string]$label, [string]$oldRootForNew
         $cn = ""
         $note = ""
         try {
-          $out = Run-OpenSsl @("req", "-in", $f.FullName, "-noout", "-subject")
+          $out = Invoke-OpenSsl @("req", "-in", $f.FullName, "-noout", "-subject")
           $subj = (($out | Select-Object -First 1) -replace "^subject=", "").Trim()
           if ($subj -match "(?:^|[,/\\s])CN\\s*=\\s*([^,\\/]+)") { $cn = $matches[1].Trim() }
         }
@@ -1516,7 +1618,7 @@ function Show-Folder([string]$folderPath, [string]$label, [string]$oldRootForNew
         $isEnc = Test-KeyEncrypted $f.FullName
         $encText = Format-YesNo $isEnc
         $autoText = Format-AutoModeStatus $isEnc $passphrases
-        $decText = Try-TestKeyReadable $f.FullName $passphrases
+        $decText = Test-KeyReadable $f.FullName $passphrases
         $keyRows.Add([PSCustomObject]@{
             File         = $name
             Dir          = Split-Path -Parent $f.FullName
@@ -1557,11 +1659,13 @@ function Show-Folder([string]$folderPath, [string]$label, [string]$oldRootForNew
         $finalCode = [string]$r.FinalUseCode
         $exti = [string]$r.ExtIntermediate
         $notAfter = [string]$r.NotAfter
+        $notAfterLocal = [string]$r.NotAfterLocal
         $issuerCN = [string]$r.IssuerCN
         $chainFileName = [string]$r.ChainFile
         $chainBlocks = [string]$r.ChainFileBlocks
         Write-TreeLine 4 $r.File {
-          if (-not [string]::IsNullOrWhiteSpace($notAfter)) { Write-Tag (T "CheckBasic.Cert.Expiry" @($notAfter)) "Cyan" }
+          $expiryText = if (-not [string]::IsNullOrWhiteSpace($notAfterLocal)) { $notAfterLocal } else { $notAfter }
+          if (-not [string]::IsNullOrWhiteSpace($expiryText)) { Write-Tag (T "CheckBasic.Cert.Expiry" @($expiryText)) "Cyan" }
           if ($chainBool -is [bool] -and $chainBool) { Write-Tag (T "CheckBasic.Cert.HasChain") "Green" }
           elseif ($chainBool -is [bool] -and -not $chainBool) { Write-Tag (T "CheckBasic.Cert.NotMerged") "Red" }
           else { Write-Tag (T "CheckBasic.Cert.Unk") "DarkYellow" }
@@ -1635,23 +1739,23 @@ function Show-Folder([string]$folderPath, [string]$label, [string]$oldRootForNew
 }
 
 if (-not [string]::IsNullOrWhiteSpace($Path)) {
-  Show-OneFile -FilePath $Path -Passphrases (Collect-Passphrases @(
+  Show-OneFile -FilePath $Path -Passphrases (Get-Passphrases @(
       (Find-PassFile (Split-Path -Parent $Path)),
-      (Find-PassFile (Join-Path $PSScriptRoot "old")),
-      (Find-PassFile (Join-Path $PSScriptRoot "new")),
+      (Find-PassFile $toolOldDir),
+      (Find-PassFile $toolNewDir),
       (Find-PassFile $PSScriptRoot)
     )) -PassFiles @(
     (Find-PassFile (Split-Path -Parent $Path)),
-    (Find-PassFile (Join-Path $PSScriptRoot "old")),
-    (Find-PassFile (Join-Path $PSScriptRoot "new")),
+    (Find-PassFile $toolOldDir),
+    (Find-PassFile $toolNewDir),
     (Find-PassFile $PSScriptRoot)
   )
   exit 0
 }
 
 # パラメータ未指定：old/new をそれぞれチェック
-$oldDir = Join-Path $PSScriptRoot "old"
-$newDir = Join-Path $PSScriptRoot "new"
+$oldDir = $toolOldDir
+$newDir = $toolNewDir
 
 if (-not $Detail) {
   Show-InteractiveMenu $oldDir $newDir
@@ -1660,5 +1764,9 @@ if (-not $Detail) {
 
 Show-Folder $oldDir (T "Label.Old") ""
 Show-Folder $newDir (T "Label.New") $oldDir
+Show-Folder $toolMergedDir (T "Label.Merged") ""
+Show-Folder $toolSelfSignedDir (T "Label.SelfSigned") ""
+
+
 
 

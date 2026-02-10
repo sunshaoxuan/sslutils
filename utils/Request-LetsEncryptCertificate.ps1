@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
 Let's Encrypt 証明書を Docker で自動申請するスクリプト
 
@@ -80,8 +80,8 @@ param(
   [string]$Lang = "ja"
 )
 
-Set-StrictMode -Version Latest
-$ErrorActionPreference = "Stop"
+
+$ToolkitRoot = Split-Path -Parent $PSScriptRoot
 
 # Ensure clean buffer on start
 try { $host.UI.RawUI.FlushInputBuffer() } catch { }
@@ -90,11 +90,11 @@ try { $host.UI.RawUI.FlushInputBuffer() } catch { }
 $i18nModule = Join-Path $PSScriptRoot "lib\i18n.ps1"
 if (-not (Test-Path -LiteralPath $i18nModule -PathType Leaf)) { throw "i18n module not found: $i18nModule" }
 . $i18nModule
-$__i18n = Initialize-I18n -Lang $Lang -BaseDir $PSScriptRoot
+$__i18n = Initialize-I18n -Lang $Lang -BaseDir $ToolkitRoot
 function T([string]$Key, [object[]]$FormatArgs = @()) { return Get-I18nText -I18n $__i18n -Key $Key -FormatArgs $FormatArgs }
 
 # Exit with Pause helper
-function Pause-And-Exit([int]$ExitCode = 99) {
+function Wait-And-Exit([int]$ExitCode = 99) {
   Write-Host ""
   
   # Flush input buffer (robust method for Console)
@@ -181,13 +181,13 @@ try {
       # 念のためバッファクリア
       try { $host.UI.RawUI.FlushInputBuffer() } catch { }
       $Domain = Read-HostWithEsc (T "Common.Prompt.Domain")
-      if ($null -eq $Domain) { Pause-And-Exit 99 }
+      if ($null -eq $Domain) { Wait-And-Exit 99 }
     }
     else {
       $Domain = Read-Host (T "Common.Prompt.Domain")
     }
   }
-  if ([string]::IsNullOrWhiteSpace($Domain)) { Pause-And-Exit 99 }
+  if ([string]::IsNullOrWhiteSpace($Domain)) { Wait-And-Exit 99 }
 
   # Email 入力確報
   if ([string]::IsNullOrWhiteSpace($Email)) {
@@ -196,13 +196,13 @@ try {
       # 念のためバッファクリア
       try { $host.UI.RawUI.FlushInputBuffer() } catch { }
       $Email = Read-HostWithEsc (T "Common.Prompt.Email")
-      if ($null -eq $Email) { Pause-And-Exit 99 }
+      if ($null -eq $Email) { Wait-And-Exit 99 }
     }
     else {
       $Email = Read-Host (T "Common.Prompt.Email")
     }
   }
-  if ([string]::IsNullOrWhiteSpace($Email)) { Pause-And-Exit 99 }
+  if ([string]::IsNullOrWhiteSpace($Email)) { Wait-And-Exit 99 }
 
 
 
@@ -496,10 +496,12 @@ exit 0
   Write-Host (T "LE.ExportSuccess" @($privkey, $len2)) -ForegroundColor Green
   Write-Host ""
   Write-Host (T "LE.CompletedMsg")
-  Pause-And-Exit 99
+  Wait-And-Exit 99
 }
 catch {
   Write-Host ""
   Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red
-  Pause-And-Exit 99
+  Wait-And-Exit 99
 }
+
+

@@ -25,6 +25,9 @@ passphrase.txt
 # 临时文件
 tmp_*
 test_*
+tmp-selfsigned-*/
+temp/*
+!temp/README.md
 
 # Windows 系统文件
 Thumbs.db

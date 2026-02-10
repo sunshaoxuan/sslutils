@@ -1,4 +1,4 @@
-# menu.ps1
+﻿# menu.ps1
 # 共通メニュー選択モジュール
 # 上下キーで選択、Enter で確定、ESC でキャンセル
 
@@ -191,7 +191,7 @@ function Read-HostWithEsc {
 .SYNOPSIS
 任意キー待機
 #>
-function Pause-AnyKey {
+function Wait-AnyKey {
     param([string]$Message = "Press any key to continue...")
     
     Write-Host $Message -NoNewline
@@ -199,3 +199,4 @@ function Pause-AnyKey {
     $null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
     Write-Host ""
 }
+

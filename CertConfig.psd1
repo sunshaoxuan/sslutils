@@ -1,4 +1,4 @@
-@{
+﻿@{
     # Root directory for certificate storage (relative to script root)
     CertStoreRoot = "CertStore"
 
