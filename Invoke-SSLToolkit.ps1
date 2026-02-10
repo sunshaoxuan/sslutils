@@ -25,6 +25,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $ToolkitVersion = "1.3.4"
+$ToolkitLastUpdated = "2026-02-10"
 
 # UTF-8出力設定
 try {
@@ -284,13 +285,13 @@ try {
             try { [Console]::SetCursorPosition(0, 0) } catch { }
             
             Write-Host ""
-            
-            $exitMsg = switch ($Lang) {
-                "zh" { "感谢您的使用！" }
-                "en" { "Thank you for using SSL Toolkit!" }
-                default { "ご利用ありがとうございました！" }
-            }
-            Write-Host $exitMsg -ForegroundColor Green
+            Write-Host (T "Toolkit.Exit.Thanks") -ForegroundColor Green
+            Write-Host "------------------------------------" -ForegroundColor Gray
+            Write-Host (T "Toolkit.Banner.Title") -ForegroundColor Gray
+            Write-Host (T "Toolkit.Exit.VersionLine" @($ToolkitVersion)) -ForegroundColor Gray
+            Write-Host (T "Toolkit.Exit.UpdatedLine" @($ToolkitLastUpdated)) -ForegroundColor Gray
+            Write-Host "------------------------------------" -ForegroundColor Gray
+            Write-Host (T "Toolkit.Exit.Copyright") -ForegroundColor DarkGray
             Write-Host ""
             break
         }

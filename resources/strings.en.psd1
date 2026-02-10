@@ -19,6 +19,10 @@
 
   "Toolkit.Banner.Title"                     = "SSL Certificate Management Tool"
   "Toolkit.Banner.Version"                   = "Ver {0}  https://github.com/sunshaoxuan"
+  "Toolkit.Exit.VersionLine"                 = "Version: {0}"
+  "Toolkit.Exit.UpdatedLine"                 = "Last Updated: {0}"
+  "Toolkit.Exit.Copyright"                   = "Copyright (c) sunshaoxuan"
+  "Toolkit.Exit.Thanks"                      = "Thank you for using SSL Toolkit!"
   "Common.FileNotFound"                      = "{0} not found: {1}"
   "Common.OpenSslCmdFailed"                  = "OpenSSL command failed: {0}`n{1}"
   "Common.Exists"                            = "exists"

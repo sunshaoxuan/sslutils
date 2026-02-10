@@ -20,6 +20,10 @@
 
   "Toolkit.Banner.Title"                     = "SSL 証明書管理ツール"
   "Toolkit.Banner.Version"                   = "Ver {0}  https://github.com/sunshaoxuan"
+  "Toolkit.Exit.VersionLine"                 = "バージョン: {0}"
+  "Toolkit.Exit.UpdatedLine"                 = "最終更新: {0}"
+  "Toolkit.Exit.Copyright"                   = "Copyright (c) sunshaoxuan"
+  "Toolkit.Exit.Thanks"                      = "ご利用ありがとうございました！"
   "Common.FileNotFound"                      = "{0} が見つかりません: {1}"
   "Common.OpenSslCmdFailed"                  = "OpenSSL コマンド失敗: {0}`n{1}"
   "Common.Exists"                            = "存在"
