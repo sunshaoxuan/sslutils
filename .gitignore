@@ -29,6 +29,16 @@ tmp-selfsigned-*/
 temp/*
 !temp/README.md
 
+# Runtime/output data (potentially customer-sensitive)
+output/**
+temp/**
+new/**
+old/**
+!output/README.md
+!temp/README.md
+!new/README.md
+!old/README.md
+
 # Windows 系统文件
 Thumbs.db
 Desktop.ini
