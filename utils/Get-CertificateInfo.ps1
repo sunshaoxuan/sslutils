@@ -1257,7 +1257,7 @@ function Show-OneFile {
       }
       else {
         # 証明書ファイル：複数ブロックの場合は個別に表示
-        $pemBlocks = Split-PemCertBlocks $path
+        $pemBlocks = @(Split-PemCertBlocks $path)
         if ($pemBlocks.Count -gt 1) {
           # 全ブロックを先に解析
           $allBlockData = @()
