@@ -1122,14 +1122,8 @@ function Show-OneFile {
     return "{0} ({1}/{2})" -f (T "Label.ChainBlockIntermediate"), ($index + 1), $total
   }
 
-  # 1つの証明書ブロックの詳細を表示
-  function Show-OneCertBlockDetail([string]$pemContent, [string]$blockLabel, [string]$blockPrefix, [bool]$isLastBlock) {
-    $blockMark = if ($isLastBlock) { "└──" } else { "├──" }
-    $connector = if ($isLastBlock) { "    " } else { "│   " }
-    $childPrefix = $blockPrefix + $connector
-
-    Write-Host ("{0}{1} {2}" -f $blockPrefix, $blockMark, $blockLabel) -ForegroundColor Cyan
-
+  # PEM ブロックから証明書情報を解析
+  function Parse-CertBlockData([string]$pemContent) {
     $tmpBlock = [IO.Path]::GetTempFileName()
     try {
       Set-Content -LiteralPath $tmpBlock -Value $pemContent -Encoding ASCII
@@ -1138,7 +1132,6 @@ function Show-OneFile {
     finally {
       Remove-Item $tmpBlock -Force -ErrorAction SilentlyContinue
     }
-
     $bd = @{}
     foreach ($line in $blockRaw) {
       if ($line -match "^subject=(.*)") { $bd["subject"] = $matches[1] }
@@ -1146,9 +1139,21 @@ function Show-OneFile {
       if ($line -match "^notBefore=(.*)") { $bd["notBefore"] = $matches[1] }
       if ($line -match "^notAfter=(.*)") { $bd["notAfter"] = $matches[1] }
     }
+    return $bd
+  }
+
+  # 1つの証明書ブロックの詳細を表示（解析済みデータを受け取る）
+  function Show-OneCertBlockDetail([hashtable]$bd, [string]$blockLabel, [string]$blockPrefix, [bool]$isLastBlock, [bool]$showIssuer = $true) {
+    $blockMark = if ($isLastBlock) { "└──" } else { "├──" }
+    $connector = if ($isLastBlock) { "    " } else { "│   " }
+    $childPrefix = $blockPrefix + $connector
+
+    Write-Host ("{0}{1} {2}" -f $blockPrefix, $blockMark, $blockLabel) -ForegroundColor Cyan
 
     Write-TreeDN $false (T "Label.Subject") ([string]$bd["subject"]) $childPrefix
-    Write-TreeDN $false (T "Label.Issuer") ([string]$bd["issuer"]) $childPrefix
+    if ($showIssuer) {
+      Write-TreeDN $false (T "Label.Issuer") ([string]$bd["issuer"]) $childPrefix
+    }
     Write-TreeProp $false (T "Label.NotBefore") (Format-CertDateForDisplay ([string]$bd["notBefore"])) ([ConsoleColor]::Gray) $childPrefix
     Write-TreeProp $true  (T "Label.NotAfter")  (Format-CertDateForDisplay ([string]$bd["notAfter"])) ([ConsoleColor]::Gray) $childPrefix
   }
@@ -1254,10 +1259,22 @@ function Show-OneFile {
         # 証明書ファイル：複数ブロックの場合は個別に表示
         $pemBlocks = Split-PemCertBlocks $path
         if ($pemBlocks.Count -gt 1) {
+          # 全ブロックを先に解析
+          $allBlockData = @()
+          foreach ($block in $pemBlocks) {
+            $allBlockData += Parse-CertBlockData $block
+          }
+          # 各ブロックを表示（Issuer が次ブロックの Subject と一致する場合は省略）
           for ($bi = 0; $bi -lt $pemBlocks.Count; $bi++) {
             $isLastBlock = ($bi -eq ($pemBlocks.Count - 1))
             $blockLabel = Get-ChainBlockLabel $bi $pemBlocks.Count
-            Show-OneCertBlockDetail $pemBlocks[$bi] $blockLabel "" $isLastBlock
+            $showIssuer = $true
+            if (-not $isLastBlock) {
+              $myIssuer = ([string]$allBlockData[$bi]["issuer"]).Trim()
+              $nextSubject = ([string]$allBlockData[$bi + 1]["subject"]).Trim()
+              if ($myIssuer -eq $nextSubject) { $showIssuer = $false }
+            }
+            Show-OneCertBlockDetail $allBlockData[$bi] $blockLabel "" $isLastBlock $showIssuer
           }
         }
         else {
