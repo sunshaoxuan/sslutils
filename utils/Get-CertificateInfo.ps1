@@ -1032,18 +1032,18 @@ function Show-OneFile {
     Write-Host (" {0}" -f $path)
   }
 
-  function Write-TreeProp([bool]$last, [string]$label, [string]$value, [ConsoleColor]$valColor = [ConsoleColor]::Gray) {
+  function Write-TreeProp([bool]$last, [string]$label, [string]$value, [ConsoleColor]$valColor = [ConsoleColor]::Gray, [string]$indent = "") {
     $mark = if ($last) { "└──" } else { "├──" }
-    Write-Host ("{0} {1}: " -f $mark, $label) -NoNewline -ForegroundColor DarkGray
+    Write-Host ("{0}{1} {2}: " -f $indent, $mark, $label) -NoNewline -ForegroundColor DarkGray
     Write-Host $value -ForegroundColor $valColor
   }
 
   # Subject や Issuer を階層表示する関数
-  function Write-TreeDN([bool]$last, [string]$label, [string]$dn) {
+  function Write-TreeDN([bool]$last, [string]$label, [string]$dn, [string]$indent = "") {
     $mark = if ($last) { "└──" } else { "├──" }
-    $prefix = if ($last) { "    " } else { "│   " }
+    $prefix = $indent + (if ($last) { "    " } else { "│   " })
     
-    Write-Host ("{0} {1}" -f $mark, $label) -ForegroundColor DarkGray
+    Write-Host ("{0}{1} {2}" -f $indent, $mark, $label) -ForegroundColor DarkGray
     
     # DN を解析 (RFC2253 形式: CN=xxx,O=xxx,L=xxx,ST=xxx,C=xx)
     # カンマで分割するが、エスケープされたカンマは除外
@@ -1099,6 +1099,58 @@ function Show-OneFile {
     }
   }
 
+  # PEM ファイルから個々の証明書ブロックを抽出
+  function Split-PemCertBlocks([string]$pemPath) {
+    $content = Get-Content -LiteralPath $pemPath -Raw
+    $blocks = @()
+    $re = [regex]::new("-----BEGIN CERTIFICATE-----.+?-----END CERTIFICATE-----", [System.Text.RegularExpressions.RegexOptions]::Singleline)
+    foreach ($m in $re.Matches($content)) {
+      $blocks += $m.Value
+    }
+    return $blocks
+  }
+
+  # チェーン内の各ブロックのラベルを返す
+  function Get-ChainBlockLabel([int]$index, [int]$total) {
+    if ($index -eq 0) {
+      return "{0} ({1}/{2})" -f (T "Label.ChainBlockServer"), ($index + 1), $total
+    }
+    if ($index -eq ($total - 1) -and $total -ge 3) {
+      return "{0} ({1}/{2})" -f (T "Label.ChainBlockRoot"), ($index + 1), $total
+    }
+    return "{0} ({1}/{2})" -f (T "Label.ChainBlockIntermediate"), ($index + 1), $total
+  }
+
+  # 1つの証明書ブロックの詳細を表示
+  function Show-OneCertBlockDetail([string]$pemContent, [string]$blockLabel, [string]$blockPrefix, [bool]$isLastBlock) {
+    $blockMark = if ($isLastBlock) { "└──" } else { "├──" }
+    $childPrefix = $blockPrefix + (if ($isLastBlock) { "    " } else { "│   " })
+
+    Write-Host ("{0}{1} {2}" -f $blockPrefix, $blockMark, $blockLabel) -ForegroundColor Cyan
+
+    $tmpBlock = [IO.Path]::GetTempFileName()
+    try {
+      Set-Content -LiteralPath $tmpBlock -Value $pemContent -Encoding ASCII
+      $blockRaw = Invoke-OpenSsl @("x509", "-in", $tmpBlock, "-noout", "-subject", "-issuer", "-dates", "-nameopt", "RFC2253")
+    }
+    finally {
+      Remove-Item $tmpBlock -Force -ErrorAction SilentlyContinue
+    }
+
+    $bd = @{}
+    foreach ($line in $blockRaw) {
+      if ($line -match "^subject=(.*)") { $bd["subject"] = $matches[1] }
+      if ($line -match "^issuer=(.*)") { $bd["issuer"] = $matches[1] }
+      if ($line -match "^notBefore=(.*)") { $bd["notBefore"] = $matches[1] }
+      if ($line -match "^notAfter=(.*)") { $bd["notAfter"] = $matches[1] }
+    }
+
+    Write-TreeDN $false (T "Label.Subject") ([string]$bd["subject"]) $childPrefix
+    Write-TreeDN $false (T "Label.Issuer") ([string]$bd["issuer"]) $childPrefix
+    Write-TreeProp $false (T "Label.NotBefore") (Format-CertDateForDisplay ([string]$bd["notBefore"])) ([ConsoleColor]::Gray) $childPrefix
+    Write-TreeProp $true  (T "Label.NotAfter")  (Format-CertDateForDisplay ([string]$bd["notAfter"])) ([ConsoleColor]::Gray) $childPrefix
+  }
+
   function Show-OpenSslDetails([string]$path, [string[]]$passphrases = @()) {
     Write-Host ""
     Write-HeaderBar (T "Label.OpenSslDetails") ""
@@ -1119,14 +1171,34 @@ function Show-OneFile {
             continue
           }
           if ($inSanBlock) {
-            # Usually the next line contains "DNS:example.com, IP:1.2.3.4"
             if ($line -match "DNS:|IP Address:|IP:") {
               $entries = $line -split ", "
               foreach ($e in $entries) {
                 $sanList += $e.Trim()
               }
-              $inSanBlock = $false # Assuming single line for simplicity or end of block
+              $inSanBlock = $false
             }
+          }
+        }
+
+        $data = @{}
+        foreach ($line in $raw) {
+          if ($line -match "^\s*subject=(.*)") { $data["subject"] = $matches[1] }
+          if ($line -match "^subject=(.*)") { $data["subject"] = $matches[1] }
+        }
+        $subjRaw = Invoke-OpenSsl @("req", "-in", $path, "-noout", "-subject", "-nameopt", "RFC2253")
+        if ($subjRaw -match "^subject=(.*)") { $data["subject"] = $matches[1] }
+
+        $hasSan = ($sanList.Count -gt 0)
+        $isLastParams = -not $hasSan
+        Write-TreeDN $isLastParams (T "Label.Subject") ([string]$data["subject"])
+
+        if ($hasSan) {
+          Write-TreeProp $false (T "CheckBasic.Cert.SAN") ""
+          for ($i = 0; $i -lt $sanList.Count; $i++) {
+            $isLast = ($i -eq ($sanList.Count - 1))
+            $mark = if ($isLast) { "└──" } else { "├──" }
+            Write-Host ("│   {0} {1}" -f $mark, $sanList[$i]) -ForegroundColor Gray
           }
         }
       }
@@ -1149,7 +1221,6 @@ function Show-OneFile {
         }
         
         if (-not [string]::IsNullOrWhiteSpace($certPem)) {
-          # Use temporary file to pipe to x509 (Invoke-OpenSsl wrapper doesn't support direct pipe input easily without mod)
           $tmpCert = [IO.Path]::GetTempFileName()
           try {
             Set-Content -LiteralPath $tmpCert -Value $certPem -Encoding ASCII
@@ -1163,50 +1234,45 @@ function Show-OneFile {
           Write-Host (T "CheckBasic.Detail.Key.CannotReadNeedPass" @("PassFile")) -ForegroundColor Red
           return
         }
-      }
-      else {
-        $raw = Invoke-OpenSsl @("x509", "-in", $path, "-noout", "-subject", "-issuer", "-dates", "-nameopt", "RFC2253")
-      }
 
-      $data = @{}
-      foreach ($line in $raw) {
-        if ($line -match "^\s*subject=(.*)") { $data["subject"] = $matches[1] } # Handle potential indent in req -text
-        if ($line -match "^subject=(.*)") { $data["subject"] = $matches[1] } # Fallback for strict match
-        if ($line -match "^issuer=(.*)") { $data["issuer"] = $matches[1] }
-        if ($line -match "^notBefore=(.*)") { $data["notBefore"] = $matches[1] }
-        if ($line -match "^notAfter=(.*)") { $data["notAfter"] = $matches[1] }
-      }
-      
-      $hasSan = ($sanList.Count -gt 0)
-      $isLastParams = if ($isCsr -and -not $hasSan) { $true } else { $false }
-      
-      # For CSR, Subject might be indented in -text output, so we check carefully
-      # Invoke-OpenSsl for req -subject might be safer for finding subject line specifically if -text is messy, 
-      # but let's try to parse from -text first or reuse the dedicated subject call if needed.
-      # Actually, `req -text` output contains `Subject: ...` not `subject=...` usually. 
-      # Let's verify by just running `req -subject` separately to be safe for Subject, or handle the `Subject:` prefix.
-      
-      # Refinement: Run -subject explicitly for CSR to get clean Subject line, to avoid -text parsing fragility for Subject.
-      if ($isCsr) {
-        $subjRaw = Invoke-OpenSsl @("req", "-in", $path, "-noout", "-subject", "-nameopt", "RFC2253")
-        if ($subjRaw -match "^subject=(.*)") { $data["subject"] = $matches[1] }
-      }
+        $data = @{}
+        foreach ($line in $raw) {
+          if ($line -match "^subject=(.*)") { $data["subject"] = $matches[1] }
+          if ($line -match "^issuer=(.*)") { $data["issuer"] = $matches[1] }
+          if ($line -match "^notBefore=(.*)") { $data["notBefore"] = $matches[1] }
+          if ($line -match "^notAfter=(.*)") { $data["notAfter"] = $matches[1] }
+        }
 
-      Write-TreeDN $isLastParams (T "Label.Subject") ([string]$data["subject"])
-      
-      if (-not $isCsr) {
+        Write-TreeDN $false (T "Label.Subject") ([string]$data["subject"])
         Write-TreeDN $false (T "Label.Issuer") ([string]$data["issuer"])
         Write-TreeProp $false (T "Label.NotBefore") (Format-CertDateForDisplay ([string]$data["notBefore"]))
         Write-TreeProp $true  (T "Label.NotAfter")  (Format-CertDateForDisplay ([string]$data["notAfter"]))
       }
-      
-      # CSRのSAN表示
-      if ($isCsr -and $hasSan) {
-        Write-TreeProp $false (T "CheckBasic.Cert.SAN") ""
-        for ($i = 0; $i -lt $sanList.Count; $i++) {
-          $isLast = ($i -eq ($sanList.Count - 1))
-          $mark = if ($isLast) { "└──" } else { "├──" }
-          Write-Host ("│   {0} {1}" -f $mark, $sanList[$i]) -ForegroundColor Gray
+      else {
+        # 証明書ファイル：複数ブロックの場合は個別に表示
+        $pemBlocks = Split-PemCertBlocks $path
+        if ($pemBlocks.Count -gt 1) {
+          for ($bi = 0; $bi -lt $pemBlocks.Count; $bi++) {
+            $isLastBlock = ($bi -eq ($pemBlocks.Count - 1))
+            $blockLabel = Get-ChainBlockLabel $bi $pemBlocks.Count
+            Show-OneCertBlockDetail $pemBlocks[$bi] $blockLabel "" $isLastBlock
+          }
+        }
+        else {
+          $raw = Invoke-OpenSsl @("x509", "-in", $path, "-noout", "-subject", "-issuer", "-dates", "-nameopt", "RFC2253")
+
+          $data = @{}
+          foreach ($line in $raw) {
+            if ($line -match "^subject=(.*)") { $data["subject"] = $matches[1] }
+            if ($line -match "^issuer=(.*)") { $data["issuer"] = $matches[1] }
+            if ($line -match "^notBefore=(.*)") { $data["notBefore"] = $matches[1] }
+            if ($line -match "^notAfter=(.*)") { $data["notAfter"] = $matches[1] }
+          }
+
+          Write-TreeDN $false (T "Label.Subject") ([string]$data["subject"])
+          Write-TreeDN $false (T "Label.Issuer") ([string]$data["issuer"])
+          Write-TreeProp $false (T "Label.NotBefore") (Format-CertDateForDisplay ([string]$data["notBefore"]))
+          Write-TreeProp $true  (T "Label.NotAfter")  (Format-CertDateForDisplay ([string]$data["notAfter"]))
         }
       }
     }
