@@ -1360,7 +1360,8 @@ function Show-OneFile {
       }
 
       $hasKeyStr = if ($sum.HasPrivateKey) { (T "Common.Yes") } else { (T "Common.No") }
-      Write-TreeProp $true (T "CheckBasic.Detail.Cert.HasPrivateKey") $hasKeyStr
+      $hasKeyColor = if ($sum.HasPrivateKey) { [ConsoleColor]::Red } else { [ConsoleColor]::Green }
+      Write-TreeProp $true (T "CheckBasic.Detail.Cert.HasPrivateKey") $hasKeyStr $hasKeyColor
       
       Show-OpenSslDetails $FilePath
       break
@@ -1414,7 +1415,8 @@ function Show-OneFile {
       }
       
       $hasKeyStr = if ($sum.HasPrivateKey) { (T "Common.Yes") } else { (T "Common.No") }
-      Write-TreeProp $true (T "CheckBasic.Detail.Cert.HasPrivateKey") $hasKeyStr
+      $hasKeyColor = if ($sum.HasPrivateKey) { [ConsoleColor]::Red } else { [ConsoleColor]::Green }
+      Write-TreeProp $true (T "CheckBasic.Detail.Cert.HasPrivateKey") $hasKeyStr $hasKeyColor
 
       Show-OpenSslDetails $FilePath
       break
@@ -1468,7 +1470,8 @@ function Show-OneFile {
       }
       
       $hasKeyStr = if ($sum.HasPrivateKey) { (T "Common.Yes") } else { (T "Common.No") }
-      Write-TreeProp $true (T "CheckBasic.Detail.Cert.HasPrivateKey") $hasKeyStr
+      $hasKeyColor = if ($sum.HasPrivateKey) { [ConsoleColor]::Red } else { [ConsoleColor]::Green }
+      Write-TreeProp $true (T "CheckBasic.Detail.Cert.HasPrivateKey") $hasKeyStr $hasKeyColor
 
       Show-OpenSslDetails $FilePath
       break

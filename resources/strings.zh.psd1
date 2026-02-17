@@ -128,7 +128,7 @@
   "CheckBasic.Detail.Key.CannotReadNeedPass" = "[警告] 加密私钥无法读取（请准备 {0} 或 -PassFile / 环境变量 PASS_FILE）"
   "CheckBasic.Detail.Key.CannotRead"         = "[警告] 无法读取私钥"
   "CheckBasic.Detail.UnsupportedExt"         = "不支持的扩展名: {0}"
-  "CheckBasic.Detail.Cert.HasPrivateKey"     = "[警告] 证书文件内包含疑似私钥块"
+  "CheckBasic.Detail.Cert.HasPrivateKey"     = "秘密钥同捆"
   "CheckBasic.Detail.Cert.NoChainHint"       = "[证书] 备注: 未包含中间证书。如需合并请使用 Merge-CertificateChain.ps1 等。"
 
   # Merge-CertificateChain.ps1

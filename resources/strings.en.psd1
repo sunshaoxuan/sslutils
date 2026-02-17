@@ -127,7 +127,7 @@
   "CheckBasic.Detail.Key.CannotReadNeedPass" = "[WARN] Cannot read encrypted key (prepare {0} or -PassFile / env PASS_FILE)"
   "CheckBasic.Detail.Key.CannotRead"         = "[WARN] Cannot read key"
   "CheckBasic.Detail.UnsupportedExt"         = "Unsupported extension: {0}"
-  "CheckBasic.Detail.Cert.HasPrivateKey"     = "[WARN] Certificate file contains what appears to be a private key block"
+  "CheckBasic.Detail.Cert.HasPrivateKey"     = "Private Key Included"
   "CheckBasic.Detail.Cert.NoChainHint"       = "[CERT] Note: Intermediate certificate is not included. Use Merge-CertificateChain.ps1 if needed."
 
   # Merge-CertificateChain.ps1
