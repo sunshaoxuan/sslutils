@@ -1,4 +1,4 @@
-﻿@{
+@{
   # Common
   "Common.Yes"                               = "はい"
   "Common.No"                                = "いいえ"
@@ -145,6 +145,10 @@
   "MergeCert.SyncPrompt"                     = "関連ファイル(.key/.csr/.tsv)もマージ先へ同期しますか？(y/N)"
   "MergeCert.Synced"                         = "同期完了: {0}"
   "MergeCert.SyncSkipped"                    = "同期をスキップしました。"
+
+  # Sync-ToMerged.ps1
+  "SyncToMerged.KeyDecrypted"                = "(復号済み)"
+
   "MergeCert.ChainFromClient"                = "[情報] クライアント証明書内の残りブロックをチェーンとして使用します。"
   "MergeCert.NoChainData"                    = "チェーンファイル用の証明書が見つかりません。"
   "MergeCert.NoCertBlock"                    = "クライアント証明書に CERT ブロックが見つかりません。"

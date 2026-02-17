@@ -1,4 +1,4 @@
-﻿@{
+@{
   # Common
   "Common.Yes"                               = "Yes"
   "Common.No"                                = "No"
@@ -145,6 +145,10 @@
   "MergeCert.SyncPrompt"                     = "Sync related files (.key/.csr/.tsv) to merged directory? (y/N)"
   "MergeCert.Synced"                         = "Synced: {0}"
   "MergeCert.SyncSkipped"                    = "Sync skipped."
+
+  # Sync-ToMerged.ps1
+  "SyncToMerged.KeyDecrypted"                = "(decrypted)"
+
   "MergeCert.ChainFromClient"                = "[INFO] Using chain from client certificate (remaining blocks)."
   "MergeCert.NoChainData"                    = "No chain data available for chainfile output."
   "MergeCert.NoCertBlock"                    = "No certificate block found in client certificate."

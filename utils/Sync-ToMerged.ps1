@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
 new フォルダの key, csr, tsv を output\merged\<組織> へ同期
 
@@ -21,6 +21,8 @@ param(
     [switch]$DryRun = $false,
     [string]$Target = "",
     [switch]$NoPause = $false,
+    [Parameter(Mandatory = $false)]
+    [string]$OpenSsl = "C:\Program Files\Git\usr\bin\openssl.exe",
     [Parameter(Mandatory = $false)]
     [ValidateSet("ja", "zh", "en")]
     [string]$Lang = "ja"
@@ -53,11 +55,17 @@ if (Test-Path -LiteralPath $i18nModule -PathType Leaf) {
     $__i18n = Initialize-I18n -Lang $Lang -BaseDir $ToolkitRoot
 }
 
+# Security helper (Find-PassFile, Get-Passphrases, Test-KeyEncrypted, Invoke-TempPassFile)
+$securityModule = Join-Path $PSScriptRoot "lib\security.ps1"
+if (Test-Path -LiteralPath $securityModule -PathType Leaf) { . $securityModule }
+
 # Menu helper
 $menuModule = Join-Path $PSScriptRoot "lib\menu.ps1"
 if (Test-Path -LiteralPath $menuModule -PathType Leaf) {
     . $menuModule
 }
+
+$FixedPassFileName = "passphrase.txt"
 
 function T([string]$Key, $ArgList = @()) {
     if ($null -ne $__i18n) {
@@ -65,6 +73,38 @@ function T([string]$Key, $ArgList = @()) {
         return Get-I18nText -I18n $__i18n -Key $Key -FormatArgs $arr
     }
     return $Key
+}
+
+function Invoke-OpenSsl([string[]]$OpenSslArgs, [switch]$AllowFail) {
+    $out = & $OpenSsl @OpenSslArgs 2>&1 | ForEach-Object { $_.ToString() }
+    if ($LASTEXITCODE -ne 0) {
+        if ($AllowFail) { return $out }
+        throw ("OpenSSL failed: {0}" -f ($OpenSslArgs -join " "))
+    }
+    return $out
+}
+
+function Copy-DecryptedKey([string]$srcKeyPath, [string]$destPath, [string[]]$passphrases) {
+    foreach ($p in @($passphrases)) {
+        if ([string]::IsNullOrWhiteSpace($p)) { continue }
+        try {
+            Invoke-TempPassFile $p {
+                param($tmpPass)
+                Invoke-OpenSsl @("pkey", "-in", $srcKeyPath, "-out", $destPath, "-passin", ("file:{0}" -f $tmpPass)) -AllowFail | Out-Null
+                if ($LASTEXITCODE -ne 0) {
+                    Invoke-OpenSsl @("rsa", "-in", $srcKeyPath, "-out", $destPath, "-passin", ("file:{0}" -f $tmpPass)) | Out-Null
+                }
+            } | Out-Null
+            if ((Test-Path -LiteralPath $destPath -PathType Leaf) -and -not (Test-KeyEncrypted $destPath)) {
+                return $true
+            }
+            Remove-Item -LiteralPath $destPath -Force -ErrorAction SilentlyContinue
+        }
+        catch {
+            Remove-Item -LiteralPath $destPath -Force -ErrorAction SilentlyContinue
+        }
+    }
+    return $false
 }
 
 function Get-OrgMapping {
@@ -123,7 +163,24 @@ function Find-MatchingMergedFolder([string]$newOrgPath, [hashtable]$mapping) {
     return $null
 }
 
-function Sync-FilesToMerged([string]$newOrgPath, [string]$mergedOrgPath, [switch]$DryRun) {
+function Copy-OrDecryptKey([string]$srcPath, [string]$destPath, [string[]]$passphrases, [switch]$DryRun) {
+    $isEnc = Test-KeyEncrypted $srcPath
+    if ($isEnc -and @($passphrases).Count -gt 0 -and (Test-Path -LiteralPath $OpenSsl -PathType Leaf)) {
+        if (-not $DryRun) {
+            $ok = Copy-DecryptedKey $srcPath $destPath $passphrases
+            if ($ok) { return "decrypted" }
+            Copy-Item -LiteralPath $srcPath -Destination $destPath
+            return "new"
+        }
+        return "decrypted"
+    }
+    if (-not $DryRun) {
+        Copy-Item -LiteralPath $srcPath -Destination $destPath
+    }
+    return "new"
+}
+
+function Sync-FilesToMerged([string]$newOrgPath, [string]$mergedOrgPath, [string[]]$passphrases = @(), [switch]$DryRun) {
     $extensions = @("*.key", "*.csr", "*.tsv")
     $copied = @()
     
@@ -133,10 +190,16 @@ function Sync-FilesToMerged([string]$newOrgPath, [string]$mergedOrgPath, [switch
         foreach ($f in $files) {
             $destPath = Join-Path $mergedOrgPath $f.Name
             if (-not (Test-Path -LiteralPath $destPath)) {
-                if (-not $DryRun) {
-                    Copy-Item -LiteralPath $f.FullName -Destination $destPath
+                if ($f.Extension -eq ".key") {
+                    $type = Copy-OrDecryptKey $f.FullName $destPath $passphrases -DryRun:$DryRun
+                    $copied += @{ File = $f.Name; Type = $type }
                 }
-                $copied += @{ File = $f.Name; Type = "new" }
+                else {
+                    if (-not $DryRun) {
+                        Copy-Item -LiteralPath $f.FullName -Destination $destPath
+                    }
+                    $copied += @{ File = $f.Name; Type = "new" }
+                }
             }
         }
         
@@ -152,10 +215,16 @@ function Sync-FilesToMerged([string]$newOrgPath, [string]$mergedOrgPath, [switch
                 }
                 $destPath = Join-Path $mergedSubDir $sf.Name
                 if (-not (Test-Path -LiteralPath $destPath)) {
-                    if (-not $DryRun) {
-                        Copy-Item -LiteralPath $sf.FullName -Destination $destPath
+                    if ($sf.Extension -eq ".key") {
+                        $type = Copy-OrDecryptKey $sf.FullName $destPath $passphrases -DryRun:$DryRun
+                        $copied += @{ File = "$($sub.Name)/$($sf.Name)"; Type = $type }
                     }
-                    $copied += @{ File = "$($sub.Name)/$($sf.Name)"; Type = "new" }
+                    else {
+                        if (-not $DryRun) {
+                            Copy-Item -LiteralPath $sf.FullName -Destination $destPath
+                        }
+                        $copied += @{ File = "$($sub.Name)/$($sf.Name)"; Type = "new" }
+                    }
                 }
             }
         }
@@ -295,13 +364,27 @@ foreach ($org in $newOrgs) {
     
     Write-Host "  $orgDisplayName" -NoNewline
     
-    $copied = @(Sync-FilesToMerged $org.FullName $mergedPath -DryRun:$DryRun)
+    # 組織フォルダからパスフレーズを探索
+    $passFiles = @()
+    $pf = Find-PassFile $org.FullName
+    if ($pf) { $passFiles += $pf }
+    $pf = Find-PassFile $newDir
+    if ($pf) { $passFiles += $pf }
+    $pf = Find-PassFile $PSScriptRoot
+    if ($pf) { $passFiles += $pf }
+    $passphrases = Get-Passphrases $passFiles
+    
+    $copied = @(Sync-FilesToMerged $org.FullName $mergedPath $passphrases -DryRun:$DryRun)
     
     if ($copied.Count -gt 0) {
         $dryRunMark = if ($DryRun) { " [DryRun]" } else { "" }
         Write-Host " -> $($copied.Count) files$dryRunMark" -ForegroundColor Green
         foreach ($c in $copied) {
-            Write-Host "      + $($c.File)" -ForegroundColor Gray
+            $suffix = ""
+            if ($c.Type -eq "decrypted") {
+                $suffix = " " + (T "SyncToMerged.KeyDecrypted")
+            }
+            Write-Host ("      + {0}{1}" -f $c.File, $suffix) -ForegroundColor Gray
         }
         $totalCopied += $copied.Count
     }

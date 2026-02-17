@@ -1,4 +1,4 @@
-﻿@{
+@{
   # Common
   "Common.Yes"                               = "是"
   "Common.No"                                = "否"
@@ -146,6 +146,10 @@
   "MergeCert.SyncPrompt"                     = "是否同步其他文件(.key/.csr/.tsv)到合并目录？(y/N)"
   "MergeCert.Synced"                         = "已同步: {0}"
   "MergeCert.SyncSkipped"                    = "已跳过同步。"
+
+  # Sync-ToMerged.ps1
+  "SyncToMerged.KeyDecrypted"                = "(已解密)"
+
   "MergeCert.ChainFromClient"                = "[信息] 使用客户端证书中的剩余区块作为链。"
   "MergeCert.NoChainData"                    = "没有可用于链文件的证书数据。"
   "MergeCert.NoCertBlock"                    = "客户端证书中未找到 CERT 区块。"
