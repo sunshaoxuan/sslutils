@@ -1041,7 +1041,8 @@ function Show-OneFile {
   # Subject や Issuer を階層表示する関数
   function Write-TreeDN([bool]$last, [string]$label, [string]$dn, [string]$indent = "") {
     $mark = if ($last) { "└──" } else { "├──" }
-    $prefix = $indent + (if ($last) { "    " } else { "│   " })
+    $connector = if ($last) { "    " } else { "│   " }
+    $prefix = $indent + $connector
     
     Write-Host ("{0}{1} {2}" -f $indent, $mark, $label) -ForegroundColor DarkGray
     
@@ -1124,7 +1125,8 @@ function Show-OneFile {
   # 1つの証明書ブロックの詳細を表示
   function Show-OneCertBlockDetail([string]$pemContent, [string]$blockLabel, [string]$blockPrefix, [bool]$isLastBlock) {
     $blockMark = if ($isLastBlock) { "└──" } else { "├──" }
-    $childPrefix = $blockPrefix + (if ($isLastBlock) { "    " } else { "│   " })
+    $connector = if ($isLastBlock) { "    " } else { "│   " }
+    $childPrefix = $blockPrefix + $connector
 
     Write-Host ("{0}{1} {2}" -f $blockPrefix, $blockMark, $blockLabel) -ForegroundColor Cyan
 
