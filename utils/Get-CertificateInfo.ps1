@@ -843,6 +843,32 @@ function Get-KeyBit([string]$keyPath, [string[]]$passphrases) {
   return $false
 }
 
+# === 暗号化対応キー Modulus 取得 ===
+function Get-KeyModulus([string]$keyPath, [string[]]$passphrases) {
+  $isEnc = Test-KeyEncrypted $keyPath
+  if (-not $isEnc) {
+    try {
+      $out = (Invoke-OpenSsl @("rsa", "-in", $keyPath, "-noout", "-modulus") | Out-String) -replace "Modulus=", ""
+      return $out.Trim()
+    }
+    catch { return $null }
+  }
+
+  foreach ($p in @($passphrases)) {
+    if ([string]::IsNullOrWhiteSpace($p)) { continue }
+    try {
+      $result = Invoke-TempPassFile $p {
+        param($tmpPass)
+        $out = (Invoke-OpenSsl @("rsa", "-in", $keyPath, "-noout", "-modulus", "-passin", ("file:{0}" -f $tmpPass)) | Out-String) -replace "Modulus=", ""
+        $out.Trim()
+      }
+      if (-not [string]::IsNullOrWhiteSpace($result)) { return $result }
+    }
+    catch { }
+  }
+  return $null
+}
+
 # === ファイル整合性検証 ===
 function Show-FileMatching([string]$filePath, [string[]]$passphrases = @()) {
   $dir = [IO.Path]::GetDirectoryName($filePath)
@@ -868,7 +894,8 @@ function Show-FileMatching([string]$filePath, [string[]]$passphrases = @()) {
   # 1. KEY-CSR Modulus Check
   if ($keyFile -and $csrFile) {
     try {
-      $keyMod = (Invoke-OpenSsl @("rsa", "-in", $keyFile.FullName, "-noout", "-modulus") | Out-String) -replace "Modulus=", ""
+      $keyMod = Get-KeyModulus $keyFile.FullName $passphrases
+      if ($null -eq $keyMod) { throw "Cannot read key modulus" }
       $csrMod = (Invoke-OpenSsl @("req", "-in", $csrFile.FullName, "-noout", "-modulus") | Out-String) -replace "Modulus=", ""
       $match = ($keyMod.Trim() -eq $csrMod.Trim())
       $label = "{0} [{1} / {2}]" -f (T "Matching.KeyCsr"), $keyFile.Name, $csrFile.Name
@@ -880,7 +907,8 @@ function Show-FileMatching([string]$filePath, [string[]]$passphrases = @()) {
   # 2. KEY-CER Modulus Check
   if ($keyFile -and $cerFile) {
     try {
-      $keyMod = (Invoke-OpenSsl @("rsa", "-in", $keyFile.FullName, "-noout", "-modulus") | Out-String) -replace "Modulus=", ""
+      $keyMod = Get-KeyModulus $keyFile.FullName $passphrases
+      if ($null -eq $keyMod) { throw "Cannot read key modulus" }
       $cerMod = (Invoke-OpenSsl @("x509", "-in", $cerFile.FullName, "-noout", "-modulus") | Out-String) -replace "Modulus=", ""
       $match = ($keyMod.Trim() -eq $cerMod.Trim())
       $label = "{0} [{1} / {2}]" -f (T "Matching.KeyCer"), $keyFile.Name, $cerFile.Name
@@ -926,7 +954,8 @@ function Show-FileMatching([string]$filePath, [string[]]$passphrases = @()) {
   # 4. KEY-PFX Modulus Check
   if ($keyFile -and $pfxFile) {
     try {
-      $keyMod = (Invoke-OpenSsl @("rsa", "-in", $keyFile.FullName, "-noout", "-modulus") | Out-String) -replace "Modulus=", ""
+      $keyMod = Get-KeyModulus $keyFile.FullName $passphrases
+      if ($null -eq $keyMod) { throw "Cannot read key modulus" }
        
       $pfxMod = ""
       foreach ($p in @("") + $passphrases) {
