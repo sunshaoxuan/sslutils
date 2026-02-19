@@ -200,6 +200,32 @@ function Invoke-OpenSsl([string[]]$OpenSslArgs) {
   return $out
 }
 
+function Invoke-Pkcs12([string[]]$Pkcs12Args) {
+  $fullArgs = @("pkcs12") + $Pkcs12Args
+  try {
+    return Invoke-OpenSsl $fullArgs
+  }
+  catch {
+    $firstErr = $_
+    if ($firstErr.Exception.Message -notmatch "unsupported|RC2|legacy") { throw }
+  }
+  $legacyErr = $null
+  try {
+    return Invoke-OpenSsl ($fullArgs + @("-legacy"))
+  }
+  catch {
+    $legacyErr = $_
+    if ($legacyErr.Exception.Message -notmatch "unable to load provider|ossl-modules") { throw }
+  }
+  $mingw = $OpenSsl -replace '[/\\]usr[/\\]bin[/\\]', '\mingw64\bin\'
+  if ($mingw -eq $OpenSsl -or -not (Test-Path -LiteralPath $mingw)) { throw $legacyErr }
+  $out = & $mingw @($fullArgs + @("-legacy")) 2>&1 | ForEach-Object { $_.ToString() }
+  if ($LASTEXITCODE -ne 0) {
+    throw (T "Common.OpenSslCmdFailed" @(($fullArgs -join " "), (($out | Where-Object { $_ -ne "" }) -join "`n")))
+  }
+  return $out
+}
+
 Assert-ExistsFile $OpenSsl "OpenSSL"
 
 if (-not [string]::IsNullOrWhiteSpace($ChainFile) -and [string]::IsNullOrWhiteSpace($Path)) {
@@ -963,12 +989,12 @@ function Show-FileMatching([string]$filePath, [string[]]$passphrases = @()) {
         try {
           $certOut = ""
           if ($isPass) {
-            Invoke-TempPassFile $p { param($tmp)
-              $certOut = Invoke-OpenSsl @("pkcs12", "-in", $pfxFile.FullName, "-nokeys", "-clcerts", "-passin", "file:$tmp")
+            $certOut = Invoke-TempPassFile $p { param($tmp)
+              Invoke-Pkcs12 @("-in", $pfxFile.FullName, "-nokeys", "-clcerts", "-passin", "file:$tmp")
             }
           }
           else {
-            $certOut = Invoke-OpenSsl @("pkcs12", "-in", $pfxFile.FullName, "-nokeys", "-clcerts", "-passin", "pass:")
+            $certOut = Invoke-Pkcs12 @("-in", $pfxFile.FullName, "-nokeys", "-clcerts", "-passin", "pass:")
           }
              
           if (-not [string]::IsNullOrWhiteSpace($certOut)) {
@@ -1215,11 +1241,11 @@ function Show-OneFile {
         foreach ($p in @("") + $passphrases) {
           try {
             if ([string]::IsNullOrWhiteSpace($p)) {
-              $certPem = Invoke-OpenSsl @("pkcs12", "-in", $path, "-nokeys", "-clcerts", "-passin", "pass:") | Out-String
+              $certPem = Invoke-Pkcs12 @("-in", $path, "-nokeys", "-clcerts", "-passin", "pass:") | Out-String
             }
             else {
-              Invoke-TempPassFile $p { param($tmp)
-                $certPem = Invoke-OpenSsl @("pkcs12", "-in", $path, "-nokeys", "-clcerts", "-passin", "file:$tmp") | Out-String
+              $certPem = Invoke-TempPassFile $p { param($tmp)
+                Invoke-Pkcs12 @("-in", $path, "-nokeys", "-clcerts", "-passin", "file:$tmp") | Out-String
               }
             }
             if (-not [string]::IsNullOrWhiteSpace($certPem)) { break }
@@ -1523,7 +1549,7 @@ function Show-OneFile {
       $pfxInfo = ""
       
       try {
-        $out = Invoke-OpenSsl @("pkcs12", "-info", "-in", $FilePath, "-nokeys", "-clcerts", "-passin", "pass:")
+        $out = Invoke-Pkcs12 @("-info", "-in", $FilePath, "-nokeys", "-clcerts", "-passin", "pass:")
         $pfxInfo = $out
         $pfxOk = $true
       }
@@ -1533,10 +1559,9 @@ function Show-OneFile {
         foreach ($p in $Passphrases) {
           if ([string]::IsNullOrWhiteSpace($p)) { continue }
           try {
-            Invoke-TempPassFile $p { param($tmp)
-              $out = Invoke-OpenSsl @("pkcs12", "-info", "-in", $FilePath, "-nokeys", "-clcerts", "-passin", "file:$tmp")
+            $pfxInfo = Invoke-TempPassFile $p { param($tmp)
+              Invoke-Pkcs12 @("-info", "-in", $FilePath, "-nokeys", "-clcerts", "-passin", "file:$tmp")
             }
-            $pfxInfo = $out
             $pfxOk = $true
             break
           }
