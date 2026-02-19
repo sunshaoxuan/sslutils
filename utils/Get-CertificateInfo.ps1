@@ -1570,11 +1570,6 @@ function Show-OneFile {
       }
       
       if ($pfxOk) {
-        $subj = ($pfxInfo | Select-String "subject=") | Select-Object -First 1
-        if ($subj) {
-          $s = $subj.ToString().Trim().Replace("subject=", "")
-          Write-TreeProp $false "Subject" $s
-        }
         Write-TreeProp $true (T "Label.DecryptCheck") (T "Common.Success") "Green"
       }
       else {
