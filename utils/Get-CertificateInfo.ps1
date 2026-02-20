@@ -900,13 +900,20 @@ function Show-FileMatching([string]$filePath, [string[]]$passphrases = @()) {
   $dir = [IO.Path]::GetDirectoryName($filePath)
   if ([string]::IsNullOrWhiteSpace($dir)) { return }
   
-  # 同一ディレクトリ内の関連ファイルを検索
-  $csrFile = Get-ChildItem -LiteralPath $dir -Filter "*.csr" -File -ErrorAction SilentlyContinue | Select-Object -First 1
-  $keyFile = Get-ChildItem -LiteralPath $dir -Filter "*.key" -File -ErrorAction SilentlyContinue | Select-Object -First 1
-  $cerFile = Get-ChildItem -LiteralPath $dir -Filter "*.cer" -File -ErrorAction SilentlyContinue | Select-Object -First 1
+  # 同一ディレクトリ内の関連ファイルを検索（同一ベースネーム優先）
+  $base = [IO.Path]::GetFileNameWithoutExtension($filePath)
+  $csrFile = Get-ChildItem -LiteralPath $dir -Filter "$base.csr" -File -ErrorAction SilentlyContinue | Select-Object -First 1
+  if (-not $csrFile) { $csrFile = Get-ChildItem -LiteralPath $dir -Filter "*.csr" -File -ErrorAction SilentlyContinue | Select-Object -First 1 }
+  $keyFile = Get-ChildItem -LiteralPath $dir -Filter "$base.key" -File -ErrorAction SilentlyContinue | Select-Object -First 1
+  if (-not $keyFile) { $keyFile = Get-ChildItem -LiteralPath $dir -Filter "*.key" -File -ErrorAction SilentlyContinue | Select-Object -First 1 }
+  $cerFile = Get-ChildItem -LiteralPath $dir -Filter "$base.cer" -File -ErrorAction SilentlyContinue | Select-Object -First 1
+  if (-not $cerFile) { $cerFile = Get-ChildItem -LiteralPath $dir -Filter "$base.crt" -File -ErrorAction SilentlyContinue | Select-Object -First 1 }
+  if (-not $cerFile) { $cerFile = Get-ChildItem -LiteralPath $dir -Filter "*.cer" -File -ErrorAction SilentlyContinue | Select-Object -First 1 }
   if (-not $cerFile) { $cerFile = Get-ChildItem -LiteralPath $dir -Filter "*.crt" -File -ErrorAction SilentlyContinue | Select-Object -First 1 }
-  $tsvFile = Get-ChildItem -LiteralPath $dir -Filter "*.tsv" -File -ErrorAction SilentlyContinue | Select-Object -First 1
-  $pfxFile = Get-ChildItem -LiteralPath $dir -Filter "*.pfx" -File -ErrorAction SilentlyContinue | Select-Object -First 1
+  $tsvFile = Get-ChildItem -LiteralPath $dir -Filter "$base.tsv" -File -ErrorAction SilentlyContinue | Select-Object -First 1
+  if (-not $tsvFile) { $tsvFile = Get-ChildItem -LiteralPath $dir -Filter "*.tsv" -File -ErrorAction SilentlyContinue | Select-Object -First 1 }
+  $pfxFile = Get-ChildItem -LiteralPath $dir -Filter "$base.pfx" -File -ErrorAction SilentlyContinue | Select-Object -First 1
+  if (-not $pfxFile) { $pfxFile = Get-ChildItem -LiteralPath $dir -Filter "*.pfx" -File -ErrorAction SilentlyContinue | Select-Object -First 1 }
   
   # 比較には2つ以上のファイルが必要
   $foundCount = @($csrFile, $keyFile, $cerFile, $tsvFile, $pfxFile | Where-Object { $_ }).Count
