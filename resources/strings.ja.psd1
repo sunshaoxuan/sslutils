@@ -1,4 +1,4 @@
-@{
+﻿@{
   # Common
   "Common.Yes"                               = "はい"
   "Common.No"                                = "いいえ"
@@ -145,6 +145,8 @@
   "MergeCert.ChainCert"                      = "チェーン証明書"
   "MergeCert.RootCerts"                      = "ルート証明書"
   "MergeCert.PfxGenerated"                   = "PFX 生成完了"
+  "MergeCert.PfxCopiedFromSource"            = "顧客提供 PFX を復号してコピー"
+  "MergeCert.PfxCopiedAsIs"                  = "顧客提供 PFX をそのままコピー"
   "MergeCert.SyncPrompt"                     = "関連ファイル(.key/.csr/.tsv)もマージ先へ同期しますか？(y/N)"
   "MergeCert.Synced"                         = "同期完了: {0}"
   "MergeCert.SyncSkipped"                    = "同期をスキップしました。"

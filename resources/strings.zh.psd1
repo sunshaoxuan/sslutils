@@ -1,4 +1,4 @@
-@{
+﻿@{
   # Common
   "Common.Yes"                               = "是"
   "Common.No"                                = "否"
@@ -146,6 +146,8 @@
   "MergeCert.ChainCert"                      = "链证书"
   "MergeCert.RootCerts"                      = "根证书"
   "MergeCert.PfxGenerated"                   = "已生成 PFX"
+  "MergeCert.PfxCopiedFromSource"            = "已解密并复制客户提供的 PFX"
+  "MergeCert.PfxCopiedAsIs"                  = "已原样复制客户提供的 PFX"
   "MergeCert.SyncPrompt"                     = "是否同步其他文件(.key/.csr/.tsv)到合并目录？(y/N)"
   "MergeCert.Synced"                         = "已同步: {0}"
   "MergeCert.SyncSkipped"                    = "已跳过同步。"

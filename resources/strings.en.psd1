@@ -1,4 +1,4 @@
-@{
+﻿@{
   # Common
   "Common.Yes"                               = "Yes"
   "Common.No"                                = "No"
@@ -145,6 +145,8 @@
   "MergeCert.ChainCert"                      = "Chain Cert"
   "MergeCert.RootCerts"                      = "Root Certs"
   "MergeCert.PfxGenerated"                   = "PFX Generated"
+  "MergeCert.PfxCopiedFromSource"            = "Decrypted and copied customer-provided PFX"
+  "MergeCert.PfxCopiedAsIs"                  = "Copied customer-provided PFX as-is"
   "MergeCert.SyncPrompt"                     = "Sync related files (.key/.csr/.tsv) to merged directory? (y/N)"
   "MergeCert.Synced"                         = "Synced: {0}"
   "MergeCert.SyncSkipped"                    = "Sync skipped."

@@ -247,6 +247,92 @@ function Invoke-OpenSsl([string[]]$OpenSslArgs, [switch]$AllowFail) {
   return $out
 }
 
+function Invoke-Pkcs12([string[]]$Pkcs12Args, [switch]$AllowFail) {
+  $fullArgs = @("pkcs12") + $Pkcs12Args
+  try {
+    return Invoke-OpenSsl $fullArgs -AllowFail:$AllowFail
+  }
+  catch {
+    $firstErr = $_
+    if ($firstErr.Exception.Message -notmatch "unsupported|RC2|legacy") { throw }
+  }
+  try {
+    return Invoke-OpenSsl ($fullArgs + @("-legacy")) -AllowFail:$AllowFail
+  }
+  catch {
+    $legacyErr = $_
+    if ($legacyErr.Exception.Message -notmatch "unable to load provider|ossl-modules") { throw }
+  }
+  $mingw = $OpenSsl -replace '[/\\]usr[/\\]bin[/\\]', '\mingw64\bin\'
+  if ($mingw -eq $OpenSsl -or -not (Test-Path -LiteralPath $mingw)) { throw $legacyErr }
+  $out = & $mingw @($fullArgs + @("-legacy")) 2>&1 | ForEach-Object { $_.ToString() }
+  if ($LASTEXITCODE -ne 0) {
+    if ($AllowFail) { return $out }
+    throw (T "Common.OpenSslCmdFailed" @(($fullArgs -join " "), (($out | Where-Object { $_ -ne "" }) -join "`n")))
+  }
+  return $out
+}
+
+function Get-CertNotBeforeFromFile([string]$certPath) {
+  try {
+    $out = Invoke-OpenSsl @("x509", "-in", $certPath, "-noout", "-dates")
+    $line = ($out | Where-Object { $_ -match "^notBefore=" } | Select-Object -First 1)
+    if ($line) { return ([string]$line).Trim().Replace("notBefore=", "") }
+  }
+  catch {}
+  return ""
+}
+
+function Get-CertNotBeforeFromPfx([string]$pfxPath, [string[]]$phrases) {
+  foreach ($p in @("") + $phrases) {
+    try {
+      $certPem = ""
+      if ([string]::IsNullOrWhiteSpace($p)) {
+        $certPem = Invoke-Pkcs12 @("-in", $pfxPath, "-nokeys", "-clcerts", "-passin", "pass:") | Out-String
+      }
+      else {
+        $certPem = Invoke-TempPassFile $p { param($tmp)
+          Invoke-Pkcs12 @("-in", $pfxPath, "-nokeys", "-clcerts", "-passin", "file:$tmp") | Out-String
+        }
+      }
+      if ([string]::IsNullOrWhiteSpace($certPem)) { continue }
+      $tmpCert = [IO.Path]::GetTempFileName()
+      try {
+        Set-Content -LiteralPath $tmpCert -Value $certPem -Encoding ASCII
+        return Get-CertNotBeforeFromFile $tmpCert
+      }
+      finally { Remove-Item $tmpCert -Force -ErrorAction SilentlyContinue }
+    }
+    catch {}
+  }
+  return ""
+}
+
+function Copy-PfxDecrypted([string]$srcPfx, [string]$destPfx, [string[]]$phrases) {
+  foreach ($p in @("") + $phrases) {
+    try {
+      $isPass = -not [string]::IsNullOrWhiteSpace($p)
+      $tmpPem = [IO.Path]::GetTempFileName()
+      try {
+        if ($isPass) {
+          Invoke-TempPassFile $p { param($tmp)
+            Invoke-Pkcs12 @("-in", $srcPfx, "-out", $tmpPem, "-nodes", "-passin", "file:$tmp")
+          } | Out-Null
+        }
+        else {
+          Invoke-Pkcs12 @("-in", $srcPfx, "-out", $tmpPem, "-nodes", "-passin", "pass:") | Out-Null
+        }
+        if ($LASTEXITCODE -ne 0) { continue }
+        Invoke-OpenSsl @("pkcs12", "-export", "-in", $tmpPem, "-out", $destPfx, "-passout", "pass:") | Out-Null
+        if ($LASTEXITCODE -eq 0) { return $true }
+      }
+      finally { Remove-Item $tmpPem -Force -ErrorAction SilentlyContinue }
+    }
+    catch {}
+  }
+  return $false
+}
+
 function NormalizeLf([string]$s) {
   return ($s -replace "`r`n", "`n" -replace "`r", "`n")
 }
@@ -518,7 +604,7 @@ function Merge-One([string]$clientCertPath, [string]$SelectedIntermediate = "", 
     Write-Success (T "MergeCert.OutFile") ([IO.Path]::GetFileName($outPath))
   }
 
-  # PFX Generation
+  # PFX Generation / Copy
   $keyPath = [IO.Path]::ChangeExtension($clientCertPath, ".key")
   if (Test-Path -LiteralPath $keyPath -PathType Leaf) {
     $pfxPath = [IO.Path]::ChangeExtension($outPath, ".pfx")
@@ -533,32 +619,54 @@ function Merge-One([string]$clientCertPath, [string]$SelectedIntermediate = "", 
     }
     $phrases = Get-Passphrases $pFiles
     
-    $isEnc = Test-KeyEncrypted $keyPath
-    $generated = $false
+    $pfxHandled = $false
     
-    if (-not $isEnc) {
-      # Plain key -> PFX (no password)
-      Invoke-OpenSsl @("pkcs12", "-export", "-in", $outPath, "-inkey", $keyPath, "-out", $pfxPath, "-passout", "pass:") -AllowFail | Out-Null
-      if ($LASTEXITCODE -eq 0) { $generated = $true }
-    }
-    else {
-      # Encrypted key -> Try passphrases
-      foreach ($p in $phrases) {
-        Invoke-TempPassFile $p { param($tmp)
-          Invoke-OpenSsl @("pkcs12", "-export", "-in", $outPath, "-inkey", $keyPath, "-out", $pfxPath, "-passin", "file:$tmp", "-passout", "file:$tmp") -AllowFail | Out-Null
+    # Check if source directory already has a customer-provided PFX
+    $srcPfx = [IO.Path]::ChangeExtension($clientCertPath, ".pfx")
+    if (Test-Path -LiteralPath $srcPfx -PathType Leaf) {
+      $cerDate = Get-CertNotBeforeFromFile $clientCertPath
+      $pfxDate = Get-CertNotBeforeFromPfx $srcPfx $phrases
+      if (-not [string]::IsNullOrWhiteSpace($cerDate) -and -not [string]::IsNullOrWhiteSpace($pfxDate) -and $cerDate -eq $pfxDate) {
+        Backup-IfExists $pfxPath
+        $ok = Copy-PfxDecrypted $srcPfx $pfxPath $phrases
+        if ($ok) {
+          Write-Success (T "MergeCert.PfxCopiedFromSource") ([IO.Path]::GetFileName($srcPfx))
+          $pfxHandled = $true
         }
-        if ($LASTEXITCODE -eq 0) { 
-          $generated = $true
-          break 
+        else {
+          Copy-Item -LiteralPath $srcPfx -Destination $pfxPath -Force
+          Write-Success (T "MergeCert.PfxCopiedAsIs") ([IO.Path]::GetFileName($srcPfx))
+          $pfxHandled = $true
         }
       }
     }
     
-    if ($generated) {
-      Write-Success (T "MergeCert.PfxGenerated") ([IO.Path]::GetFileName($pfxPath))
-    }
-    else {
-      Write-Warn (T "Common.Warn" @("Failed to generate PFX"))
+    if (-not $pfxHandled) {
+      $isEnc = Test-KeyEncrypted $keyPath
+      $generated = $false
+      
+      if (-not $isEnc) {
+        Invoke-OpenSsl @("pkcs12", "-export", "-in", $outPath, "-inkey", $keyPath, "-out", $pfxPath, "-passout", "pass:") -AllowFail | Out-Null
+        if ($LASTEXITCODE -eq 0) { $generated = $true }
+      }
+      else {
+        foreach ($p in $phrases) {
+          Invoke-TempPassFile $p { param($tmp)
+            Invoke-OpenSsl @("pkcs12", "-export", "-in", $outPath, "-inkey", $keyPath, "-out", $pfxPath, "-passin", "file:$tmp", "-passout", "file:$tmp") -AllowFail | Out-Null
+          }
+          if ($LASTEXITCODE -eq 0) { 
+            $generated = $true
+            break 
+          }
+        }
+      }
+      
+      if ($generated) {
+        Write-Success (T "MergeCert.PfxGenerated") ([IO.Path]::GetFileName($pfxPath))
+      }
+      else {
+        Write-Warn (T "Common.Warn" @("Failed to generate PFX"))
+      }
     }
     
     # Sync Suggestion
