@@ -180,7 +180,8 @@
   "MergeCert.BatchTarget"                    = "Target: {0}"
   "MergeCert.BatchIntermediate"              = "Intermediate: {0}"
   "MergeCert.BatchIntermediateAuto"          = "(auto)"
-  "MergeCert.BatchRoot"                      = "Root/Cross: {0}"
+  "MergeCert.BatchRoot"                      = "Cross-root: {0}"
+  "MergeCert.BatchRootCA"                    = "Root CA: {0}"
   "MergeCert.BatchPlan"                      = "[Plan] {0}"
   "MergeCert.BatchPlanMerge2"                = "Merge 2"
   "MergeCert.BatchPlanMerge3"                = "Merge 3"
@@ -190,11 +191,12 @@
   "MergeCert.BatchMenuMerge2"                = "Merge 2"
   "MergeCert.BatchMenuMerge3"                = "Merge 3"
   "MergeCert.BatchMenuMerge3Rec"             = "Merge 3 (recommended)"
+  "MergeCert.BatchMenuMerge4"                = "Merge 4 (with Root CA)"
   "MergeCert.BatchMenuSkip"                  = "Skip"
   "MergeCert.BatchMenuBack"                  = "Back"
   "MergeCert.BatchMenuQuit"                  = "Quit"
   "MergeCert.BatchCertMenuTitle"             = "Select certificate"
-  "MergeCert.RootRequired"                   = "Merge 3 selected but no matching root/cross certificate found."
+  "MergeCert.RootRequired"                   = "No matching root/cross certificate found for the selected merge mode."
 
   # Convert-KeyToPlaintext.ps1
   "DecryptKey.PathNotFound"                  = "Path not found: {0}"

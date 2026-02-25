@@ -181,7 +181,8 @@
   "MergeCert.BatchTarget"                    = "对象: {0}"
   "MergeCert.BatchIntermediate"              = "中间: {0}"
   "MergeCert.BatchIntermediateAuto"          = "(自动选择)"
-  "MergeCert.BatchRoot"                      = "根/交叉: {0}"
+  "MergeCert.BatchRoot"                      = "交叉根: {0}"
+  "MergeCert.BatchRootCA"                    = "根CA: {0}"
   "MergeCert.BatchPlan"                      = "[计划] {0}"
   "MergeCert.BatchPlanMerge2"                = "2 张合并"
   "MergeCert.BatchPlanMerge3"                = "3 张合并"
@@ -191,11 +192,12 @@
   "MergeCert.BatchMenuMerge2"                = "2 张合并"
   "MergeCert.BatchMenuMerge3"                = "3 张合并"
   "MergeCert.BatchMenuMerge3Rec"             = "3 张合并(推荐)"
+  "MergeCert.BatchMenuMerge4"                = "4 张合并（含根CA）"
   "MergeCert.BatchMenuSkip"                  = "跳过"
   "MergeCert.BatchMenuBack"                  = "返回"
   "MergeCert.BatchMenuQuit"                  = "退出"
   "MergeCert.BatchCertMenuTitle"             = "请选择证书"
-  "MergeCert.RootRequired"                   = "已选择 3 张合并，但未找到匹配的根/交叉证书。"
+  "MergeCert.RootRequired"                   = "所选合并模式未找到匹配的根/交叉证书。"
 
   # Convert-KeyToPlaintext.ps1
   "DecryptKey.PathNotFound"                  = "路径不存在: {0}"

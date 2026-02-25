@@ -446,6 +446,33 @@ function Select-RootCerts([string]$intermediateCertPath) {
   return [PSCustomObject]@{ Status = "nomatch"; Files = @() }
 }
 
+function Select-FullChainRootCerts([string]$intermediateCertPath) {
+  $result3 = Select-RootCerts $intermediateCertPath
+  if ($result3.Status -ne "ok" -or $result3.Files.Count -eq 0) {
+    return [PSCustomObject]@{ Status3 = $result3.Status; Files3 = @(); Status4 = "none"; Files4 = @() }
+  }
+  $crossRoot = $result3.Files[0]
+  $result4Parent = Select-RootCerts $crossRoot
+  $files4 = @()
+  $status4 = "none"
+  if ($result4Parent.Status -eq "ok" -and $result4Parent.Files.Count -gt 0) {
+    $parentSubj = ""
+    $parentLine = Invoke-OpenSsl @("x509", "-in", $result4Parent.Files[0], "-noout", "-subject", "-nameopt", "RFC2253") -AllowFail | Select-Object -First 1
+    if ($parentLine) { $parentSubj = ([string]$parentLine).Trim().Replace("subject=", "") }
+    $crossSubj = ""
+    $crossLine = Invoke-OpenSsl @("x509", "-in", $crossRoot, "-noout", "-issuer", "-nameopt", "RFC2253") -AllowFail | Select-Object -First 1
+    if ($crossLine) { $crossSubj = ([string]$crossLine).Trim().Replace("issuer=", "") }
+    if ($parentSubj -eq $crossSubj -and -not [string]::IsNullOrWhiteSpace($parentSubj)) {
+      $files4 = @($crossRoot, $result4Parent.Files[0])
+      $status4 = "ok"
+    }
+  }
+  return [PSCustomObject]@{
+    Status3 = $result3.Status; Files3 = @($result3.Files)
+    Status4 = $status4;        Files4 = $files4
+  }
+}
+
 function Select-IntermediateCert([string]$clientCertPath) {
   if (-not [string]::IsNullOrWhiteSpace($IntermediateCert)) {
     return $IntermediateCert
@@ -724,16 +751,20 @@ function Get-MergePlan([string]$clientCertPath) {
   $selectedIntermediate = ""
   if ($needIntermediate) { $selectedIntermediate = Select-IntermediateCert $clientCertPath }
 
-  $rootFiles = @()
-  $rootStatus = "none"
+  $rootFiles3 = @()
+  $rootFiles4 = @()
+  $rootStatus3 = "none"
+  $rootStatus4 = "none"
   if ($RootCert.Count -gt 0) {
-    $rootFiles = @(Resolve-RootCertFiles $clientCertPath)
-    $rootStatus = if ($rootFiles.Count -gt 0) { "ok" } else { "none" }
+    $rootFiles3 = @(Resolve-RootCertFiles $clientCertPath)
+    $rootStatus3 = if ($rootFiles3.Count -gt 0) { "ok" } else { "none" }
   }
   elseif (-not [string]::IsNullOrWhiteSpace($selectedIntermediate)) {
-    $rootSel = Select-RootCerts $selectedIntermediate
-    $rootStatus = $rootSel.Status
-    $rootFiles = @($rootSel.Files)
+    $fullChain = Select-FullChainRootCerts $selectedIntermediate
+    $rootStatus3 = $fullChain.Status3
+    $rootFiles3 = @($fullChain.Files3)
+    $rootStatus4 = $fullChain.Status4
+    $rootFiles4 = @($fullChain.Files4)
   }
 
   # Check PFX
@@ -741,16 +772,14 @@ function Get-MergePlan([string]$clientCertPath) {
   $pfxExists = Test-Path -LiteralPath $pfxPath -PathType Leaf
 
   $action = "Merge2"
-  if ($rootFiles.Count -gt 0) {
+  if ($rootFiles3.Count -gt 0) {
     $action = "Merge3"
   }
   elseif ($alreadyMerged -and $SkipIfAlreadyMerged -and -not $Force) {
-    # If PFX is missing, do not skip (we need to run Merge-One to generate PFX)
     if ($pfxExists) {
       $action = "Skip"
     }
     else {
-      # Treat as Merge2 so the loop calls Merge-One, which will skip merge but generate PFX
       $action = "Merge2"
     }
   }
@@ -760,8 +789,10 @@ function Get-MergePlan([string]$clientCertPath) {
     BlockCount    = $blockCount
     AlreadyMerged = $alreadyMerged
     Intermediate  = $selectedIntermediate
-    RootFiles     = $rootFiles
-    RootStatus    = $rootStatus
+    RootFiles     = $rootFiles3
+    RootFiles4    = $rootFiles4
+    RootStatus    = $rootStatus3
+    RootStatus4   = $rootStatus4
     PfxExists     = $pfxExists
   }
 }
@@ -831,6 +862,10 @@ if ([string]::IsNullOrWhiteSpace($ClientCert)) {
         $rootNames = @($plan.RootFiles | ForEach-Object { [IO.Path]::GetFileName($_) })
         Write-Host (T "MergeCert.BatchRoot" @(($rootNames -join "; ")))
       }
+      if ($plan.RootFiles4.Count -gt 0) {
+        $rootNames4 = @($plan.RootFiles4 | ForEach-Object { [IO.Path]::GetFileName($_) })
+        Write-Host (T "MergeCert.BatchRootCA" @(($rootNames4[-1])))
+      }
 
       $actions = New-Object System.Collections.Generic.List[object]
       $menuItems = New-Object System.Collections.Generic.List[string]
@@ -848,6 +883,11 @@ if ([string]::IsNullOrWhiteSpace($ClientCert)) {
       if ($plan.RootStatus -eq "ok" -and $plan.RootFiles.Count -gt 0) {
         $actions.Add("Merge3") | Out-Null
         $menuItems.Add($merge3Text) | Out-Null
+      }
+
+      if ($plan.RootStatus4 -eq "ok" -and $plan.RootFiles4.Count -gt 0) {
+        $actions.Add("Merge4") | Out-Null
+        $menuItems.Add((T "MergeCert.BatchMenuMerge4")) | Out-Null
       }
 
       $actions.Add("Skip") | Out-Null
@@ -870,22 +910,17 @@ if ([string]::IsNullOrWhiteSpace($ClientCert)) {
       $skipAutoRoot = $true
       $selIntermediate = $plan.Intermediate
       $selRoots = @()
-      if ($selectedAction -eq "Merge3") {
+      if ($selectedAction -eq "Merge3" -or $selectedAction -eq "Merge4") {
         if (-not [string]::IsNullOrWhiteSpace($selIntermediate)) {
-          $rootSel = Select-RootCerts $selIntermediate
-          if ($rootSel.Status -ne "ok" -or $rootSel.Files.Count -eq 0) {
-            switch ($rootSel.Status) {
-              "needopenssl" { throw (T "MergeCert.RootNeedOpenSsl") }
-              "issuerMissing" { throw (T "MergeCert.RootIssuerMissing" @($selIntermediate)) }
-              "multi" {
-                $list = ($rootSel.Files | ForEach-Object { "- " + $_ }) -join "`n"
-                throw (T "MergeCert.MultiRootMatched" @($list))
-              }
-              "nomatch" { throw (T "MergeCert.RootRequired") }
-              default { throw (T "MergeCert.RootRequired") }
-            }
+          if ($selectedAction -eq "Merge4" -and $plan.RootFiles4.Count -gt 0) {
+            $selRoots = @($plan.RootFiles4)
           }
-          $selRoots = @($rootSel.Files)
+          else {
+            $selRoots = @($plan.RootFiles)
+          }
+          if ($selRoots.Count -eq 0) {
+            throw (T "MergeCert.RootRequired")
+          }
         }
         if ($selRoots.Count -eq 0) {
           throw (T "MergeCert.RootRequired")

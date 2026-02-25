@@ -180,7 +180,8 @@
   "MergeCert.BatchTarget"                    = "対象: {0}"
   "MergeCert.BatchIntermediate"              = "中間: {0}"
   "MergeCert.BatchIntermediateAuto"          = "（自動選択）"
-  "MergeCert.BatchRoot"                      = "ルート/交差: {0}"
+  "MergeCert.BatchRoot"                      = "交差ルート: {0}"
+  "MergeCert.BatchRootCA"                    = "ルートCA: {0}"
   "MergeCert.BatchPlan"                      = "[予定] {0}"
   "MergeCert.BatchPlanMerge2"                = "2 枚結合"
   "MergeCert.BatchPlanMerge3"                = "3 枚結合"
@@ -190,11 +191,12 @@
   "MergeCert.BatchMenuMerge2"                = "2 枚結合"
   "MergeCert.BatchMenuMerge3"                = "3 枚結合"
   "MergeCert.BatchMenuMerge3Rec"             = "3 枚結合(推奨)"
+  "MergeCert.BatchMenuMerge4"                = "4 枚結合（ルートCA含む）"
   "MergeCert.BatchMenuSkip"                  = "スキップ"
   "MergeCert.BatchMenuBack"                  = "戻る"
   "MergeCert.BatchMenuQuit"                  = "終了"
   "MergeCert.BatchCertMenuTitle"             = "証明書を選択"
-  "MergeCert.RootRequired"                   = "3 枚結合を選択しましたが、対応するルート/交差証明書が見つかりません。"
+  "MergeCert.RootRequired"                   = "選択した結合モードに対応するルート/交差証明書が見つかりません。"
 
   # Convert-KeyToPlaintext.ps1
   "DecryptKey.PathNotFound"                  = "Path が見つかりません: {0}"
