@@ -1260,50 +1260,81 @@ function Show-OneFile {
         }
       }
       elseif ($isPfx) {
-        # Try to extract cert from PFX
-        $certPem = ""
+        # Extract ALL certificates from PFX (not just client cert)
+        $allCertPem = ""
         foreach ($p in @("") + $passphrases) {
           try {
             if ([string]::IsNullOrWhiteSpace($p)) {
-              $certPem = Invoke-Pkcs12 @("-in", $path, "-nokeys", "-clcerts", "-passin", "pass:") | Out-String
+              $allCertPem = Invoke-Pkcs12 @("-in", $path, "-nokeys", "-passin", "pass:") | Out-String
             }
             else {
-              $certPem = Invoke-TempPassFile $p { param($tmp)
-                Invoke-Pkcs12 @("-in", $path, "-nokeys", "-clcerts", "-passin", "file:$tmp") | Out-String
+              $allCertPem = Invoke-TempPassFile $p { param($tmp)
+                Invoke-Pkcs12 @("-in", $path, "-nokeys", "-passin", "file:$tmp") | Out-String
               }
             }
-            if (-not [string]::IsNullOrWhiteSpace($certPem)) { break }
+            if (-not [string]::IsNullOrWhiteSpace($allCertPem)) { break }
           }
           catch {}
         }
         
-        if (-not [string]::IsNullOrWhiteSpace($certPem)) {
-          $tmpCert = [IO.Path]::GetTempFileName()
-          try {
-            Set-Content -LiteralPath $tmpCert -Value $certPem -Encoding ASCII
-            $raw = Invoke-OpenSsl @("x509", "-in", $tmpCert, "-noout", "-subject", "-issuer", "-dates", "-nameopt", "RFC2253")
-          }
-          finally {
-            Remove-Item $tmpCert -Force -ErrorAction SilentlyContinue
-          }
-        }
-        else {
+        if ([string]::IsNullOrWhiteSpace($allCertPem)) {
           Write-Host (T "CheckBasic.Detail.Key.CannotReadNeedPass" @("PassFile")) -ForegroundColor Red
           return
         }
 
-        $data = @{}
-        foreach ($line in $raw) {
-          if ($line -match "^subject=(.*)") { $data["subject"] = $matches[1] }
-          if ($line -match "^issuer=(.*)") { $data["issuer"] = $matches[1] }
-          if ($line -match "^notBefore=(.*)") { $data["notBefore"] = $matches[1] }
-          if ($line -match "^notAfter=(.*)") { $data["notAfter"] = $matches[1] }
+        $tmpPfxCert = [IO.Path]::GetTempFileName()
+        try {
+          Set-Content -LiteralPath $tmpPfxCert -Value $allCertPem -Encoding ASCII
+          $pemBlocks = @(Split-PemCertBlocks $tmpPfxCert)
+        }
+        finally {
+          Remove-Item $tmpPfxCert -Force -ErrorAction SilentlyContinue
         }
 
-        Write-TreeDN $false (T "Label.Subject") ([string]$data["subject"])
-        Write-TreeDN $false (T "Label.Issuer") ([string]$data["issuer"])
-        Write-TreeProp $false (T "Label.NotBefore") (Format-CertDateForDisplay ([string]$data["notBefore"]))
-        Write-TreeProp $true  (T "Label.NotAfter")  (Format-CertDateForDisplay ([string]$data["notAfter"]))
+        if ($pemBlocks.Count -gt 1) {
+          $allBlockData = @()
+          foreach ($block in $pemBlocks) {
+            $allBlockData += Parse-CertBlockData $block
+          }
+          for ($bi = 0; $bi -lt $pemBlocks.Count; $bi++) {
+            $isLastBlock = ($bi -eq ($pemBlocks.Count - 1))
+            $blockLabel = Get-ChainBlockLabel $bi $pemBlocks.Count
+            if ($bi -gt 0) {
+              $srcFile = Find-CertSourceFile $pemBlocks[$bi]
+              if (-not [string]::IsNullOrWhiteSpace($srcFile)) {
+                $blockLabel = "{0} [{1}]" -f $blockLabel, $srcFile
+              }
+            }
+            $showIssuer = $true
+            if (-not $isLastBlock) {
+              $myIssuer = ([string]$allBlockData[$bi]["issuer"]).Trim()
+              $nextSubject = ([string]$allBlockData[$bi + 1]["subject"]).Trim()
+              if ($myIssuer -eq $nextSubject) { $showIssuer = $false }
+            }
+            Show-OneCertBlockDetail $allBlockData[$bi] $blockLabel "" $isLastBlock $showIssuer
+          }
+        }
+        else {
+          $tmpSingle = [IO.Path]::GetTempFileName()
+          try {
+            Set-Content -LiteralPath $tmpSingle -Value $pemBlocks[0] -Encoding ASCII
+            $raw = Invoke-OpenSsl @("x509", "-in", $tmpSingle, "-noout", "-subject", "-issuer", "-dates", "-nameopt", "RFC2253")
+          }
+          finally {
+            Remove-Item $tmpSingle -Force -ErrorAction SilentlyContinue
+          }
+          $data = @{}
+          foreach ($line in $raw) {
+            if ($line -match "^subject=(.*)") { $data["subject"] = $matches[1] }
+            if ($line -match "^issuer=(.*)") { $data["issuer"] = $matches[1] }
+            if ($line -match "^notBefore=(.*)") { $data["notBefore"] = $matches[1] }
+            if ($line -match "^notAfter=(.*)") { $data["notAfter"] = $matches[1] }
+          }
+          Write-TreeDN $false (T "Label.Subject") ([string]$data["subject"])
+          Write-TreeDN $false (T "Label.Issuer") ([string]$data["issuer"])
+          Write-TreeProp $false (T "Label.NotBefore") (Format-CertDateForDisplay ([string]$data["notBefore"]))
+          Write-TreeProp $true  (T "Label.NotAfter")  (Format-CertDateForDisplay ([string]$data["notAfter"]))
+        }
       }
       else {
         # 証明書ファイル：複数ブロックの場合は個別に表示

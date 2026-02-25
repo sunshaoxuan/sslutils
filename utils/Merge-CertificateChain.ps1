@@ -654,16 +654,25 @@ function Merge-One([string]$clientCertPath, [string]$SelectedIntermediate = "", 
       $cerDate = Get-CertNotBeforeFromFile $clientCertPath
       $pfxDate = Get-CertNotBeforeFromPfx $srcPfx $phrases
       if (-not [string]::IsNullOrWhiteSpace($cerDate) -and -not [string]::IsNullOrWhiteSpace($pfxDate) -and $cerDate -eq $pfxDate) {
-        Backup-IfExists $pfxPath
-        $ok = Copy-PfxDecrypted $srcPfx $pfxPath $phrases
-        if ($ok) {
-          Write-Success (T "MergeCert.PfxCopiedFromSource") ([IO.Path]::GetFileName($srcPfx))
-          $pfxHandled = $true
+        Write-Host ""
+        Write-Host (T "MergeCert.PfxFoundInSource" @([IO.Path]::GetFileName($srcPfx))) -ForegroundColor Yellow
+        Write-Host (T "MergeCert.PfxRegenPrompt") -ForegroundColor Yellow -NoNewline
+        $regenAns = Read-Host " "
+        if ($regenAns -match "^[yY]") {
+          Write-Info (T "MergeCert.PfxRegenChosen")
         }
         else {
-          Copy-Item -LiteralPath $srcPfx -Destination $pfxPath -Force
-          Write-Success (T "MergeCert.PfxCopiedAsIs") ([IO.Path]::GetFileName($srcPfx))
-          $pfxHandled = $true
+          Backup-IfExists $pfxPath
+          $ok = Copy-PfxDecrypted $srcPfx $pfxPath $phrases
+          if ($ok) {
+            Write-Success (T "MergeCert.PfxCopiedFromSource") ([IO.Path]::GetFileName($srcPfx))
+            $pfxHandled = $true
+          }
+          else {
+            Copy-Item -LiteralPath $srcPfx -Destination $pfxPath -Force
+            Write-Success (T "MergeCert.PfxCopiedAsIs") ([IO.Path]::GetFileName($srcPfx))
+            $pfxHandled = $true
+          }
         }
       }
     }
