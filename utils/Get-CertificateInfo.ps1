@@ -1133,6 +1133,23 @@ function Show-OneFile {
     }
   }
 
+  # CertStore からブロックの元ファイルを検索
+  function Find-CertSourceFile([string]$pemBlock) {
+    $certStoreRoot = $CertConfig.CertStoreRoot
+    if ([string]::IsNullOrWhiteSpace($certStoreRoot)) { $certStoreRoot = "CertStore" }
+    $storeDir = Join-Path $ToolkitRoot $certStoreRoot
+    if (-not (Test-Path -LiteralPath $storeDir -PathType Container)) { return "" }
+    $needle = $pemBlock.Trim() -replace "`r`n", "`n" -replace "`r", "`n"
+    $cerFiles = @(Get-ChildItem -LiteralPath $storeDir -Recurse -File -Include *.cer, *.crt, *.pem -ErrorAction SilentlyContinue)
+    foreach ($f in $cerFiles) {
+      $content = (Get-Content -LiteralPath $f.FullName -Raw) -replace "`r`n", "`n" -replace "`r", "`n"
+      if ($content.Contains($needle)) {
+        return $f.Name
+      }
+    }
+    return ""
+  }
+
   # PEM ファイルから個々の証明書ブロックを抽出
   function Split-PemCertBlocks([string]$pemPath) {
     $content = Get-Content -LiteralPath $pemPath -Raw
@@ -1301,6 +1318,12 @@ function Show-OneFile {
           for ($bi = 0; $bi -lt $pemBlocks.Count; $bi++) {
             $isLastBlock = ($bi -eq ($pemBlocks.Count - 1))
             $blockLabel = Get-ChainBlockLabel $bi $pemBlocks.Count
+            if ($bi -gt 0) {
+              $srcFile = Find-CertSourceFile $pemBlocks[$bi]
+              if (-not [string]::IsNullOrWhiteSpace($srcFile)) {
+                $blockLabel = "{0} [{1}]" -f $blockLabel, $srcFile
+              }
+            }
             $showIssuer = $true
             if (-not $isLastBlock) {
               $myIssuer = ([string]$allBlockData[$bi]["issuer"]).Trim()
