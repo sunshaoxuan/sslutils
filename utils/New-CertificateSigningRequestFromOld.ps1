@@ -32,7 +32,7 @@ OpenSSL 実行ファイルのパス
 OpenSSL とディレクトリ情報を表示して終了
 
 .PARAMETER Overwrite
-出力先（new\<CN>\<base>.key/<base>.csr）が既に存在する場合に、バックアップして再生成
+出力先（new\<機関名>\<base>.key/<base>.csr）が既に存在する場合に、バックアップして再生成
 
 .PARAMETER Org
 機関ディレクトリ名（指定した場合はその機関のみ処理）
@@ -63,7 +63,7 @@ OpenSSL とディレクトリ情報を表示して終了
 - 旧秘密鍵から鍵長を自動検出します（暗号化鍵の場合はパスワードが必要）
 - 複数機関がある場合は、対話式メニューで選択します（-Org または -All で回避可能）
 - -Overwrite と複数機関の組み合わせは、安全のため "YES" の入力が必要です
-- 出力先は new\<機関名>\<CN>\<base>.key と <base>.csr です
+- 出力先は new\<機関名>\<base>.key と <base>.csr です
 #>
 
 param(
@@ -89,7 +89,7 @@ param(
   [switch]$ShowInfo
 
   ,
-  # 出力先(new\<CN>\<base>.key/<base>.csr)が既に存在する場合に、削除して再生成する
+  # 出力先(new\<機関名>\<base>.key/<base>.csr)が既に存在する場合に、削除して再生成する
   [Parameter(Mandatory = $false)]
   [switch]$Overwrite
 
@@ -977,14 +977,12 @@ while ($script:returnToOrgMenu) {
       $subj = SubjectMapToSubj $subjectMap
       $sanOpt = Build-SanOpt $sans
 
-      # new\<機関>\<CN>\...  (root の場合は証明書ファイル名を機関名として扱う)
+      # new\<機関>\...  (root の場合は証明書ファイル名を機関名として扱う)
       $orgOut = $orgName
       if ($orgName -eq "(root)") { $orgOut = [IO.Path]::GetFileNameWithoutExtension($certPath) }
       $newOrgDir = Join-Path $NewDir $orgOut
       New-DirectoryIfMissing $newOrgDir
       $outDir = $newOrgDir
-      if ($orgOut -ne $cn) { $outDir = Join-Path $newOrgDir $cn }
-      New-DirectoryIfMissing $outDir
 
       $base = [IO.Path]::GetFileNameWithoutExtension($certPath)
       $outKey = Join-Path $outDir ("{0}.key" -f $base)
