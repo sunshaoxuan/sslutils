@@ -1097,14 +1097,21 @@ while ($script:returnToOrgMenu) {
         $legacyTsvFiles = @(Get-ChildItem -LiteralPath $oldCertDir -Filter $targetFilter -File -ErrorAction SilentlyContinue)
               
         $tsvDefaults = @{ "Software" = "Apache"; "Contact" = "Admin"; "Term" = "1"; "SystemID" = "SYS-NEW" }
-        $tsvOutName = "server_list.tsv" # Default name
-        
+        $tsvOutName = "cert_renewal_list.tsv" # Preferred default name
+
         if ($legacyTsvFiles.Count -gt 0) {
           $legFile = $legacyTsvFiles[0]
           $tsvOutName = $legFile.Name
           $map = ConvertFrom-LegacyTsv $legFile.FullName
           if ($map.ContainsKey($cn)) {
             $tsvDefaults = $map[$cn]
+          }
+        }
+        else {
+          # Backward compatibility: keep legacy filename if already used in target output dir.
+          $legacyOutPath = Join-Path $newOrgDir "server_list.tsv"
+          if (Test-Path -LiteralPath $legacyOutPath -PathType Leaf) {
+            $tsvOutName = "server_list.tsv"
           }
         }
         
@@ -1200,5 +1207,4 @@ while ($script:returnToOrgMenu) {
     $script:returnToOrgMenu = $true
   }
 }  # end while
-
 

@@ -116,6 +116,12 @@ Repair/normalize PEM files.
 .\utils\Repair-PemFile.ps1 -Fullchain .\fullchain.pem -Privkey .\privkey.pem
 ```
 
+10) `New-ServerList.ps1`
+Generate/maintain a certificate renewal TSV (with legacy field import and manual edit preservation).
+```powershell
+.\utils\New-ServerList.ps1 -Path .\new -OldPath .\old
+```
+
 ## 🌐 Adding a New Language
 
 To add a new language, simply create `resources/strings.xx.psd1` (where `xx` is the language code) containing all translation keys and a `Language.DisplayName` key. No code changes are required — the language will automatically appear in the main menu's language selector.

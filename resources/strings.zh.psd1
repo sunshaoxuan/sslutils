@@ -50,7 +50,7 @@
   "Toolkit.Tool.ConvertKey"                  = "密钥转换为明文"
   "Toolkit.Tool.ExportModulus"               = "导出证书模数"
   "Toolkit.Tool.RepairPem"                   = "修复PEM文件"
-  "Toolkit.Tool.ServerList"                  = "导出服务器列表（TSV）"
+  "Toolkit.Tool.ServerList"                  = "导出证书更新清单（TSV）"
   "Toolkit.Tool.SyncMerged"                  = "同步到output/merged (key,csr,tsv)"
   "Toolkit.Tool.SelfSigned"                  = "自签证书"
   "Toolkit.SubTool.SelfSigned10Y"            = "生成10年期自签证书"

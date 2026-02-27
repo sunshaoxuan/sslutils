@@ -115,6 +115,12 @@ PEM の修復・正規化。
 .\utils\Repair-PemFile.ps1 -Fullchain .\fullchain.pem -Privkey .\privkey.pem
 ```
 
+10) `New-ServerList.ps1`
+証明書更新用 TSV を生成/保守（旧 TSV の項目継承と手修正値の保持に対応）。
+```powershell
+.\utils\New-ServerList.ps1 -Path .\new -OldPath .\old
+```
+
 ## 🌐 多言語拡張
 
 新しい言語を追加するには `resources/strings.xx.psd1`（xx は言語コード）を作成し、`Language.DisplayName` キーと全翻訳キーを含めるだけです。コード変更は不要で、メインメニューの言語選択に自動的に表示されます。

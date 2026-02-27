@@ -104,7 +104,7 @@ ssl_maker/
 - **PEM 修复**: `Repair-PemFile.ps1` (修复换行符问题)。
 - **同步**: `Sync-ToMerged.ps1` (将 new/ 中的 key/csr/tsv 同步到 output/merged/)。
 - **组织重命名**: 启动时自动执行（标准化文件夹命名）。
-- **服务器列表**: `New-ServerList.ps1` (生成 TSV 格式列表)。
+- **证书更新清单**: `New-ServerList.ps1`（生成/维护证书更新用 TSV，保留人工字段）。
 
 ---
 

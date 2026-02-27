@@ -1,11 +1,11 @@
 <#
 .SYNOPSIS
-Creates a Server List TSV file from CSRs (supports legacy import and manual edit preservation).
+Creates a certificate renewal TSV from CSRs (supports legacy import and manual edit preservation).
 
 .DESCRIPTION
-Scans the 'new' directory for .csr files and generates a TSV file.
+Scans the 'new' directory for .csr files and generates a certificate renewal TSV.
 - Imports Legacy Data from 'old/' (manual fields like Contact/Software).
-- Preserves manual edits if 'server_list.tsv' already exists.
+- Preserves manual edits if an existing renewal TSV already exists.
 - Interactive mode for new records defaults.
 - Safety: Prompts before overwriting and creates backups.
    - If CN is new but present in Legacy Data, prompts user to inherit legacy values.
@@ -19,7 +19,7 @@ The root directory to search for .csr files. Default is ".\new".
 The root directory to search for legacy .tsv files. Default is ".\old".
 
 .PARAMETER TsvFile
-The target TSV file path. Default is ".\server_list.tsv".
+The target TSV file path. Default is ".\cert_renewal_list.tsv".
 
 .PARAMETER Interactive
 If set (default), prompts for defaults and legacy confirmation.
@@ -27,7 +27,7 @@ If set (default), prompts for defaults and legacy confirmation.
 param(
     [string]$Path = ".\new",
     [string]$OldPath = ".\old",
-    # TsvFile not needed, filename deduced from Org name
+    [string]$TsvFile = "",
     [switch]$Interactive = $true,
     [Parameter(Mandatory = $false)]
     [string]$Lang = "",  # resolved via defaults.ps1
@@ -43,6 +43,14 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+if ([string]::IsNullOrWhiteSpace($TsvFile)) {
+    $preferred = ".\cert_renewal_list.tsv"
+    $legacy = ".\server_list.tsv"
+    if (Test-Path -LiteralPath $preferred -PathType Leaf) { $TsvFile = $preferred }
+    elseif (Test-Path -LiteralPath $legacy -PathType Leaf) { $TsvFile = $legacy }
+    else { $TsvFile = $preferred }
+}
 
 . (Join-Path $PSScriptRoot "lib\defaults.ps1")
 if ([string]::IsNullOrWhiteSpace($Lang)) { $Lang = $__DefaultLang }
@@ -188,7 +196,7 @@ else {
 
 $existingData = @{}
 if (Test-Path $TsvFile) {
-    Write-Host "Loading existing server_list.tsv..."
+    Write-Host "Loading existing renewal TSV..."
     Import-Csv -LiteralPath $TsvFile -Delimiter "`t" | ForEach-Object {
         $cn = $_.'Common Name'
         if ($cn) { $existingData[$cn] = $_ }
