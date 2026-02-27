@@ -128,20 +128,27 @@ $tools = @(
         Wait   = $true
     },
     @{
-        Name   = "Self-Signed (10Y)"
-        Script = "utils\Request-SelfSignedCertificate.ps1"
-        DescJa = "10年自己署名証明書を作成"
-        DescZh = "生成10年期自签证书"
-        DescEn = "Generate 10-Year Self-Signed Cert"
+        Name   = "Self-Signed"
+        DescJa = "自己署名証明書"
+        DescZh = "自签证书"
+        DescEn = "Self-Signed Certificate"
         Wait   = $true
-    },
-    @{
-        Name   = "Let's Encrypt"
-        Script = "utils\Request-LetsEncryptCertificate.ps1"
-        DescJa = "Let's Encrypt証明書取得"
-        DescZh = "获取Let's Encrypt证书"
-        DescEn = "Request Let's Encrypt Certificate"
-        Wait   = $true
+        SubMenu = @(
+            @{
+                Name   = "10-Year Self-Signed"
+                Script = "utils\Request-SelfSignedCertificate.ps1"
+                DescJa = "10年自己署名証明書を作成"
+                DescZh = "生成10年期自签证书"
+                DescEn = "Generate 10-Year Self-Signed Cert"
+            },
+            @{
+                Name   = "Let's Encrypt"
+                Script = "utils\Request-LetsEncryptCertificate.ps1"
+                DescJa = "Let's Encrypt 証明書を取得"
+                DescZh = "获取 Let's Encrypt 证书"
+                DescEn = "Request Let's Encrypt Certificate"
+            }
+        )
     }
 )
 
@@ -218,9 +225,14 @@ $bottomBorder
 function Show-MainMenu {
     $menuItems = @()
     foreach ($tool in $tools) {
-        $scriptPath = Join-Path $PSScriptRoot $tool.Script
-        $exists = Test-Path -LiteralPath $scriptPath -PathType Leaf
-        $status = if ($exists) { "" } else { " [N/A]" }
+        $status = ""
+        if ($null -ne $tool.SubMenu) {
+            $status = " ▸"
+        }
+        elseif ($tool.Script) {
+            $scriptPath = Join-Path $PSScriptRoot $tool.Script
+            if (-not (Test-Path -LiteralPath $scriptPath -PathType Leaf)) { $status = " [N/A]" }
+        }
         $menuItems += "{0,-20} - {1}{2}" -f $tool.Name, (Get-ToolDesc $tool), $status
     }
     $exitText = switch ($Lang) {
@@ -298,7 +310,35 @@ try {
         
         # ツール実行
         $selectedTool = $tools[$selection - 1]
-        $scriptPath = Join-Path $PSScriptRoot $selectedTool.Script
+        
+        # SubMenu がある場合は二級メニューを表示
+        if ($null -ne $selectedTool.SubMenu -and $selectedTool.SubMenu.Count -gt 0) {
+            $subItems = @()
+            foreach ($sub in $selectedTool.SubMenu) {
+                $subDesc = switch ($Lang) { "zh" { $sub.DescZh } "en" { $sub.DescEn } default { $sub.DescJa } }
+                $subScript = Join-Path $PSScriptRoot $sub.Script
+                $subStatus = if (Test-Path -LiteralPath $subScript -PathType Leaf) { "" } else { " [N/A]" }
+                $subItems += "{0,-24} - {1}{2}" -f $sub.Name, $subDesc, $subStatus
+            }
+            $backText = switch ($Lang) { "zh" { "[ 返回 ]" } "en" { "[ Back ]" } default { "[ 戻る ]" } }
+            $subItems += $backText
+
+            $subTitle = switch ($Lang) {
+                "zh" { "{0} - 请选择类型" -f (Get-ToolDesc $selectedTool) }
+                "en" { "{0} - Select type" -f (Get-ToolDesc $selectedTool) }
+                default { "{0} - 種類を選択" -f (Get-ToolDesc $selectedTool) }
+            }
+            $subSel = Show-MenuSelect -title $subTitle -items $subItems
+            if ($null -eq $subSel -or $subSel -eq $subItems.Count) { continue }
+
+            $chosenSub = $selectedTool.SubMenu[$subSel - 1]
+            $scriptPath = Join-Path $PSScriptRoot $chosenSub.Script
+            $runName = $chosenSub.Name
+        }
+        else {
+            $scriptPath = Join-Path $PSScriptRoot $selectedTool.Script
+            $runName = $selectedTool.Name
+        }
         
         if (-not (Test-Path -LiteralPath $scriptPath -PathType Leaf)) {
             Clear-Host
@@ -315,7 +355,6 @@ try {
             continue
         }
         
-        # 選択されたスクリプトを実行
         Clear-Host
         Write-Host ""
         $runMsg = switch ($Lang) {
@@ -323,7 +362,7 @@ try {
             "en" { "Starting: {0}" }
             default { "起動中: {0}" }
         }
-        Write-Host ($runMsg -f $selectedTool.Name) -ForegroundColor Yellow
+        Write-Host ($runMsg -f $runName) -ForegroundColor Yellow
         Write-Host ""
         
         try {
@@ -335,7 +374,6 @@ try {
             Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red
         }
         finally {
-            # 99 = Skip Pause (Sub-menu return / Cancelled)
             if ($selectedTool.Wait -and $LASTEXITCODE -ne 99) {
                 Write-Host ""
                 $pressKeyMsg = switch ($Lang) {
