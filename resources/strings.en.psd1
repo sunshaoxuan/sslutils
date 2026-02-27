@@ -50,7 +50,7 @@
   "Toolkit.Tool.ConvertKey"                  = "Convert Key to Plaintext"
   "Toolkit.Tool.ExportModulus"               = "Export Certificate Modulus"
   "Toolkit.Tool.RepairPem"                   = "Repair PEM File"
-  "Toolkit.Tool.ServerList"                  = "Generate Server List"
+  "Toolkit.Tool.ServerList"                  = "Export Server List (TSV)"
   "Toolkit.Tool.SyncMerged"                  = "Sync to output/merged (key,csr,tsv)"
   "Toolkit.Tool.SelfSigned"                  = "Self-Signed Certificate"
   "Toolkit.SubTool.SelfSigned10Y"            = "Generate 10-Year Self-Signed Cert"

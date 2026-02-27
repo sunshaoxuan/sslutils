@@ -107,7 +107,7 @@ $tools = @(
         Wait    = $true
     },
     @{
-        Name    = "New-ServerList"
+        Name    = "Export-ServerList"
         Script  = "utils\New-ServerList.ps1"
         DescKey = "Toolkit.Tool.ServerList"
         Wait    = $true

@@ -51,7 +51,7 @@
   "Toolkit.Tool.ConvertKey"                  = "秘密鍵を平文に変換"
   "Toolkit.Tool.ExportModulus"               = "証明書モジュラス出力"
   "Toolkit.Tool.RepairPem"                   = "PEMファイル修復"
-  "Toolkit.Tool.ServerList"                  = "サーバー一覧作成"
+  "Toolkit.Tool.ServerList"                  = "サーバー一覧をTSV出力"
   "Toolkit.Tool.SyncMerged"                  = "new→output/merged同期 (key,csr,tsv)"
   "Toolkit.Tool.SelfSigned"                  = "自己署名証明書"
   "Toolkit.SubTool.SelfSigned10Y"            = "10年自己署名証明書を作成"
