@@ -159,3 +159,19 @@ SSLCertificateKeyFile   /path/to/new/server.key
 
 默认会显示全球稳定的时区 ID（优先 IANA），避免受操作系统语言影响。
 可选配置：如需自定义 `Get-CertificateInfo.ps1` 中时区名称显示，可在 `config.json` 增加 `TimeZoneNames`（键使用 Windows/IANA 时区 ID）。
+
+---
+
+## 📜 公共证书库 (CertStore)
+
+工具内置的根证书和中间证书，用于自动构建完整证书链。详见 [CertStore/README.md](CertStore/README.md)。
+
+| 文件 | 说明 | 下载 |
+|------|------|------|
+| gsgccr3dvtlsca2020.cer | GlobalSign GCC R3 DV TLS CA 2020 | [下载](https://github.com/sunshaoxuan/sslutils/raw/main/CertStore/GlobalSign/gsgccr3dvtlsca2020.cer) |
+| nii-odca4g7rsa.cer | NII Open Domain CA - G7 RSA | [下载](https://github.com/sunshaoxuan/sslutils/raw/main/CertStore/NII/nii-odca4g7rsa.cer) |
+| nii-odca4g8rsa-pem.cer | NII Open Domain CA - G8 RSA | [下载](https://github.com/sunshaoxuan/sslutils/raw/main/CertStore/NII/nii-odca4g8rsa-pem.cer) |
+| SCRoot2caPem.cer | Security Communication RootCA2 (Root) | [下载](https://github.com/sunshaoxuan/sslutils/raw/main/CertStore/Secom/SCRoot2caPem.cer) |
+| tlsrsarootca2024cross-pem.cer | SECOM TLS RSA Root CA 2024 (Cross-signed) | [下载](https://github.com/sunshaoxuan/sslutils/raw/main/CertStore/Secom/tlsrsarootca2024cross-pem.cer) |
+
+详细变更历史请参见 [CHANGELOG.md](CHANGELOG.md)。

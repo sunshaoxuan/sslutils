@@ -1,7 +1,10 @@
-# 证书文件
+# 证书文件（CertStore 除外，公共证书需要共享）
 *.cer
 *.crt
 *.pem
+!CertStore/**/*.cer
+!CertStore/**/*.crt
+!CertStore/**/*.pem
 
 # 私钥文件
 *.key

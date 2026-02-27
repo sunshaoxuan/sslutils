@@ -161,4 +161,18 @@ Directory names are configurable via `Paths` in `config.json` (defaults):
 By default, time zone output uses a globally stable TimeZone ID (IANA preferred) to avoid OS language dependence.
 Optional: to override displayed names per language in `Get-CertificateInfo.ps1`, add `TimeZoneNames` in `config.json` (keys are Windows/IANA TimeZone IDs).
 
+---
+
+## 📜 Public Certificate Store (CertStore)
+
+Built-in Root CA and Intermediate CA certificates used for automatic chain building. See [CertStore/README.md](CertStore/README.md) for details.
+
+| File | Description | Download |
+|------|-------------|----------|
+| gsgccr3dvtlsca2020.cer | GlobalSign GCC R3 DV TLS CA 2020 | [Download](https://github.com/sunshaoxuan/sslutils/raw/main/CertStore/GlobalSign/gsgccr3dvtlsca2020.cer) |
+| nii-odca4g7rsa.cer | NII Open Domain CA - G7 RSA | [Download](https://github.com/sunshaoxuan/sslutils/raw/main/CertStore/NII/nii-odca4g7rsa.cer) |
+| nii-odca4g8rsa-pem.cer | NII Open Domain CA - G8 RSA | [Download](https://github.com/sunshaoxuan/sslutils/raw/main/CertStore/NII/nii-odca4g8rsa-pem.cer) |
+| SCRoot2caPem.cer | Security Communication RootCA2 (Root) | [Download](https://github.com/sunshaoxuan/sslutils/raw/main/CertStore/Secom/SCRoot2caPem.cer) |
+| tlsrsarootca2024cross-pem.cer | SECOM TLS RSA Root CA 2024 (Cross-signed) | [Download](https://github.com/sunshaoxuan/sslutils/raw/main/CertStore/Secom/tlsrsarootca2024cross-pem.cer) |
+
 For the full change history, see [CHANGELOG.md](CHANGELOG.md).

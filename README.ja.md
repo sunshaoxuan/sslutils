@@ -157,4 +157,18 @@ Tomcat（PKCS#12 方式）:
 }
 ```
 
+---
+
+## 📜 公開証明書ストア (CertStore)
+
+ルート証明書・中間証明書を内蔵し、証明書チェーンの自動構築に使用します。詳細は [CertStore/README.md](CertStore/README.md) を参照。
+
+| ファイル | 説明 | ダウンロード |
+|----------|------|------------|
+| gsgccr3dvtlsca2020.cer | GlobalSign GCC R3 DV TLS CA 2020 | [DL](https://github.com/sunshaoxuan/sslutils/raw/main/CertStore/GlobalSign/gsgccr3dvtlsca2020.cer) |
+| nii-odca4g7rsa.cer | NII Open Domain CA - G7 RSA | [DL](https://github.com/sunshaoxuan/sslutils/raw/main/CertStore/NII/nii-odca4g7rsa.cer) |
+| nii-odca4g8rsa-pem.cer | NII Open Domain CA - G8 RSA | [DL](https://github.com/sunshaoxuan/sslutils/raw/main/CertStore/NII/nii-odca4g8rsa-pem.cer) |
+| SCRoot2caPem.cer | Security Communication RootCA2 (Root) | [DL](https://github.com/sunshaoxuan/sslutils/raw/main/CertStore/Secom/SCRoot2caPem.cer) |
+| tlsrsarootca2024cross-pem.cer | SECOM TLS RSA Root CA 2024 (Cross-signed) | [DL](https://github.com/sunshaoxuan/sslutils/raw/main/CertStore/Secom/tlsrsarootca2024cross-pem.cer) |
+
 詳細な変更履歴は [CHANGELOG.md](CHANGELOG.md) を参照してください。
