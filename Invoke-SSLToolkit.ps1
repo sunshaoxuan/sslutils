@@ -17,7 +17,7 @@ SSL証明書管理ツールキット - 統合メニュー
 
 param(
     [Parameter(Mandatory = $false)]
-    [string]$Lang = "ja"
+    [string]$Lang = ""
 )
 
 Set-StrictMode -Version Latest
@@ -25,6 +25,14 @@ $ErrorActionPreference = "Stop"
 
 $ToolkitVersion = "1.3.4"
 $ToolkitLastUpdated = "2026-02-10"
+
+$__langFile = Join-Path $PSScriptRoot ".toolkit_lang"
+if ([string]::IsNullOrWhiteSpace($Lang)) {
+    if (Test-Path -LiteralPath $__langFile -PathType Leaf) {
+        $Lang = (Get-Content -LiteralPath $__langFile -Raw -ErrorAction SilentlyContinue).Trim()
+    }
+    if ([string]::IsNullOrWhiteSpace($Lang)) { $Lang = "ja" }
+}
 
 # UTF-8出力設定
 try {
@@ -272,6 +280,7 @@ try {
                 if ($newLang -ne $Lang) {
                     $Lang = $newLang
                     $__i18n = Initialize-I18n -Lang $Lang -BaseDir $PSScriptRoot
+                    Set-Content -LiteralPath $__langFile -Value $Lang -Encoding UTF8 -NoNewline -ErrorAction SilentlyContinue
                 }
             }
             continue

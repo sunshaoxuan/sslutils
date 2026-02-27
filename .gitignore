@@ -50,6 +50,9 @@ Desktop.ini
 *.swo
 .claude/
 
+# User preferences
+.toolkit_lang
+
 # Let's Encrypt 工作目录
 le-work-*/
 
