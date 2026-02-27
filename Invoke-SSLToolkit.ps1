@@ -222,6 +222,15 @@ $bottomBorder
     return $banner
 }
 
+function Get-LangDisplayName([string]$langCode) {
+    switch ($langCode) {
+        "ja" { return "日本語" }
+        "zh" { return "中文" }
+        "en" { return "English" }
+        default { return $langCode }
+    }
+}
+
 function Show-MainMenu {
     $menuItems = @()
     foreach ($tool in $tools) {
@@ -235,11 +244,9 @@ function Show-MainMenu {
         }
         $menuItems += "{0,-20} - {1}{2}" -f $tool.Name, (Get-ToolDesc $tool), $status
     }
-    $exitText = switch ($Lang) {
-        "zh" { "[ 退出 ]" }
-        "en" { "[ Exit ]" }
-        default { "[ 終了 ]" }
-    }
+    $langLabel = switch ($Lang) { "zh" { "语言" } "en" { "Language" } default { "言語" } }
+    $menuItems += "{0,-20} - {1} ({2}) ▸" -f "Language", $langLabel, (Get-LangDisplayName $Lang)
+    $exitText = switch ($Lang) { "zh" { "[ 退出 ]" } "en" { "[ Exit ]" } default { "[ 終了 ]" } }
     $menuItems += $exitText
     
     return $menuItems
@@ -291,8 +298,10 @@ try {
         $fullTitle = (Get-BannerText) + "`n" + $titleText
         $selection = Show-MenuSelect -title $fullTitle -items $menuItems
         
-        if ($null -eq $selection -or $selection -eq $menuItems.Count) {
-            # 終了
+        $exitIdx = $menuItems.Count      # last item = Exit
+        $langIdx = $menuItems.Count - 1   # second-to-last = Language
+
+        if ($null -eq $selection -or $selection -eq $exitIdx) {
             try { [Console]::Clear() } catch { Clear-Host }
             try { [Console]::SetCursorPosition(0, 0) } catch { }
             
@@ -306,6 +315,28 @@ try {
             Write-Host (T "Toolkit.Exit.Copyright") -ForegroundColor DarkGray
             Write-Host ""
             break
+        }
+        
+        if ($selection -eq $langIdx) {
+            $langOptions = @("ja", "zh", "en")
+            $langItems = @()
+            foreach ($lc in $langOptions) {
+                $mark = if ($lc -eq $Lang) { " *" } else { "" }
+                $langItems += "{0} ({1}){2}" -f (Get-LangDisplayName $lc), $lc, $mark
+            }
+            $backText = switch ($Lang) { "zh" { "[ 返回 ]" } "en" { "[ Back ]" } default { "[ 戻る ]" } }
+            $langItems += $backText
+
+            $langTitle = switch ($Lang) { "zh" { "选择显示语言" } "en" { "Select Language" } default { "表示言語を選択" } }
+            $langSel = Show-MenuSelect -title $langTitle -items $langItems
+            if ($null -ne $langSel -and $langSel -le $langOptions.Count) {
+                $newLang = $langOptions[$langSel - 1]
+                if ($newLang -ne $Lang) {
+                    $Lang = $newLang
+                    $__i18n = Initialize-I18n -Lang $Lang -BaseDir $PSScriptRoot
+                }
+            }
+            continue
         }
         
         # ツール実行
