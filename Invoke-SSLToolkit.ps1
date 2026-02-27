@@ -193,10 +193,10 @@ function Show-MainMenu {
     $menuItems = @()
     foreach ($tool in $tools) {
         $status = ""
-        if ($null -ne $tool.SubMenu) {
+        if ($tool.ContainsKey('SubMenu')) {
             $status = " ▸"
         }
-        elseif ($tool.Script) {
+        elseif ($tool.ContainsKey('Script')) {
             $scriptPath = Join-Path $PSScriptRoot $tool.Script
             if (-not (Test-Path -LiteralPath $scriptPath -PathType Leaf)) { $status = " [N/A]" }
         }
@@ -281,7 +281,7 @@ try {
         $selectedTool = $tools[$selection - 1]
         
         # SubMenu がある場合は二級メニューを表示
-        if ($null -ne $selectedTool.SubMenu -and $selectedTool.SubMenu.Count -gt 0) {
+        if ($selectedTool.ContainsKey('SubMenu') -and $selectedTool.SubMenu.Count -gt 0) {
             $subItems = @()
             foreach ($sub in $selectedTool.SubMenu) {
                 $subScript = Join-Path $PSScriptRoot $sub.Script
