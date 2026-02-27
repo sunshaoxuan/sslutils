@@ -2,8 +2,19 @@
 $ErrorActionPreference = "Stop"
 
 if ($PSVersionTable.PSVersion.Major -lt 7) {
-  Write-Host "[ERROR] PowerShell 7.x or later is required. / PowerShell 7.x 以上が必要です。" -ForegroundColor Red
-  Write-Host "        Current: $($PSVersionTable.PSVersion)" -ForegroundColor Red
+  $__curLang = if (Test-Path variable:Lang) { $Lang } else { "ja" }
+  $__msg = switch ($__curLang) {
+    "zh" { "[错误] 需要 PowerShell 7.x 以上版本。" }
+    "en" { "[ERROR] PowerShell 7.x or later is required." }
+    default { "[エラー] PowerShell 7.x 以上が必要です。" }
+  }
+  $__cur = switch ($__curLang) {
+    "zh" { "当前版本" }
+    "en" { "Current" }
+    default { "現在のバージョン" }
+  }
+  Write-Host $__msg -ForegroundColor Red
+  Write-Host ("        {0}: {1}" -f $__cur, $PSVersionTable.PSVersion) -ForegroundColor Red
   Write-Host "        https://github.com/PowerShell/PowerShell/releases" -ForegroundColor Yellow
   exit 1
 }

@@ -13,8 +13,8 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 if ($PSVersionTable.PSVersion.Major -lt 7) {
-  Write-Host "[ERROR] PowerShell 7.x or later is required. / PowerShell 7.x 以上が必要です。" -ForegroundColor Red
-  Write-Host "        Current: $($PSVersionTable.PSVersion)" -ForegroundColor Red
+  Write-Host "[エラー] PowerShell 7.x 以上が必要です。" -ForegroundColor Red
+  Write-Host ("        現在のバージョン: {0}" -f $PSVersionTable.PSVersion) -ForegroundColor Red
   Write-Host "        https://github.com/PowerShell/PowerShell/releases" -ForegroundColor Yellow
   exit 1
 }
