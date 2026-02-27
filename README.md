@@ -1,30 +1,26 @@
 # SSL 证书管理工具 (SSL Certificate Management Toolkit)
 
-**Ver 1.3.1**  
+**Ver 1.4.0**
 https://github.com/sunshaoxuan
 
-这是一个功能强大的 PowerShell 脚本集合，用于自动化管理 SSL 证书、私钥和 CSR。支持多语言（中文/日语/英语）、多机构管理，并提供统一的菜单界面。
+这是一个功能强大的 PowerShell 脚本集合，用于自动化管理 SSL 证书、私钥和 CSR。支持多语言（可通过配置文件扩展）、多机构管理，并提供统一的菜单界面。
 
 ---
 
-## 📅 版本更新 (v1.3.1)
-- **输出目录规范**: 统一改为工作根目录下 `output/`。
-- **路径调整**:
-  - 证书链合并输出默认到 `output/merged/`
-  - 自签证书输出默认到 `output/self-signed/`
-  - 同步脚本目标改为 `output/merged/`
+## 📅 版本更新 (v1.4.0)
+- **语言配置化**: 支持语种从 `resources/strings.*.psd1` 自动发现，新增语言只需添加资源文件，无需修改代码。
+- **语言持久化**: 在主菜单中切换语言后自动保存，下次启动时恢复上次使用的语言。
+- **4段式证书链**: 支持 服务器 + 中间证书 + 交叉根 + 根CA 的4段式合并（3段式仍为推荐默认）。
+- **PFX增强**: 显示PFX完整证书链结构（含源文件名）；合并时检测客户提供的PFX并提示是否沿用；支持旧加密算法（RC2-40-CBC等）的legacy回退。
+- **链明细显示**: 证书信息展示中，中间证书/根证书块会标注源文件名（如 `[nii-odca4g8rsa-pem.cer]`）。
+- **PS7强制检查**: 所有入口脚本在 PowerShell < 7.x 时报错退出，错误消息按当前语言显示。
+- **菜单优化**: "自签(10Y)"和"Let's Encrypt"合并为单个"自签证书"菜单项（含子菜单）。
 
-## 📅 历史更新 (v1.3.0)
-- **新增功能**: 增加 `Request-SelfSignedCertificate.ps1`，用于生成 10 年期自签证书（独立于 Let's Encrypt）。
-- **菜单集成**: 主菜单新增 `Self-Signed (10Y)` 入口，支持进入子菜单并返回上级菜单。
-- **多语言支持**: 新功能已补齐中文/日语/英语文案。
- 
-## 📅 历史更新 (v1.2.1)
-- **Let's Encrypt 修复**: 修复了某些环境下输入回车过快导致脚本闪退的问题；修正了取消时的文案显示。
-- **多语言支持**: 全面支持 简体中文、日语、英语（自动根据参数切换）。
-- **统一入口**: 新增 `Invoke-SSLToolkit.ps1` 集成菜单，一键调用所有工具。
-- **PFX 支持**: 证书合并时自动生成 `.pfx` (PKCS#12) 文件，支持密码保护和无密码模式。
-- **智能合并**: `Merge-CertificateChain.ps1` 支持“PFX Only”模式（已合并证书仅生成 PFX）。
+## 📅 历史更新
+- **v1.3.x**: 输出目录统一到 `output/`，脚本重命名为 Verb-Noun 格式，新增自签证书生成。
+- **v1.2.x**: 统一菜单入口、PFX 生成、全面多语言支持。
+
+详细变更历史请参见 [CHANGELOG.md](CHANGELOG.md)。
 
 ---
 
@@ -36,10 +32,12 @@ https://github.com/sunshaoxuan
 .\Invoke-SSLToolkit.ps1
 ```
 
-或者指定语言启动：
+首次启动默认为日语。可在主菜单中选择 **Language** 切换语言（中文/日语/英语等），选择会自动保存。
+
+也可以通过启动参数指定语言：
 ```powershell
-.\Invoke-SSLToolkit.ps1 -Lang zh  # 中文 (默认)
-.\Invoke-SSLToolkit.ps1 -Lang ja  # 日本语
+.\Invoke-SSLToolkit.ps1 -Lang zh  # 中文
+.\Invoke-SSLToolkit.ps1 -Lang ja  # 日本語
 .\Invoke-SSLToolkit.ps1 -Lang en  # English
 ```
 
@@ -55,11 +53,13 @@ ssl_maker/
 │   ├── merged/             # 合并后的完整证书链 & PFX
 │   └── self-signed/        # 自签证书输出
 ├── CertStore/              # 根证书与中间证书库
-├── resources/              # 资源文件 (语言包, 缓存)
-├── temp/                   # 临时文件目录（脚本运行后自动清理）
+├── resources/              # 资源文件 (语言包)
+│   ├── strings.ja.psd1     # 日语
+│   ├── strings.zh.psd1     # 中文
+│   └── strings.en.psd1     # 英语
 ├── CertConfig.psd1         # 证书匹配规则配置文件
 ├── Invoke-SSLToolkit.ps1   # [入口] 主菜单工具
-└── *.ps1                   # 各独立功能脚本
+└── utils/                  # 各独立功能脚本
 ```
 
 ---
@@ -71,13 +71,16 @@ ssl_maker/
 ### 1. 证书查看与校验
 **脚本**: `Get-CertificateInfo.ps1`
 - 查看 .cer, .key, .csr, .pfx 的详细信息（Subject, Issuer, 有效期）。
+- 多段式证书链逐块显示（服务器/中间/根），含源证书文件名标注。
 - 自动校验 **证书 ⇔ 私钥** 是否匹配（Modulus Check）。
-- 支持解密 PFX 查看内容。
+- 支持解密 PFX 查看完整证书链。
 
 ### 2. 证书链合并 & PFX 生成
 **脚本**: `Merge-CertificateChain.ps1`
 - 自动识别服务器证书，寻找匹配的中间证书并合并为 fullchain。
-- **[新]** 自动查找对应的 `.key` 文件，生成 `.pfx` (PKCS#12) 文件（Tomcat/IIS 必需）。
+- 支持3段式（服务器+中间+交叉根）和4段式（+根CA）合并模式。
+- 自动查找对应的 `.key` 文件，生成 `.pfx` (PKCS#12) 文件。
+- 检测客户提供的 PFX，提示用户选择沿用或重新生成。
 - 支持批量处理 `new/` 目录下的所有证书。
 
 ### 3. CSR (证书签名请求) 生成
@@ -87,14 +90,22 @@ ssl_maker/
 ### 4. 私钥管理
 - **解密/去密**: `Convert-KeyToPlaintext.ps1` (将加密的私钥转换为无需密码的 RSA Key)。
 
-### 5. 其他工具
-- **10年自签证书**: `Request-SelfSignedCertificate.ps1`（内部/测试用途，非公网 CA 证书）。
-  - `Quick`: 从 `old/` 机构目录中读取已有证书 CN，按机构生成 10 年自签证书。
-  - `Custom`: 手工输入 CN/Subject/SAN 生成证书。
-- **Let's Encrypt 申请**: `Request-LetsEncryptCertificate.ps1` (Docker + Certbot 封装)。
+### 5. 自签证书
+通过主菜单的"自签证书"子菜单选择：
+- **10年自签证书**: `Request-SelfSignedCertificate.ps1`（内部/测试用途）。
+- **Let's Encrypt**: `Request-LetsEncryptCertificate.ps1` (Docker + Certbot 封装)。
+
+### 6. 其他工具
 - **PEM 修复**: `Repair-PemFile.ps1` (修复换行符问题)。
-- **组织重命名**: 启动 `Invoke-SSLToolkit.ps1` 时自动执行（标准化文件夹命名）。
-- **服务器列表**: `New-ServerList.ps1` (生成 CSV 格式列表)。
+- **同步**: `Sync-ToMerged.ps1` (将 new/ 中的 key/csr/tsv 同步到 output/merged/)。
+- **组织重命名**: 启动时自动执行（标准化文件夹命名）。
+- **服务器列表**: `New-ServerList.ps1` (生成 TSV 格式列表)。
+
+---
+
+## 🌐 多语言扩展
+
+新增语言只需一步：创建 `resources/strings.xx.psd1` 文件（xx 为语言代码），包含所有翻译键和 `Language.DisplayName` 键。无需修改任何代码，语言会自动出现在主菜单的语言选择中。
 
 ---
 
@@ -119,7 +130,7 @@ SSLCertificateKeyFile   /path/to/new/server.key
   protocol="org.apache.coyote.http11.Http11NioProtocol"
   SSLEnabled="true"
   keystoreFile="/path/to/output/merged/server.pfx"
-  keystorePass="" 
+  keystorePass=""
   keystoreType="PKCS12" />
 ```
 *(注：如果生成 PFX 时未设置密码，keystorePass 为空或省略；如有设置，请填写对应密码)*
@@ -127,7 +138,7 @@ SSLCertificateKeyFile   /path/to/new/server.key
 ---
 
 ## ⚙️ 环境要求
-- Windows (PowerShell 5.1 或 PowerShell 7+)
+- **PowerShell 7.x** 或更高版本（脚本启动时自动检查，低于此版本将报错退出）
 - OpenSSL (推荐安装 Git for Windows，脚本默认查找 `C:\Program Files\Git\usr\bin\openssl.exe`)
 
 ## 路径配置（config.json）
@@ -146,6 +157,5 @@ SSLCertificateKeyFile   /path/to/new/server.key
 }
 ```
 
-默认会显示全球稳定的时区 ID（优先 IANA），避免受操作系统语言影响。  
+默认会显示全球稳定的时区 ID（优先 IANA），避免受操作系统语言影响。
 可选配置：如需自定义 `Get-CertificateInfo.ps1` 中时区名称显示，可在 `config.json` 增加 `TimeZoneNames`（键使用 Windows/IANA 时区 ID）。
-

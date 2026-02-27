@@ -23,8 +23,8 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$ToolkitVersion = "1.3.4"
-$ToolkitLastUpdated = "2026-02-10"
+$ToolkitVersion = "1.4.0"
+$ToolkitLastUpdated = "2026-02-17"
 
 $__langFile = Join-Path $PSScriptRoot ".toolkit_lang"
 if ([string]::IsNullOrWhiteSpace($Lang)) {

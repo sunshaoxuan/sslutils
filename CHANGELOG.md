@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.4.0] - 2026-02-17
+
+### Added
+- **i18n Config**: Supported languages are now auto-discovered from `resources/strings.*.psd1` files. Adding a new language only requires creating a new resource file with `Language.DisplayName` — no code changes needed.
+- **Language Persistence**: Selected language is saved to `.toolkit_lang` and restored on next launch.
+- **Runtime Language Switching**: New "Language" menu item in the main menu allows switching display language without restarting.
+- **4-Block Chain Merge**: `Merge-CertificateChain.ps1` now supports optional 4-block chains (server + intermediate + cross-root + root CA), while keeping 3-block as the recommended default.
+- **Chain Source Filenames**: `Get-CertificateInfo.ps1` displays the source filename (e.g., `[nii-odca4g8rsa-pem.cer]`) for each intermediate/root block in multi-block certificate chains.
+- **PFX Chain Display**: PFX files now show full certificate chain structure (server, intermediate, root) with source filenames, matching `.cer` display format.
+- **Customer PFX Prompt**: `Merge-CertificateChain.ps1` detects customer-provided PFX in `new/` (by matching validity dates) and prompts whether to regenerate or use the existing one.
+- **Legacy PFX Support**: Added `Invoke-Pkcs12` with 3-level fallback (standard → `-legacy` → mingw64 OpenSSL) for PFX files encrypted with older algorithms (e.g., RC2-40-CBC).
+- **PS7 Version Check**: All entry-point scripts enforce PowerShell 7.x minimum version with localized error messages.
+- **Secom CertStore**: Added `Secom` agency configuration in `CertConfig.psd1` for Secom root/cross-root certificate discovery.
+
+### Changed
+- **Self-Signed Submenu**: Merged "Self-Signed (10Y)" and "Let's Encrypt" into a single "Self-Signed" menu item with a submenu.
+- **Tool Descriptions**: Moved all hardcoded `DescJa/DescZh/DescEn` to i18n resource keys (`Toolkit.Tool.*`).
+- **ValidateSet Removed**: Removed `[ValidateSet("ja","zh","en")]` from all 14 scripts; language validation is now dynamic.
+- **CSR Output Path**: `New-CertificateSigningRequestFromOld.ps1` no longer creates an extra CN subdirectory; files go directly under `new/<OrgName>/`.
+- **Version Check Messages**: Version check error messages are loaded from resource files dynamically based on context language.
+
+### Fixed
+- **File Matching**: `Get-CertificateInfo.ps1` now prioritizes same-basename files when matching KEY ⇔ CER, preventing incorrect matches with intermediate certificates.
+- **PFX Scope Bug**: Fixed PowerShell scoping issue in `Invoke-TempPassFile` scriptblocks where decrypted PFX data was lost.
+- **Strict Mode**: Fixed `SubMenu` / `Script` property access errors under `Set-StrictMode -Version Latest` by using `ContainsKey()`.
+- **Redundant Subject**: Removed duplicate Subject display from PFX file info section.
+- **i18n**: Corrected Chinese translation for `HasPrivateKey` field.
+
 ## [1.3.5] - 2026-02-10
 ### Changed
 - **Naming**: Renamed main launcher from `SSL-Toolkit.ps1` to `Invoke-SSLToolkit.ps1` (approved Verb-Noun).

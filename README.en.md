@@ -8,8 +8,17 @@ Languages:
 ## Overview
 PowerShell scripts to manage certificates, keys, and CSRs with multi-org and multi-language support.
 
+## What's New (v1.4.0)
+- **Configurable Languages**: Supported languages are auto-discovered from `resources/strings.*.psd1`. Adding a new language requires only a resource file — no code changes.
+- **Language Persistence**: Language selection is saved to `.toolkit_lang` and restored on next launch.
+- **4-Block Chain Merge**: Support for server + intermediate + cross-root + root CA chains (3-block remains the recommended default).
+- **PFX Enhancements**: Full chain display for PFX files, customer-provided PFX detection with prompt, and legacy cipher fallback (RC2-40-CBC etc.).
+- **Chain Source Labels**: Certificate chain display annotates each intermediate/root block with its source filename (e.g., `[nii-odca4g8rsa-pem.cer]`).
+- **PS7 Version Check**: All entry-point scripts enforce PowerShell 7.x minimum with localized error messages.
+- **Menu Consolidation**: Self-Signed (10Y) and Let's Encrypt merged into a single submenu.
+
 ## Prerequisites
-- PowerShell 5.1+ or PowerShell 7.x
+- **PowerShell 7.x** or later (auto-checked on startup; exits with error if below)
 - OpenSSL (default: `C:\Program Files\Git\usr\bin\openssl.exe`)
 - `passphrase.txt` for encrypted keys if needed
 
@@ -19,38 +28,99 @@ ssl_maker/
 ├── old/                    # Existing cert/key/CSR
 ├── new/                    # Newly generated CSR/key
 ├── output/                 # Output root
-│   ├── merged/             # Merged chains
+│   ├── merged/             # Merged chains & PFX
 │   └── self-signed/        # Self-signed outputs
-├── resources/
-│   └── downloaded/         # AIA auto-fetch cache
-├── temp/                   # Temporary files (cleaned after script use)
-└── *.ps1
+├── CertStore/              # Root & intermediate certificate store
+├── resources/              # Resource files (language packs)
+│   ├── strings.ja.psd1     # Japanese
+│   ├── strings.zh.psd1     # Chinese
+│   └── strings.en.psd1     # English
+├── CertConfig.psd1         # Certificate matching rules
+├── Invoke-SSLToolkit.ps1   # [Entry] Main menu
+└── utils/                  # Individual scripts
+```
+
+## Quick Start
+
+```powershell
+.\Invoke-SSLToolkit.ps1
+```
+
+First launch defaults to Japanese. Select **Language** in the main menu to switch (your choice is saved automatically).
+
+You can also specify language via parameter:
+```powershell
+.\Invoke-SSLToolkit.ps1 -Lang en  # English
+.\Invoke-SSLToolkit.ps1 -Lang ja  # 日本語
+.\Invoke-SSLToolkit.ps1 -Lang zh  # 中文
 ```
 
 ## Scripts and usage
 
-1) `Get-CertificateInfo.ps1`  
-Show certificate/key/CSR info.
+1) `Get-CertificateInfo.ps1`
+Show certificate/key/CSR info. Displays per-block details for multi-cert chains with source filenames.
 ```powershell
 .\utils\Get-CertificateInfo.ps1
 .\utils\Get-CertificateInfo.ps1 -Path .\new\example.com\example.com.cer -Table
 .\utils\Get-CertificateInfo.ps1 -Lang en -PrettyTable
-.\utils\Get-CertificateInfo.ps1 -Path .\server.cer -ChainFile .\server.chain.cer
 ```
 
-2) `Merge-CertificateChain.ps1`  
-Generate fullchain (server cert + intermediates). Optionally append cross roots.
+2) `Merge-CertificateChain.ps1`
+Generate fullchain (server cert + intermediates). Supports 3-block (recommended) and 4-block (with root CA) modes.
 ```powershell
 .\utils\Merge-CertificateChain.ps1 -ClientCert .\client.cer -IntermediateCert .\intermediate.cer
-
-# fullchain + cross root
 .\utils\Merge-CertificateChain.ps1 -ClientCert .\client.cer -IntermediateCert .\intermediate.cer -RootCert .\cross-root.cer
 ```
 
-## Apache / Tomcat setup (fullchain)
-Use a fullchain file for both Apache and Tomcat (server cert + intermediates, optionally cross roots).
+3) `Convert-KeyToPlaintext.ps1`
+Decrypt encrypted private keys.
+```powershell
+.\utils\Convert-KeyToPlaintext.ps1 -Path .\new -Recurse -Overwrite
+```
 
-## Apache / Tomcat examples (fullchain)
+4) `New-CertificateSigningRequest.ps1`
+Generate CSR and private key.
+```powershell
+.\utils\New-CertificateSigningRequest.ps1 -CN example.com -C JP -ST Tokyo -L Tokyo -O "Example Corp"
+```
+
+5) `Export-CertificateModulus.ps1`
+Export modulus values.
+```powershell
+.\utils\Export-CertificateModulus.ps1 -RootDir .\old
+```
+
+6) `New-CertificateSigningRequestFromOld.ps1`
+Generate new CSR/key from existing cert info.
+```powershell
+.\utils\New-CertificateSigningRequestFromOld.ps1
+```
+
+7) `Request-LetsEncryptCertificate.ps1`
+Request Let's Encrypt cert using Docker + certbot.
+```powershell
+.\utils\Request-LetsEncryptCertificate.ps1 -Domain example.com -Email admin@example.com
+```
+
+8) `Request-SelfSignedCertificate.ps1`
+Generate a 10-year self-signed certificate.
+```powershell
+.\utils\Request-SelfSignedCertificate.ps1 -CN internal.example.local -Lang en
+```
+Quick mode: choose an organization under `old/`, then generate self-signed certs from existing certificate CNs.
+Custom mode: manually input CN/Subject/SAN.
+
+9) `Repair-PemFile.ps1`
+Repair/normalize PEM files.
+```powershell
+.\utils\Repair-PemFile.ps1 -Fullchain .\fullchain.pem -Privkey .\privkey.pem
+```
+
+## 🌐 Adding a New Language
+
+To add a new language, simply create `resources/strings.xx.psd1` (where `xx` is the language code) containing all translation keys and a `Language.DisplayName` key. No code changes are required — the language will automatically appear in the main menu's language selector.
+
+## Apache / Tomcat examples
 
 Apache (fullchain):
 ```apache
@@ -58,69 +128,18 @@ SSLCertificateFile      /path/to/fullchain.cer
 SSLCertificateKeyFile   /path/to/server.key
 ```
 
-Tomcat (PKCS#12, fullchain as input):
-```bash
-openssl pkcs12 -export \
-  -in /path/to/server.cer \
-  -inkey /path/to/server.key \
-  -certfile /path/to/server.chain.cer \
-  -out /path/to/server.p12
-```
+Tomcat (PKCS#12):
 ```xml
 <Connector port="8443"
   protocol="org.apache.coyote.http11.Http11NioProtocol"
   SSLEnabled="true"
-  keystoreFile="/path/to/server.p12"
-  keystorePass="changeit"
+  keystoreFile="/path/to/server.pfx"
+  keystorePass=""
   keystoreType="PKCS12" />
 ```
 
-3) `Convert-KeyToPlaintext.ps1`  
-Decrypt encrypted private keys.
-```powershell
-.\utils\Convert-KeyToPlaintext.ps1 -Path .\new -Recurse -Overwrite
-```
-
-4) `New-CertificateSigningRequest.ps1`  
-Generate CSR and private key.
-```powershell
-.\utils\New-CertificateSigningRequest.ps1 -CN example.com -C JP -ST Tokyo -L Tokyo -O "Example Corp"
-```
-
-5) `Export-CertificateModulus.ps1`  
-Export modulus values.
-```powershell
-.\utils\Export-CertificateModulus.ps1 -RootDir .\old
-```
-
-6) `New-CertificateSigningRequestFromOld.ps1`  
-Generate new CSR/key from existing cert info.
-```powershell
-.\utils\New-CertificateSigningRequestFromOld.ps1
-```
-
-7) `Request-LetsEncryptCertificate.ps1`  
-Request Let's Encrypt cert using Docker + certbot.
-```powershell
-.\utils\Request-LetsEncryptCertificate.ps1 -Domain example.com -Email admin@example.com
-```
-
-8) `Request-SelfSignedCertificate.ps1`  
-Generate a 10-year self-signed certificate (separate from Let's Encrypt/public CA issuance).
-```powershell
-.\utils\Request-SelfSignedCertificate.ps1 -CN internal.example.local -Lang en
-```
-Quick mode: choose an organization under `old/`, then generate self-signed certs from existing certificate CNs.  
-Custom mode: manually input CN/Subject/SAN.
-
-9) `Repair-PemFile.ps1`  
-Repair/normalize PEM files.
-```powershell
-.\utils\Repair-PemFile.ps1 -Fullchain .\fullchain.pem -Privkey .\privkey.pem
-```
-
 ## Passphrase file
-`passphrase.txt` search order:  
+`passphrase.txt` search order:
 same folder → parent folders → org folder → old/new → script root → env `PASS_FILE`
 
 ## Path Configuration (config.json)
@@ -139,6 +158,7 @@ Directory names are configurable via `Paths` in `config.json` (defaults):
 }
 ```
 
-By default, time zone output uses a globally stable TimeZone ID (IANA preferred) to avoid OS language dependence.  
+By default, time zone output uses a globally stable TimeZone ID (IANA preferred) to avoid OS language dependence.
 Optional: to override displayed names per language in `Get-CertificateInfo.ps1`, add `TimeZoneNames` in `config.json` (keys are Windows/IANA TimeZone IDs).
 
+For the full change history, see [CHANGELOG.md](CHANGELOG.md).

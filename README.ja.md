@@ -8,8 +8,17 @@
 ## 概要
 証明書・秘密鍵・CSR を扱う PowerShell スクリプト集です。多機関対応と多言語対応を前提にしています。
 
+## バージョン (v1.4.0)
+- **言語の設定化**: 対応言語は `resources/strings.*.psd1` から自動検出。新言語の追加はリソースファイルの追加のみで完了（コード変更不要）。
+- **言語の永続化**: メインメニューで言語を切換えると `.toolkit_lang` に自動保存し、次回起動時に復元。
+- **4枚結合チェーン**: サーバー ＋ 中間 ＋ 交差ルート ＋ ルートCA の 4 枚結合に対応（3 枚結合が推奨デフォルト）。
+- **PFX 強化**: PFX のチェーン構造を完全表示、顧客提供 PFX の検出と再利用プロンプト、レガシー暗号方式の自動回退。
+- **チェーン詳細**: 証明書チェーンの各ブロックにソースファイル名を表示（例: `[nii-odca4g8rsa-pem.cer]`）。
+- **PS7 バージョンチェック**: 全エントリースクリプトで PowerShell 7.x 以上を必須化。
+- **メニュー改善**: 自己署名関連を1つのサブメニューに統合。
+
 ## 事前準備
-- PowerShell 5.1 以上 または PowerShell 7.x
+- **PowerShell 7.x** 以上（スクリプト起動時に自動チェック、未満の場合はエラー終了）
 - OpenSSL（既定: `C:\Program Files\Git\usr\bin\openssl.exe`）
 - 必要なら `passphrase.txt`（暗号化鍵用）
 
@@ -17,48 +26,100 @@
 ```
 ssl_maker/
 ├── old/                    # 旧証明書・鍵・CSR
-│   └── org1/
-│       ├── server.cer
-│       ├── server.key
-│       └── server.csr
 ├── new/                    # 新規生成 CSR・鍵
-│   └── org1/
-│       └── server.csr
 ├── output/                 # 出力ルート
-│   ├── merged/             # 結合済みチェーン
+│   ├── merged/             # 結合済みチェーン & PFX
 │   └── self-signed/        # 自己署名証明書の出力
-├── resources/
-│   └── downloaded/         # AIA 自動取得の保存先
-├── temp/                   # 一時ファイル置き場（実行後に自動削除）
-└── *.ps1
+├── CertStore/              # ルート証明書・中間証明書ストア
+├── resources/              # リソースファイル（言語パック）
+│   ├── strings.ja.psd1     # 日本語
+│   ├── strings.zh.psd1     # 中国語
+│   └── strings.en.psd1     # 英語
+├── CertConfig.psd1         # 証明書マッチングルール
+├── Invoke-SSLToolkit.ps1   # [入口] メインメニュー
+└── utils/                  # 各独立スクリプト
+```
+
+## クイックスタート
+
+```powershell
+.\Invoke-SSLToolkit.ps1
+```
+
+初回起動は日本語です。メインメニューの **Language** から言語を切換えできます（選択は自動保存）。
+
+起動パラメータで言語を指定することも可能：
+```powershell
+.\Invoke-SSLToolkit.ps1 -Lang ja  # 日本語
+.\Invoke-SSLToolkit.ps1 -Lang zh  # 中文
+.\Invoke-SSLToolkit.ps1 -Lang en  # English
 ```
 
 ## スクリプト一覧と使い方
 
-1) `Get-CertificateInfo.ps1`  
-証明書・秘密鍵・CSR の情報を表示。
+1) `Get-CertificateInfo.ps1`
+証明書・秘密鍵・CSR の情報を表示。多段チェーンの各ブロック詳細やソースファイル名を表示。
 ```powershell
 .\utils\Get-CertificateInfo.ps1
 .\utils\Get-CertificateInfo.ps1 -Path .\new\example.com\example.com.cer -Table
-.\utils\Get-CertificateInfo.ps1 -Lang ja -PrettyTable
-.\utils\Get-CertificateInfo.ps1 -Path .\server.cer -ChainFile .\server.chain.cer
 .\utils\Get-CertificateInfo.ps1 -Lang ja
 ```
 
-2) `Merge-CertificateChain.ps1`  
-fullchain を生成します（証明書 + 中間）。必要なら交差ルートを末尾に追加できます。
+2) `Merge-CertificateChain.ps1`
+fullchain を生成（証明書 + 中間）。3枚結合（推奨）または 4枚結合（ルートCA含む）に対応。
 ```powershell
-# fullchain（証明書+中間）
 .\utils\Merge-CertificateChain.ps1 -ClientCert .\client.cer -IntermediateCert .\intermediate.cer
-
-# fullchain + 交差ルート
 .\utils\Merge-CertificateChain.ps1 -ClientCert .\client.cer -IntermediateCert .\intermediate.cer -RootCert .\cross-root.cer
 ```
 
-## Apache / Tomcat 設定（fullchain）
-Apache と Tomcat はどちらも fullchain（証明書 + 中間、必要なら交差ルート）を使用します。
+3) `Convert-KeyToPlaintext.ps1`
+暗号化鍵を平文に変換。
+```powershell
+.\utils\Convert-KeyToPlaintext.ps1 -Path .\new\example.com\server.key
+.\utils\Convert-KeyToPlaintext.ps1 -Path .\new -Recurse -Overwrite
+```
 
-## Apache / Tomcat の設定例（fullchain）
+4) `New-CertificateSigningRequest.ps1`
+CSR と秘密鍵を生成。
+```powershell
+.\utils\New-CertificateSigningRequest.ps1 -CN example.com -C JP -ST Tokyo -L Tokyo -O "Example Corp"
+```
+
+5) `Export-CertificateModulus.ps1`
+証明書/鍵の Modulus を一覧出力。
+```powershell
+.\utils\Export-CertificateModulus.ps1 -RootDir .\old
+```
+
+6) `New-CertificateSigningRequestFromOld.ps1`
+旧証明書情報から新 CSR/鍵を生成。
+```powershell
+.\utils\New-CertificateSigningRequestFromOld.ps1
+```
+
+7) `Request-LetsEncryptCertificate.ps1`
+Docker + certbot で Let's Encrypt を申請。
+```powershell
+.\utils\Request-LetsEncryptCertificate.ps1 -Domain example.com -Email admin@example.com
+```
+
+8) `Request-SelfSignedCertificate.ps1`
+10年有効の自己署名証明書を生成。
+```powershell
+.\utils\Request-SelfSignedCertificate.ps1 -CN internal.example.local -Lang ja
+```
+
+9) `Repair-PemFile.ps1`
+PEM の修復・正規化。
+```powershell
+.\utils\Repair-PemFile.ps1 -Fullchain .\fullchain.pem -Privkey .\privkey.pem
+```
+
+## 🌐 多言語拡張
+
+新しい言語を追加するには `resources/strings.xx.psd1`（xx は言語コード）を作成し、`Language.DisplayName` キーと全翻訳キーを含めるだけです。コード変更は不要で、メインメニューの言語選択に自動的に表示されます。
+
+## Apache / Tomcat 設定例
 
 Apache（fullchain 方式）:
 ```apache
@@ -66,73 +127,18 @@ SSLCertificateFile      /path/to/fullchain.cer
 SSLCertificateKeyFile   /path/to/server.key
 ```
 
-Tomcat（PKCS#12 方式、fullchain を入力）:
-```bash
-openssl pkcs12 -export \
-  -in /path/to/server.cer \
-  -inkey /path/to/server.key \
-  -certfile /path/to/server.chain.cer \
-  -out /path/to/server.p12
-```
+Tomcat（PKCS#12 方式）:
 ```xml
 <Connector port="8443"
   protocol="org.apache.coyote.http11.Http11NioProtocol"
   SSLEnabled="true"
-  keystoreFile="/path/to/server.p12"
-  keystorePass="changeit"
+  keystoreFile="/path/to/server.pfx"
+  keystorePass=""
   keystoreType="PKCS12" />
 ```
 
-3) `Convert-KeyToPlaintext.ps1`  
-暗号化鍵を平文に変換。
-```powershell
-.\utils\Convert-KeyToPlaintext.ps1 -Path .\new\example.com\server.key
-.\utils\Convert-KeyToPlaintext.ps1 -Path .\new -Recurse -Overwrite
-```
-
-4) `New-CertificateSigningRequest.ps1`  
-CSR と秘密鍵を生成。
-```powershell
-.\utils\New-CertificateSigningRequest.ps1 -CN example.com -C JP -ST Tokyo -L Tokyo -O "Example Corp"
-.\utils\New-CertificateSigningRequest.ps1 -CN example.com -PassFile .\passphrase.txt -Overwrite
-```
-
-5) `Export-CertificateModulus.ps1`  
-証明書/鍵の Modulus を一覧出力。
-```powershell
-.\utils\Export-CertificateModulus.ps1 -RootDir .\old
-.\utils\Export-CertificateModulus.ps1 -RootDir . -PassFile .\passphrase.txt
-```
-
-6) `New-CertificateSigningRequestFromOld.ps1`  
-旧証明書情報から新 CSR/鍵を生成。
-```powershell
-.\utils\New-CertificateSigningRequestFromOld.ps1
-.\utils\New-CertificateSigningRequestFromOld.ps1 -Org example.com -Overwrite
-```
-
-7) `Request-LetsEncryptCertificate.ps1`  
-Docker + certbot で Let's Encrypt を申請。
-```powershell
-.\utils\Request-LetsEncryptCertificate.ps1 -Domain example.com -Email admin@example.com
-```
-
-8) `Request-SelfSignedCertificate.ps1`  
-10年有効の自己署名証明書を生成（Let's Encrypt / 公開 CA 署名とは別機能）。
-```powershell
-.\utils\Request-SelfSignedCertificate.ps1 -CN internal.example.local -Lang ja
-```
-簡易作成モード: `old/` 配下の機関を選択し、既存証明書の CN から自己署名証明書を生成。  
-個別設定モード: CN/Subject/SAN を手動入力して生成。
-
-9) `Repair-PemFile.ps1`  
-PEM の修復・正規化。
-```powershell
-.\utils\Repair-PemFile.ps1 -Fullchain .\fullchain.pem -Privkey .\privkey.pem
-```
-
 ## パスワードファイル
-`passphrase.txt` の探索順序（最大 6 階層）:  
+`passphrase.txt` の探索順序（最大 6 階層）:
 鍵と同階層 → 上位 → 機関直下 → old/new 直下 → スクリプト直下 → 環境変数 `PASS_FILE`
 
 ## パス設定（config.json）
@@ -151,6 +157,4 @@ PEM の修復・正規化。
 }
 ```
 
-既定ではタイムゾーン名は地域依存の翻訳を使わず、グローバルに安定した TimeZone ID（IANA 優先）を表示します。  
-任意設定として、`config.json` の `TimeZoneNames` で言語別表示名を上書きできます（キーは Windows/IANA の TimeZone ID）。
-
+詳細な変更履歴は [CHANGELOG.md](CHANGELOG.md) を参照してください。
