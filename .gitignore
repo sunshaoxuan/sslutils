@@ -52,6 +52,7 @@ Desktop.ini
 *.swp
 *.swo
 .claude/
+.antigravity/
 
 # User preferences
 .toolkit_lang
