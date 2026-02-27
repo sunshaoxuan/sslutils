@@ -1,8 +1,10 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+. (Join-Path $PSScriptRoot "defaults.ps1")
+
 if ($PSVersionTable.PSVersion.Major -lt 7) {
-  $__curLang = if (Test-Path variable:Lang) { $Lang } else { "en" }
+  $__curLang = if (Test-Path variable:Lang) { $Lang } else { $__DefaultLang }
   $__msg = "[エラー] PowerShell 7.x 以上が必要です。"
   $__cur = "現在のバージョン"
   try {
@@ -40,20 +42,21 @@ function Get-AvailableLanguages {
       $langs += [PSCustomObject]@{ Code = $code; DisplayName = $displayName }
     }
   }
-  $en = @($langs | Where-Object { $_.Code -eq "en" })
-  $others = @($langs | Where-Object { $_.Code -ne "en" } | Sort-Object Code)
-  return @($en + $others)
+  $primary = @($langs | Where-Object { $_.Code -eq $__DefaultLang })
+  $others = @($langs | Where-Object { $_.Code -ne $__DefaultLang } | Sort-Object Code)
+  return @($primary + $others)
 }
 
 function Initialize-I18n {
   param(
     [Parameter(Mandatory = $false)]
-    [string]$Lang = "en",
+    [string]$Lang = "",
 
     [Parameter(Mandatory = $false)]
     [string]$BaseDir = ""
   )
 
+  if ([string]::IsNullOrWhiteSpace($Lang)) { $Lang = $__DefaultLang }
   if ([string]::IsNullOrWhiteSpace($BaseDir)) { $BaseDir = $PSScriptRoot }
   $resDir = Join-Path $BaseDir "resources"
   $jaPath = Join-Path $resDir "strings.ja.psd1"

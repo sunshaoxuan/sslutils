@@ -60,7 +60,7 @@ param(
   [switch]$TestNginx,
 
   [Parameter(Mandatory = $false)]
-  [string]$Lang = "en"
+  [string]$Lang = ""
 )
 
 

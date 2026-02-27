@@ -26,12 +26,14 @@ $ErrorActionPreference = "Stop"
 $ToolkitVersion = "1.4.0"
 $ToolkitLastUpdated = "2026-02-17"
 
+. (Join-Path $PSScriptRoot "utils\lib\defaults.ps1")
+
 $__langFile = Join-Path $PSScriptRoot ".toolkit_lang"
 if ([string]::IsNullOrWhiteSpace($Lang)) {
     if (Test-Path -LiteralPath $__langFile -PathType Leaf) {
         $Lang = (Get-Content -LiteralPath $__langFile -Raw -ErrorAction SilentlyContinue).Trim()
     }
-    if ([string]::IsNullOrWhiteSpace($Lang)) { $Lang = "en" }
+    if ([string]::IsNullOrWhiteSpace($Lang)) { $Lang = $__DefaultLang }
 }
 
 # UTF-8出力設定

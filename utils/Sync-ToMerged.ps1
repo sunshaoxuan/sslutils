@@ -24,7 +24,7 @@ param(
     [Parameter(Mandatory = $false)]
     [string]$OpenSsl = "C:\Program Files\Git\usr\bin\openssl.exe",
     [Parameter(Mandatory = $false)]
-    [string]$Lang = "en"
+    [string]$Lang = ""
 )
 
 Set-StrictMode -Version Latest

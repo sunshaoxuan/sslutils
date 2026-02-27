@@ -76,7 +76,7 @@ param(
   [switch]$Clean,
 
   [Parameter(Mandatory = $false)]
-  [string]$Lang = "en"
+  [string]$Lang = ""
 )
 
 

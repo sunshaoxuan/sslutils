@@ -12,12 +12,14 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+. (Join-Path $PSScriptRoot "lib\defaults.ps1")
+
 if ($PSVersionTable.PSVersion.Major -lt 7) {
   $__msg = "[エラー] PowerShell 7.x 以上が必要です。"
   $__cur = "現在のバージョン"
   try {
     $__resDir = Join-Path (Split-Path -Parent $PSScriptRoot) "resources"
-    $__lc = if (Test-Path variable:Lang) { $Lang } else { "en" }
+    $__lc = if (Test-Path variable:Lang) { $Lang } else { $__DefaultLang }
     $__langFile = Join-Path $__resDir ("strings.{0}.psd1" -f $__lc)
     if (Test-Path -LiteralPath $__langFile -PathType Leaf) {
       $__d = Import-PowerShellDataFile -LiteralPath $__langFile

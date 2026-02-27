@@ -30,7 +30,7 @@ param(
     # TsvFile not needed, filename deduced from Org name
     [switch]$Interactive = $true,
     [Parameter(Mandatory = $false)]
-    [string]$Lang = "en",
+    [string]$Lang = "",  # resolved via defaults.ps1
     
     # Defaults for automation/testing
     [string]$DefaultSoftware = $null,
@@ -43,6 +43,9 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+. (Join-Path $PSScriptRoot "lib\defaults.ps1")
+if ([string]::IsNullOrWhiteSpace($Lang)) { $Lang = $__DefaultLang }
 
 if ($PSVersionTable.PSVersion.Major -lt 7) {
   $__msg = "[エラー] PowerShell 7.x 以上が必要です。"
