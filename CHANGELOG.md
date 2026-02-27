@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 - **Terminology**: Renamed the TSV-related menu concept from "Server List" to "Certificate Renewal TSV" across menu labels, i18n strings, and README files.
 - **Menu Label**: Updated launcher display name from `Export-ServerList` to `Export-CertTSV`.
 - **TSV Default Name**: Preferred output filename is now `cert_renewal_list.tsv`, with backward compatibility for existing `server_list.tsv`.
+- **Tomcat Docs**: Expanded README examples to include both PEM (`key` + `cer` + `chain`) and PKCS#12 (`.pfx`) configurations, with deployment caveats.
 
 ### Fixed
 - **Repo Hygiene**: Removed unintended tracked local/runtime files (`.antigravity`, non-README files under `new/old/output`, and sample organization TSVs).

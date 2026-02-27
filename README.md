@@ -131,7 +131,22 @@ SSLCertificateFile      /path/to/fullchain.cer
 SSLCertificateKeyFile   /path/to/server.key
 ```
 
-Tomcat (PKCS#12):
+Tomcat (PEM: key + cert + chain):
+```xml
+<Connector port="8443"
+  protocol="org.apache.coyote.http11.Http11NioProtocol"
+  SSLEnabled="true">
+  <SSLHostConfig>
+    <Certificate
+      certificateFile="/path/to/server.cer"
+      certificateKeyFile="/path/to/server.key"
+      certificateChainFile="/path/to/chain.cer"
+      type="RSA" />
+  </SSLHostConfig>
+</Connector>
+```
+
+Tomcat (PKCS#12 / PFX, optional):
 ```xml
 <Connector port="8443"
   protocol="org.apache.coyote.http11.Http11NioProtocol"
@@ -140,6 +155,10 @@ Tomcat (PKCS#12):
   keystorePass=""
   keystoreType="PKCS12" />
 ```
+
+Notes:
+- Use PEM configuration when your delivery artifacts are `.key` + `.cer` (+ chain).
+- PFX is still useful for specific environments, but real deployments usually also require cert reload strategy, file permissions, and chain/trust validation.
 
 ## Passphrase file
 `passphrase.txt` search order:

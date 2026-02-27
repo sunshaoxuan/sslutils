@@ -130,7 +130,22 @@ SSLCertificateFile      /path/to/fullchain.cer
 SSLCertificateKeyFile   /path/to/server.key
 ```
 
-Tomcat（PKCS#12 方式）:
+Tomcat（PEM: key + cert + chain）:
+```xml
+<Connector port="8443"
+  protocol="org.apache.coyote.http11.Http11NioProtocol"
+  SSLEnabled="true">
+  <SSLHostConfig>
+    <Certificate
+      certificateFile="/path/to/server.cer"
+      certificateKeyFile="/path/to/server.key"
+      certificateChainFile="/path/to/chain.cer"
+      type="RSA" />
+  </SSLHostConfig>
+</Connector>
+```
+
+Tomcat（PKCS#12 / PFX、任意）:
 ```xml
 <Connector port="8443"
   protocol="org.apache.coyote.http11.Http11NioProtocol"
@@ -139,6 +154,10 @@ Tomcat（PKCS#12 方式）:
   keystorePass=""
   keystoreType="PKCS12" />
 ```
+
+注:
+- 納品物が `.key` + `.cer`（+ chain）の場合は PEM 構成が分かりやすいです。
+- PFX は特定環境で有効ですが、実運用では証明書チェーン確認、権限設定、再読込手順など追加考慮が必要です。
 
 ## パスワードファイル
 `passphrase.txt` の探索順序（最大 6 階層）:

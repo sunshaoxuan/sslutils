@@ -123,8 +123,26 @@ SSLCertificateFile      /path/to/output/merged/server.cer
 SSLCertificateKeyFile   /path/to/new/server.key
 ```
 
-### Tomcat / IIS
-使用生成的 `.pfx` 文件：
+### Tomcat（PEM：key + cer + chain）
+当交付物是 `.key` + `.cer`（以及链文件）时，建议使用该配置：
+
+```xml
+<!-- Tomcat server.xml -->
+<Connector port="8443"
+  protocol="org.apache.coyote.http11.Http11NioProtocol"
+  SSLEnabled="true">
+  <SSLHostConfig>
+    <Certificate
+      certificateFile="/path/to/server.cer"
+      certificateKeyFile="/path/to/server.key"
+      certificateChainFile="/path/to/chain.cer"
+      type="RSA" />
+  </SSLHostConfig>
+</Connector>
+```
+
+### Tomcat / IIS（PKCS#12 / PFX，可选）
+当目标平台要求 keystore 时，可使用 `.pfx`：
 
 ```xml
 <!-- Tomcat server.xml -->
@@ -136,6 +154,7 @@ SSLCertificateKeyFile   /path/to/new/server.key
   keystoreType="PKCS12" />
 ```
 *(注：如果生成 PFX 时未设置密码，keystorePass 为空或省略；如有设置，请填写对应密码)*
+*(注：真实部署通常还涉及证书链校验、文件权限、热更新/重载流程等，往往不止几行配置。)*
 
 ---
 
