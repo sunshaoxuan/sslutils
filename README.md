@@ -8,14 +8,11 @@ Languages:
 ## Overview
 PowerShell scripts to manage certificates, keys, and CSRs with multi-org and multi-language support.
 
-## What's New (v1.4.0)
-- **Configurable Languages**: Supported languages are auto-discovered from `resources/strings.*.psd1`. Adding a new language requires only a resource file — no code changes.
-- **Language Persistence**: Language selection is saved to `.toolkit_lang` and restored on next launch.
-- **4-Block Chain Merge**: Support for server + intermediate + cross-root + root CA chains (3-block remains the recommended default).
-- **PFX Enhancements**: Full chain display for PFX files, customer-provided PFX detection with prompt, and legacy cipher fallback (RC2-40-CBC etc.).
-- **Chain Source Labels**: Certificate chain display annotates each intermediate/root block with its source filename (e.g., `[nii-odca4g8rsa-pem.cer]`).
-- **PS7 Version Check**: All entry-point scripts enforce PowerShell 7.x minimum with localized error messages.
-- **Menu Consolidation**: Self-Signed (10Y) and Let's Encrypt merged into a single submenu.
+## What's New (v1.4.1)
+- **Terminology Cleanup**: Replaced "Server List" naming with "Certificate Renewal TSV" across menu, strings, and docs.
+- **TSV Output Defaults**: Preferred filename is now `cert_renewal_list.tsv` (legacy `server_list.tsv` is still supported).
+- **Repository Hygiene**: Local/internal/runtime files are no longer tracked by default.
+- Full feature history (including v1.4.0 major changes): [CHANGELOG.md](CHANGELOG.md).
 
 ## Prerequisites
 - **PowerShell 7.x** or later (auto-checked on startup; exits with error if below)

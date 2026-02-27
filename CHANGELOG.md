@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.4.1] - 2026-02-27
+
+### Changed
+- **Terminology**: Renamed the TSV-related menu concept from "Server List" to "Certificate Renewal TSV" across menu labels, i18n strings, and README files.
+- **Menu Label**: Updated launcher display name from `Export-ServerList` to `Export-CertTSV`.
+- **TSV Default Name**: Preferred output filename is now `cert_renewal_list.tsv`, with backward compatibility for existing `server_list.tsv`.
+
+### Fixed
+- **Repo Hygiene**: Removed unintended tracked local/runtime files (`.antigravity`, non-README files under `new/old/output`, and sample organization TSVs).
+- **Docs Alignment**: Updated docs to reflect actual default language behavior and current release messaging.
+
 ## [1.4.0] - 2026-02-17
 
 ### Added
