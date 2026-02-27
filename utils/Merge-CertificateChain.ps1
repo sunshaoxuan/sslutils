@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
 クライアント証明書と中間証明書を結合してフルチェーンを作成するスクリプト
 
@@ -99,7 +99,6 @@ param(
 
   # 出力言語（既定: ja）
   [Parameter(Mandatory = $false)]
-  [ValidateSet("ja", "zh", "en")]
   [string]$Lang = "ja"
 )
 

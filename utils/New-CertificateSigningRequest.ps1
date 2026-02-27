@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
 汎用的な CSR（証明書署名要求）と秘密鍵を生成するスクリプト
 
@@ -116,7 +116,6 @@ param(
 
   # 出力言語（既定: ja）
   [Parameter(Mandatory = $false)]
-  [ValidateSet("ja", "zh", "en")]
   [string]$Lang = "ja"
 )
 

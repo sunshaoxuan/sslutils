@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
 Let's Encrypt 証明書を Docker で自動申請するスクリプト
 
@@ -76,7 +76,6 @@ param(
   [switch]$Clean,
 
   [Parameter(Mandatory = $false)]
-  [ValidateSet("ja", "zh", "en")]
   [string]$Lang = "ja"
 )
 

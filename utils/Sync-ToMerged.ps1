@@ -24,7 +24,6 @@ param(
     [Parameter(Mandatory = $false)]
     [string]$OpenSsl = "C:\Program Files\Git\usr\bin\openssl.exe",
     [Parameter(Mandatory = $false)]
-    [ValidateSet("ja", "zh", "en")]
     [string]$Lang = "ja"
 )
 

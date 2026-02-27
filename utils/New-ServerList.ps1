@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
 Creates a Server List TSV file from CSRs (supports legacy import and manual edit preservation).
 
@@ -30,7 +30,6 @@ param(
     # TsvFile not needed, filename deduced from Org name
     [switch]$Interactive = $true,
     [Parameter(Mandatory = $false)]
-    [ValidateSet("ja", "zh", "en")]
     [string]$Lang = "ja",
     
     # Defaults for automation/testing
@@ -46,8 +45,19 @@ param(
 $ErrorActionPreference = "Stop"
 
 if ($PSVersionTable.PSVersion.Major -lt 7) {
-  Write-Host "[エラー] PowerShell 7.x 以上が必要です。" -ForegroundColor Red
-  Write-Host ("        現在のバージョン: {0}" -f $PSVersionTable.PSVersion) -ForegroundColor Red
+  $__msg = "[エラー] PowerShell 7.x 以上が必要です。"
+  $__cur = "現在のバージョン"
+  try {
+    $__resDir = Join-Path (Split-Path -Parent $PSScriptRoot) "resources"
+    $__langFile = Join-Path $__resDir ("strings.{0}.psd1" -f $Lang)
+    if (Test-Path -LiteralPath $__langFile -PathType Leaf) {
+      $__d = Import-PowerShellDataFile -LiteralPath $__langFile
+      if ($__d.ContainsKey("Language.VersionCheckError")) { $__msg = $__d["Language.VersionCheckError"] }
+      if ($__d.ContainsKey("Language.VersionCheckCurrent")) { $__cur = $__d["Language.VersionCheckCurrent"] }
+    }
+  } catch {}
+  Write-Host $__msg -ForegroundColor Red
+  Write-Host ("        {0}: {1}" -f $__cur, $PSVersionTable.PSVersion) -ForegroundColor Red
   Write-Host "        https://github.com/PowerShell/PowerShell/releases" -ForegroundColor Yellow
   exit 1
 }

@@ -1,4 +1,4 @@
-﻿
+
 # 自動リネームツール：ドメイン名から組織名を取得してフォルダ名を変更する
 # 対象範囲：old, new, merged ディレクトリ
 # ロジック：3つのディレクトリ内の同名フォルダを一括で変更し、整合性を保つ
@@ -13,8 +13,20 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 if ($PSVersionTable.PSVersion.Major -lt 7) {
-  Write-Host "[エラー] PowerShell 7.x 以上が必要です。" -ForegroundColor Red
-  Write-Host ("        現在のバージョン: {0}" -f $PSVersionTable.PSVersion) -ForegroundColor Red
+  $__msg = "[エラー] PowerShell 7.x 以上が必要です。"
+  $__cur = "現在のバージョン"
+  try {
+    $__resDir = Join-Path (Split-Path -Parent $PSScriptRoot) "resources"
+    $__lc = if (Test-Path variable:Lang) { $Lang } else { "ja" }
+    $__langFile = Join-Path $__resDir ("strings.{0}.psd1" -f $__lc)
+    if (Test-Path -LiteralPath $__langFile -PathType Leaf) {
+      $__d = Import-PowerShellDataFile -LiteralPath $__langFile
+      if ($__d.ContainsKey("Language.VersionCheckError")) { $__msg = $__d["Language.VersionCheckError"] }
+      if ($__d.ContainsKey("Language.VersionCheckCurrent")) { $__cur = $__d["Language.VersionCheckCurrent"] }
+    }
+  } catch {}
+  Write-Host $__msg -ForegroundColor Red
+  Write-Host ("        {0}: {1}" -f $__cur, $PSVersionTable.PSVersion) -ForegroundColor Red
   Write-Host "        https://github.com/PowerShell/PowerShell/releases" -ForegroundColor Yellow
   exit 1
 }

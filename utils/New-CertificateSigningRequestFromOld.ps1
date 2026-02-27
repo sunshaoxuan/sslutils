@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
 旧証明書情報から新しい CSR と秘密鍵を生成するスクリプト
 
@@ -110,7 +110,6 @@ param(
 
   # 出力言語（既定: ja）
   [Parameter(Mandatory = $false)]
-  [ValidateSet("ja", "zh", "en")]
   [string]$Lang = "ja"
 )
 

@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
 PEM ファイルのフォーマットを修復・正規化するスクリプト
 
@@ -60,7 +60,6 @@ param(
   [switch]$TestNginx,
 
   [Parameter(Mandatory = $false)]
-  [ValidateSet("ja", "zh", "en")]
   [string]$Lang = "ja"
 )
 

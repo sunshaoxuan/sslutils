@@ -1,4 +1,9 @@
-﻿@{
+@{
+  # Language metadata
+  "Language.DisplayName"                     = "日本語"
+  "Language.VersionCheckError"               = "[エラー] PowerShell 7.x 以上が必要です。"
+  "Language.VersionCheckCurrent"             = "現在のバージョン"
+
   # Common
   "Common.Yes"                               = "はい"
   "Common.No"                                = "いいえ"
@@ -24,6 +29,33 @@
   "Toolkit.Exit.UpdatedLine"                 = "最終更新: {0}"
   "Toolkit.Exit.Copyright"                   = "Copyright (c) sunshaoxuan"
   "Toolkit.Exit.Thanks"                      = "ご利用ありがとうございました！"
+
+  # Toolkit menu
+  "Toolkit.Menu.Title"                       = "ツールを選択 (↑↓で選択, Enterで実行, ESCで終了)"
+  "Toolkit.Menu.Exit"                        = "[ 終了 ]"
+  "Toolkit.Menu.Back"                        = "[ 戻る ]"
+  "Toolkit.Menu.Language"                    = "言語"
+  "Toolkit.Menu.SelectLanguage"              = "表示言語を選択"
+  "Toolkit.Menu.SubMenuSelect"               = "{0} - 種類を選択"
+  "Toolkit.Menu.Starting"                    = "起動中: {0}"
+  "Toolkit.Menu.PressAnyKey"                 = "任意のキーを押してメニューに戻る..."
+  "Toolkit.Menu.AutoRename"                  = "起動時自動処理: 組織フォルダのリネーム確認を実行します..."
+  "Toolkit.Menu.AutoRenameFailed"            = "自動リネーム確認に失敗したためスキップしました: {0}"
+  "Toolkit.Menu.ScriptNotFound"              = "スクリプトが見つかりません: {0}"
+
+  # Tool descriptions
+  "Toolkit.Tool.CertInfo"                    = "証明書情報を確認"
+  "Toolkit.Tool.CsrFromOld"                  = "既存証明書からCSR更新"
+  "Toolkit.Tool.NewCsr"                      = "新規CSR作成"
+  "Toolkit.Tool.MergeChain"                  = "証明書チェーン結合"
+  "Toolkit.Tool.ConvertKey"                  = "秘密鍵を平文に変換"
+  "Toolkit.Tool.ExportModulus"               = "証明書モジュラス出力"
+  "Toolkit.Tool.RepairPem"                   = "PEMファイル修復"
+  "Toolkit.Tool.ServerList"                  = "サーバー一覧作成"
+  "Toolkit.Tool.SyncMerged"                  = "new→output/merged同期 (key,csr,tsv)"
+  "Toolkit.Tool.SelfSigned"                  = "自己署名証明書"
+  "Toolkit.SubTool.SelfSigned10Y"            = "10年自己署名証明書を作成"
+  "Toolkit.SubTool.LetsEncrypt"              = "Let's Encrypt 証明書を取得"
   "Common.FileNotFound"                      = "{0} が見つかりません: {1}"
   "Common.OpenSslCmdFailed"                  = "OpenSSL コマンド失敗: {0}`n{1}"
   "Common.Exists"                            = "存在"

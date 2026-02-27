@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
 暗号化された秘密鍵ファイルを復号化して平文鍵を作成するスクリプト
 
@@ -87,7 +87,6 @@ param(
 
   # 出力言語（既定: ja）
   [Parameter(Mandatory = $false)]
-  [ValidateSet("ja", "zh", "en")]
   [string]$Lang = "ja"
 )
 

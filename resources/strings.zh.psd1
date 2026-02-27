@@ -1,4 +1,9 @@
-﻿@{
+@{
+  # Language metadata
+  "Language.DisplayName"                     = "中文"
+  "Language.VersionCheckError"               = "[错误] 需要 PowerShell 7.x 以上版本。"
+  "Language.VersionCheckCurrent"             = "当前版本"
+
   # Common
   "Common.Yes"                               = "是"
   "Common.No"                                = "否"
@@ -23,6 +28,33 @@
   "Toolkit.Exit.UpdatedLine"                 = "最后更新: {0}"
   "Toolkit.Exit.Copyright"                   = "Copyright (c) sunshaoxuan"
   "Toolkit.Exit.Thanks"                      = "感谢您的使用！"
+
+  # Toolkit menu
+  "Toolkit.Menu.Title"                       = "请选择工具 (↑↓选择, Enter确认, ESC退出)"
+  "Toolkit.Menu.Exit"                        = "[ 退出 ]"
+  "Toolkit.Menu.Back"                        = "[ 返回 ]"
+  "Toolkit.Menu.Language"                    = "语言"
+  "Toolkit.Menu.SelectLanguage"              = "选择显示语言"
+  "Toolkit.Menu.SubMenuSelect"               = "{0} - 请选择类型"
+  "Toolkit.Menu.Starting"                    = "正在启动: {0}"
+  "Toolkit.Menu.PressAnyKey"                 = "按任意键返回菜单..."
+  "Toolkit.Menu.AutoRename"                  = "启动时自动执行：组织文件夹重命名检查..."
+  "Toolkit.Menu.AutoRenameFailed"            = "自动重命名检查失败，已跳过: {0}"
+  "Toolkit.Menu.ScriptNotFound"              = "脚本未找到: {0}"
+
+  # Tool descriptions
+  "Toolkit.Tool.CertInfo"                    = "查看证书信息"
+  "Toolkit.Tool.CsrFromOld"                  = "从旧证书续期CSR"
+  "Toolkit.Tool.NewCsr"                      = "创建新CSR"
+  "Toolkit.Tool.MergeChain"                  = "合并证书链"
+  "Toolkit.Tool.ConvertKey"                  = "密钥转换为明文"
+  "Toolkit.Tool.ExportModulus"               = "导出证书模数"
+  "Toolkit.Tool.RepairPem"                   = "修复PEM文件"
+  "Toolkit.Tool.ServerList"                  = "生成服务器列表"
+  "Toolkit.Tool.SyncMerged"                  = "同步到output/merged (key,csr,tsv)"
+  "Toolkit.Tool.SelfSigned"                  = "自签证书"
+  "Toolkit.SubTool.SelfSigned10Y"            = "生成10年期自签证书"
+  "Toolkit.SubTool.LetsEncrypt"              = "获取 Let's Encrypt 证书"
   "Common.FileNotFound"                      = "{0} 不存在: {1}"
   "Common.OpenSslCmdFailed"                  = "OpenSSL 命令失败: {0}`n{1}"
   "Common.Exists"                            = "存在"

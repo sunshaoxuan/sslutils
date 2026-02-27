@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
 証明書・秘密鍵・CSR ファイルの基本情報を表示するスクリプト
 
@@ -85,7 +85,6 @@ param(
 
   # 出力言語（既定: ja）
   [Parameter(Mandatory = $false)]
-  [ValidateSet("ja", "zh", "en")]
   [string]$Lang = "ja"
 )
 

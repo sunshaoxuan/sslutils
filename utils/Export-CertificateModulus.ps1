@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
 すべての証明書と秘密鍵の Modulus 値を一覧表示するスクリプト
 
@@ -61,7 +61,6 @@ param(
 
   # 出力言語（既定: ja）
   [Parameter(Mandatory = $false)]
-  [ValidateSet("ja", "zh", "en")]
   [string]$Lang = "ja"
 )
 

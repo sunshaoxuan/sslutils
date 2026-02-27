@@ -1,28 +1,53 @@
-﻿Set-StrictMode -Version Latest
+Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 if ($PSVersionTable.PSVersion.Major -lt 7) {
   $__curLang = if (Test-Path variable:Lang) { $Lang } else { "ja" }
-  $__msg = switch ($__curLang) {
-    "zh" { "[错误] 需要 PowerShell 7.x 以上版本。" }
-    "en" { "[ERROR] PowerShell 7.x or later is required." }
-    default { "[エラー] PowerShell 7.x 以上が必要です。" }
-  }
-  $__cur = switch ($__curLang) {
-    "zh" { "当前版本" }
-    "en" { "Current" }
-    default { "現在のバージョン" }
-  }
+  $__msg = "[エラー] PowerShell 7.x 以上が必要です。"
+  $__cur = "現在のバージョン"
+  try {
+    $__resDir = Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) "resources"
+    $__langFile = Join-Path $__resDir ("strings.{0}.psd1" -f $__curLang)
+    if (Test-Path -LiteralPath $__langFile -PathType Leaf) {
+      $__d = Import-PowerShellDataFile -LiteralPath $__langFile
+      if ($__d.ContainsKey("Language.VersionCheckError")) { $__msg = $__d["Language.VersionCheckError"] }
+      if ($__d.ContainsKey("Language.VersionCheckCurrent")) { $__cur = $__d["Language.VersionCheckCurrent"] }
+    }
+  } catch {}
   Write-Host $__msg -ForegroundColor Red
   Write-Host ("        {0}: {1}" -f $__cur, $PSVersionTable.PSVersion) -ForegroundColor Red
   Write-Host "        https://github.com/PowerShell/PowerShell/releases" -ForegroundColor Yellow
   exit 1
 }
 
+function Get-AvailableLanguages {
+  param(
+    [Parameter(Mandatory = $false)]
+    [string]$BaseDir = ""
+  )
+  if ([string]::IsNullOrWhiteSpace($BaseDir)) { $BaseDir = Split-Path -Parent (Split-Path -Parent $PSScriptRoot) }
+  $resDir = Join-Path $BaseDir "resources"
+  $langs = @()
+  $files = @(Get-ChildItem -LiteralPath $resDir -Filter "strings.*.psd1" -File -ErrorAction SilentlyContinue)
+  foreach ($f in $files) {
+    if ($f.Name -match '^strings\.([a-z]{2,})\.psd1$') {
+      $code = $matches[1]
+      try {
+        $data = Import-PowerShellDataFile -LiteralPath $f.FullName
+        $displayName = if ($data.ContainsKey("Language.DisplayName")) { $data["Language.DisplayName"] } else { $code }
+      }
+      catch { $displayName = $code }
+      $langs += [PSCustomObject]@{ Code = $code; DisplayName = $displayName }
+    }
+  }
+  $ja = @($langs | Where-Object { $_.Code -eq "ja" })
+  $others = @($langs | Where-Object { $_.Code -ne "ja" } | Sort-Object Code)
+  return @($ja + $others)
+}
+
 function Initialize-I18n {
   param(
     [Parameter(Mandatory = $false)]
-    [ValidateSet("ja", "zh", "en")]
     [string]$Lang = "ja",
 
     [Parameter(Mandatory = $false)]

@@ -1,4 +1,9 @@
-﻿@{
+@{
+  # Language metadata
+  "Language.DisplayName"                     = "English"
+  "Language.VersionCheckError"               = "[ERROR] PowerShell 7.x or later is required."
+  "Language.VersionCheckCurrent"             = "Current"
+
   # Common
   "Common.Yes"                               = "Yes"
   "Common.No"                                = "No"
@@ -23,6 +28,33 @@
   "Toolkit.Exit.UpdatedLine"                 = "Last Updated: {0}"
   "Toolkit.Exit.Copyright"                   = "Copyright (c) sunshaoxuan"
   "Toolkit.Exit.Thanks"                      = "Thank you for using SSL Toolkit!"
+
+  # Toolkit menu
+  "Toolkit.Menu.Title"                       = "Select Tool (Up/Down to select, Enter to confirm, ESC to exit)"
+  "Toolkit.Menu.Exit"                        = "[ Exit ]"
+  "Toolkit.Menu.Back"                        = "[ Back ]"
+  "Toolkit.Menu.Language"                    = "Language"
+  "Toolkit.Menu.SelectLanguage"              = "Select Language"
+  "Toolkit.Menu.SubMenuSelect"               = "{0} - Select type"
+  "Toolkit.Menu.Starting"                    = "Starting: {0}"
+  "Toolkit.Menu.PressAnyKey"                 = "Press any key to return to menu..."
+  "Toolkit.Menu.AutoRename"                  = "Startup auto task: organization folder rename check..."
+  "Toolkit.Menu.AutoRenameFailed"            = "Auto rename check failed and was skipped: {0}"
+  "Toolkit.Menu.ScriptNotFound"              = "Script not found: {0}"
+
+  # Tool descriptions
+  "Toolkit.Tool.CertInfo"                    = "View Certificate Info"
+  "Toolkit.Tool.CsrFromOld"                  = "Renew CSR from Old Certificate"
+  "Toolkit.Tool.NewCsr"                      = "Create New CSR"
+  "Toolkit.Tool.MergeChain"                  = "Merge Certificate Chain"
+  "Toolkit.Tool.ConvertKey"                  = "Convert Key to Plaintext"
+  "Toolkit.Tool.ExportModulus"               = "Export Certificate Modulus"
+  "Toolkit.Tool.RepairPem"                   = "Repair PEM File"
+  "Toolkit.Tool.ServerList"                  = "Generate Server List"
+  "Toolkit.Tool.SyncMerged"                  = "Sync to output/merged (key,csr,tsv)"
+  "Toolkit.Tool.SelfSigned"                  = "Self-Signed Certificate"
+  "Toolkit.SubTool.SelfSigned10Y"            = "Generate 10-Year Self-Signed Cert"
+  "Toolkit.SubTool.LetsEncrypt"              = "Request Let's Encrypt Certificate"
   "Common.FileNotFound"                      = "{0} not found: {1}"
   "Common.OpenSslCmdFailed"                  = "OpenSSL command failed: {0}`n{1}"
   "Common.Exists"                            = "exists"

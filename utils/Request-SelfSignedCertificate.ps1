@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
 10年有效期の自己署名証明書を生成するスクリプト
 
@@ -32,7 +32,6 @@ param(
   [switch]$Overwrite,
 
   [Parameter(Mandatory = $false)]
-  [ValidateSet("ja", "zh", "en")]
   [string]$Lang = "ja"
 )
 
