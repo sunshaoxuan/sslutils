@@ -17,7 +17,7 @@ if ($PSVersionTable.PSVersion.Major -lt 7) {
   $__cur = "現在のバージョン"
   try {
     $__resDir = Join-Path (Split-Path -Parent $PSScriptRoot) "resources"
-    $__lc = if (Test-Path variable:Lang) { $Lang } else { "ja" }
+    $__lc = if (Test-Path variable:Lang) { $Lang } else { "en" }
     $__langFile = Join-Path $__resDir ("strings.{0}.psd1" -f $__lc)
     if (Test-Path -LiteralPath $__langFile -PathType Leaf) {
       $__d = Import-PowerShellDataFile -LiteralPath $__langFile

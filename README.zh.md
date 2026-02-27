@@ -1,0 +1,182 @@
+# SSL 证书管理工具 (SSL Certificate Management Toolkit)
+
+语言:
+- English: [README.md](README.md)
+- 中文: README.zh.md (本文件)
+- 日本語: [README.ja.md](README.ja.md)
+
+**Ver 1.4.0**
+https://github.com/sunshaoxuan
+
+这是一个功能强大的 PowerShell 脚本集合，用于自动化管理 SSL 证书、私钥和 CSR。支持多语言（可通过配置文件扩展）、多机构管理，并提供统一的菜单界面。
+
+---
+
+## 📅 版本更新 (v1.4.0)
+- **语言配置化**: 支持语种从 `resources/strings.*.psd1` 自动发现，新增语言只需添加资源文件，无需修改代码。
+- **语言持久化**: 在主菜单中切换语言后自动保存，下次启动时恢复上次使用的语言。
+- **4段式证书链**: 支持 服务器 + 中间证书 + 交叉根 + 根CA 的4段式合并（3段式仍为推荐默认）。
+- **PFX增强**: 显示PFX完整证书链结构（含源文件名）；合并时检测客户提供的PFX并提示是否沿用；支持旧加密算法（RC2-40-CBC等）的legacy回退。
+- **链明细显示**: 证书信息展示中，中间证书/根证书块会标注源文件名（如 `[nii-odca4g8rsa-pem.cer]`）。
+- **PS7强制检查**: 所有入口脚本在 PowerShell < 7.x 时报错退出，错误消息按当前语言显示。
+- **菜单优化**: "自签(10Y)"和"Let's Encrypt"合并为单个"自签证书"菜单项（含子菜单）。
+
+## 📅 历史更新
+- **v1.3.x**: 输出目录统一到 `output/`，脚本重命名为 Verb-Noun 格式，新增自签证书生成。
+- **v1.2.x**: 统一菜单入口、PFX 生成、全面多语言支持。
+
+详细变更历史请参见 [CHANGELOG.md](CHANGELOG.md)。
+
+---
+
+## 🚀 快速开始
+
+推荐使用集成菜单工具，无需记忆复杂的参数：
+
+```powershell
+.\Invoke-SSLToolkit.ps1
+```
+
+首次启动默认为日语。可在主菜单中选择 **Language** 切换语言（中文/日语/英语等），选择会自动保存。
+
+也可以通过启动参数指定语言：
+```powershell
+.\Invoke-SSLToolkit.ps1 -Lang zh  # 中文
+.\Invoke-SSLToolkit.ps1 -Lang ja  # 日本語
+.\Invoke-SSLToolkit.ps1 -Lang en  # English
+```
+
+---
+
+## 📂 目录结构
+
+```
+ssl_maker/
+├── new/                    # 存放新生成的 CSR / 私钥 / 原始证书
+├── old/                    # 存放旧证书（用于归档或提取信息）
+├── output/                 # [输出根目录]
+│   ├── merged/             # 合并后的完整证书链 & PFX
+│   └── self-signed/        # 自签证书输出
+├── CertStore/              # 根证书与中间证书库
+├── resources/              # 资源文件 (语言包)
+│   ├── strings.ja.psd1     # 日语
+│   ├── strings.zh.psd1     # 中文
+│   └── strings.en.psd1     # 英语
+├── CertConfig.psd1         # 证书匹配规则配置文件
+├── Invoke-SSLToolkit.ps1   # [入口] 主菜单工具
+└── utils/                  # 各独立功能脚本
+```
+
+---
+
+## 🛠️ 功能列表
+
+此工具集包含以下独立脚本，既可以通过 `Invoke-SSLToolkit.ps1` 调用，也可以单独使用：
+
+### 1. 证书查看与校验
+**脚本**: `Get-CertificateInfo.ps1`
+- 查看 .cer, .key, .csr, .pfx 的详细信息（Subject, Issuer, 有效期）。
+- 多段式证书链逐块显示（服务器/中间/根），含源证书文件名标注。
+- 自动校验 **证书 ⇔ 私钥** 是否匹配（Modulus Check）。
+- 支持解密 PFX 查看完整证书链。
+
+### 2. 证书链合并 & PFX 生成
+**脚本**: `Merge-CertificateChain.ps1`
+- 自动识别服务器证书，寻找匹配的中间证书并合并为 fullchain。
+- 支持3段式（服务器+中间+交叉根）和4段式（+根CA）合并模式。
+- 自动查找对应的 `.key` 文件，生成 `.pfx` (PKCS#12) 文件。
+- 检测客户提供的 PFX，提示用户选择沿用或重新生成。
+- 支持批量处理 `new/` 目录下的所有证书。
+
+### 3. CSR (证书签名请求) 生成
+- **全新生成**: `New-CertificateSigningRequest.ps1`
+- **基于旧证书续期**: `New-CertificateSigningRequestFromOld.ps1` (自动从 old 目录读取信息)。
+
+### 4. 私钥管理
+- **解密/去密**: `Convert-KeyToPlaintext.ps1` (将加密的私钥转换为无需密码的 RSA Key)。
+
+### 5. 自签证书
+通过主菜单的"自签证书"子菜单选择：
+- **10年自签证书**: `Request-SelfSignedCertificate.ps1`（内部/测试用途）。
+- **Let's Encrypt**: `Request-LetsEncryptCertificate.ps1` (Docker + Certbot 封装)。
+
+### 6. 其他工具
+- **PEM 修复**: `Repair-PemFile.ps1` (修复换行符问题)。
+- **同步**: `Sync-ToMerged.ps1` (将 new/ 中的 key/csr/tsv 同步到 output/merged/)。
+- **组织重命名**: 启动时自动执行（标准化文件夹命名）。
+- **服务器列表**: `New-ServerList.ps1` (生成 TSV 格式列表)。
+
+---
+
+## 🌐 多语言扩展
+
+新增语言只需一步：创建 `resources/strings.xx.psd1` 文件（xx 为语言代码），包含所有翻译键和 `Language.DisplayName` 键。无需修改任何代码，语言会自动出现在主菜单的语言选择中。
+
+---
+
+## 📝 配置示例 (Apache / Tomcat)
+
+本工具生成的 `output/merged/` 目录下的文件可直接用于生产环境。
+
+### Apache (httpd)
+使用合并后的 `.cer` (Fullchain) 和无密码 `.key`：
+
+```apache
+SSLCertificateFile      /path/to/output/merged/server.cer
+SSLCertificateKeyFile   /path/to/new/server.key
+```
+
+### Tomcat / IIS
+使用生成的 `.pfx` 文件：
+
+```xml
+<!-- Tomcat server.xml -->
+<Connector port="8443"
+  protocol="org.apache.coyote.http11.Http11NioProtocol"
+  SSLEnabled="true"
+  keystoreFile="/path/to/output/merged/server.pfx"
+  keystorePass=""
+  keystoreType="PKCS12" />
+```
+*(注：如果生成 PFX 时未设置密码，keystorePass 为空或省略；如有设置，请填写对应密码)*
+
+---
+
+## ⚙️ 环境要求
+- **PowerShell 7.x** 或更高版本（脚本启动时自动检查，低于此版本将报错退出）
+- OpenSSL (推荐安装 Git for Windows，脚本默认查找 `C:\Program Files\Git\usr\bin\openssl.exe`)
+
+## 路径配置（config.json）
+目录名已支持配置化，默认如下：
+
+```json
+"Paths": {
+  "Old": "old",
+  "New": "new",
+  "OutputRoot": "output",
+  "Merged": "output/merged",
+  "SelfSigned": "output/self-signed",
+  "Temp": "temp",
+  "Resources": "resources",
+  "CertConfig": "CertConfig.psd1"
+}
+```
+
+默认会显示全球稳定的时区 ID（优先 IANA），避免受操作系统语言影响。
+可选配置：如需自定义 `Get-CertificateInfo.ps1` 中时区名称显示，可在 `config.json` 增加 `TimeZoneNames`（键使用 Windows/IANA 时区 ID）。
+
+---
+
+## 📜 公共证书库 (CertStore)
+
+工具内置的根证书和中间证书，用于自动构建完整证书链。详见 [CertStore/README.md](CertStore/README.md)。
+
+| 文件 | 说明 | 下载 |
+|------|------|------|
+| gsgccr3dvtlsca2020.cer | GlobalSign GCC R3 DV TLS CA 2020 | [下载](https://github.com/sunshaoxuan/sslutils/raw/main/CertStore/GlobalSign/gsgccr3dvtlsca2020.cer) |
+| nii-odca4g7rsa.cer | NII Open Domain CA - G7 RSA | [下载](https://github.com/sunshaoxuan/sslutils/raw/main/CertStore/NII/nii-odca4g7rsa.cer) |
+| nii-odca4g8rsa-pem.cer | NII Open Domain CA - G8 RSA | [下载](https://github.com/sunshaoxuan/sslutils/raw/main/CertStore/NII/nii-odca4g8rsa-pem.cer) |
+| SCRoot2caPem.cer | Security Communication RootCA2 (Root) | [下载](https://github.com/sunshaoxuan/sslutils/raw/main/CertStore/Secom/SCRoot2caPem.cer) |
+| tlsrsarootca2024cross-pem.cer | SECOM TLS RSA Root CA 2024 (Cross-signed) | [下载](https://github.com/sunshaoxuan/sslutils/raw/main/CertStore/Secom/tlsrsarootca2024cross-pem.cer) |
+
+详细变更历史请参见 [CHANGELOG.md](CHANGELOG.md)。

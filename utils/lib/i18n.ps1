@@ -2,7 +2,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 if ($PSVersionTable.PSVersion.Major -lt 7) {
-  $__curLang = if (Test-Path variable:Lang) { $Lang } else { "ja" }
+  $__curLang = if (Test-Path variable:Lang) { $Lang } else { "en" }
   $__msg = "[エラー] PowerShell 7.x 以上が必要です。"
   $__cur = "現在のバージョン"
   try {
@@ -40,15 +40,15 @@ function Get-AvailableLanguages {
       $langs += [PSCustomObject]@{ Code = $code; DisplayName = $displayName }
     }
   }
-  $ja = @($langs | Where-Object { $_.Code -eq "ja" })
-  $others = @($langs | Where-Object { $_.Code -ne "ja" } | Sort-Object Code)
-  return @($ja + $others)
+  $en = @($langs | Where-Object { $_.Code -eq "en" })
+  $others = @($langs | Where-Object { $_.Code -ne "en" } | Sort-Object Code)
+  return @($en + $others)
 }
 
 function Initialize-I18n {
   param(
     [Parameter(Mandatory = $false)]
-    [string]$Lang = "ja",
+    [string]$Lang = "en",
 
     [Parameter(Mandatory = $false)]
     [string]$BaseDir = ""

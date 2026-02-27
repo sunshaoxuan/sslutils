@@ -110,7 +110,7 @@ param(
 
   # 出力言語（既定: ja）
   [Parameter(Mandatory = $false)]
-  [string]$Lang = "ja"
+  [string]$Lang = "en"
 )
 
 

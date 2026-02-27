@@ -30,7 +30,7 @@ param(
     # TsvFile not needed, filename deduced from Org name
     [switch]$Interactive = $true,
     [Parameter(Mandatory = $false)]
-    [string]$Lang = "ja",
+    [string]$Lang = "en",
     
     # Defaults for automation/testing
     [string]$DefaultSoftware = $null,

@@ -32,7 +32,7 @@ param(
   [switch]$Overwrite,
 
   [Parameter(Mandatory = $false)]
-  [string]$Lang = "ja"
+  [string]$Lang = "en"
 )
 
 

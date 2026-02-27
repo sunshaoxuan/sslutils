@@ -1,9 +1,9 @@
 # SSL Certificate Management Tools
 
 言語:
-- 中文: README.md
-- 日本語: README.ja.md
-- English: README.en.md
+- English: [README.md](README.md)
+- 中文: [README.zh.md](README.zh.md)
+- 日本語: README.ja.md (このファイル)
 
 ## 概要
 証明書・秘密鍵・CSR を扱う PowerShell スクリプト集です。多機関対応と多言語対応を前提にしています。

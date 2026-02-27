@@ -31,7 +31,7 @@ if ([string]::IsNullOrWhiteSpace($Lang)) {
     if (Test-Path -LiteralPath $__langFile -PathType Leaf) {
         $Lang = (Get-Content -LiteralPath $__langFile -Raw -ErrorAction SilentlyContinue).Trim()
     }
-    if ([string]::IsNullOrWhiteSpace($Lang)) { $Lang = "ja" }
+    if ([string]::IsNullOrWhiteSpace($Lang)) { $Lang = "en" }
 }
 
 # UTF-8出力設定
