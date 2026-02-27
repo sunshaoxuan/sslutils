@@ -37,7 +37,7 @@ https://github.com/sunshaoxuan
 .\Invoke-SSLToolkit.ps1
 ```
 
-首次启动默认为日语。可在主菜单中选择 **Language** 切换语言（中文/日语/英语等），选择会自动保存。
+首次启动默认为英语。可在主菜单中选择 **Language** 切换语言（中文/日语/英语等），选择会自动保存。
 
 也可以通过启动参数指定语言：
 ```powershell

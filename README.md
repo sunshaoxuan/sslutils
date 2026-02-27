@@ -46,7 +46,7 @@ ssl_maker/
 .\Invoke-SSLToolkit.ps1
 ```
 
-First launch defaults to Japanese. Select **Language** in the main menu to switch (your choice is saved automatically).
+First launch defaults to English. Select **Language** in the main menu to switch (your choice is saved automatically).
 
 You can also specify language via parameter:
 ```powershell
