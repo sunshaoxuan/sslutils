@@ -3,11 +3,8 @@
 Downloads and installs portable OpenSSL into utils/bin/ for the SSL Toolkit.
 
 .DESCRIPTION
-Checks whether OpenSSL is available locally (utils/bin/) or on the system.
-If not found, downloads a portable OpenSSL build and extracts it to utils/bin/.
-
-Supports automatic detection of existing installations and provides
-a manual fallback guide when automatic download fails.
+Checks whether OpenSSL is already installed in utils/bin/.
+If not found, downloads a portable OpenSSL build and extracts it.
 
 .PARAMETER Force
 Re-download even if utils/bin/openssl.exe already exists.
@@ -63,25 +60,6 @@ function Test-OpenSslWorks([string]$path) {
   catch { return $false }
 }
 
-function Get-ExistingOpenSsl {
-  $candidates = @(
-    $OpenSslExe,
-    "C:\Program Files\Git\usr\bin\openssl.exe",
-    "C:\Program Files\OpenSSL-Win64\bin\openssl.exe",
-    "C:\Program Files (x86)\OpenSSL-Win32\bin\openssl.exe"
-  )
-  foreach ($c in $candidates) {
-    if ((Test-Path -LiteralPath $c -PathType Leaf) -and (Test-OpenSslWorks $c)) {
-      return $c
-    }
-  }
-  $cmd = Get-Command openssl -ErrorAction SilentlyContinue
-  if ($null -ne $cmd -and (Test-OpenSslWorks $cmd.Source)) {
-    return $cmd.Source
-  }
-  return $null
-}
-
 Write-Host ""
 Write-Host (T "Deps.Title") -ForegroundColor Cyan
 Write-Host ("=" * 50) -ForegroundColor Cyan
@@ -96,43 +74,6 @@ if (-not $Force) {
       Write-Host ""
       Write-Host (T "Deps.UseForceHint") -ForegroundColor DarkGray
       exit 0
-    }
-  }
-}
-
-$existing = Get-ExistingOpenSsl
-if (-not $Force -and $null -ne $existing -and $existing -ne $OpenSslExe) {
-  $ver = & $existing version 2>&1
-  Write-Host (T "Deps.FoundSystem" @($existing)) -ForegroundColor Yellow
-  Write-Host (T "Deps.Version" @($ver)) -ForegroundColor Yellow
-  Write-Host ""
-  Write-Host (T "Deps.CopyToLocal") -ForegroundColor White
-
-  $answer = Read-Host (T "Deps.CopyPrompt")
-  if ($answer -match "^[yY]") {
-    if (-not (Test-Path -LiteralPath $BinDir -PathType Container)) {
-      New-Item -ItemType Directory -Path $BinDir -Force | Out-Null
-    }
-    $srcDir = Split-Path -Parent $existing
-    $filesToCopy = Get-ChildItem -LiteralPath $srcDir -File | Where-Object {
-      $_.Name -match "^(openssl|libssl|libcrypto|msvcr|vcruntime|legacy)\." -or
-      $_.Extension -in ".dll", ".exe" -and $_.Name -match "ssl|crypto"
-    }
-    foreach ($f in $filesToCopy) {
-      Copy-Item -LiteralPath $f.FullName -Destination $BinDir -Force
-      Write-Host "  -> $($f.Name)" -ForegroundColor DarkGray
-    }
-    if (-not (Test-Path -LiteralPath $OpenSslExe -PathType Leaf)) {
-      Copy-Item -LiteralPath $existing -Destination $OpenSslExe -Force
-    }
-    if (Test-OpenSslWorks $OpenSslExe) {
-      $ver2 = & $OpenSslExe version 2>&1
-      Write-Host ""
-      Write-Host (T "Deps.CopySuccess" @($ver2)) -ForegroundColor Green
-      exit 0
-    }
-    else {
-      Write-Host (T "Deps.CopyFailed") -ForegroundColor Red
     }
   }
 }
