@@ -31,6 +31,26 @@ $ErrorActionPreference = "Stop"
 
 . (Join-Path $PSScriptRoot "utils\lib\defaults.ps1")
 
+if ($PSVersionTable.PSVersion.Major -lt 7) {
+  $__msg = "[ERROR] PowerShell 7.x or later is required."
+  $__cur = "Current"
+  try {
+    $__resDir = Join-Path $PSScriptRoot "resources"
+    $__lc = if (Test-Path variable:Lang) { $Lang } else { $__DefaultLang }
+    if ([string]::IsNullOrWhiteSpace($__lc)) { $__lc = "en" }
+    $__langFile2 = Join-Path $__resDir ("strings.{0}.psd1" -f $__lc)
+    if (Test-Path -LiteralPath $__langFile2 -PathType Leaf) {
+      $__d = Import-PowerShellDataFile -LiteralPath $__langFile2
+      if ($__d.ContainsKey("Language.VersionCheckError")) { $__msg = $__d["Language.VersionCheckError"] }
+      if ($__d.ContainsKey("Language.VersionCheckCurrent")) { $__cur = $__d["Language.VersionCheckCurrent"] }
+    }
+  } catch {}
+  Write-Host $__msg -ForegroundColor Red
+  Write-Host ("        {0}: {1}" -f $__cur, $PSVersionTable.PSVersion) -ForegroundColor Red
+  Write-Host "        https://github.com/PowerShell/PowerShell/releases" -ForegroundColor Yellow
+  exit 1
+}
+
 $__langFile = Join-Path $PSScriptRoot ".toolkit_lang"
 if ([string]::IsNullOrWhiteSpace($Lang)) {
   if (Test-Path -LiteralPath $__langFile -PathType Leaf) {
