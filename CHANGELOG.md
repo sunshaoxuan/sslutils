@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.0] - 2026-03-10
+
+### Added
+- **Portable OpenSSL**: Added `Install-Dependencies.ps1` to automatically download and install portable OpenSSL into `utils/bin/`, eliminating the need for a system-wide OpenSSL installation.
+- **Unified Tool Resolution**: Added `Resolve-OpenSsl` function in `paths.ps1` with prioritized search order: explicit parameter → `utils/bin/` → `config.json` → Git for Windows → system PATH.
+- **Tools Configuration**: Added `Tools.OpenSsl` option in `config.json` for custom OpenSSL path configuration.
+- **utils/bin/**: New directory for portable tool binaries (excluded from Git).
+
+### Changed
+- **OpenSSL Default**: All 10 scripts now use `Resolve-OpenSsl` instead of hardcoded `C:\Program Files\Git\usr\bin\openssl.exe` default path.
+- **Docs**: Updated all 3 README files with OpenSSL setup instructions, new folder layout, and Quick Start steps.
+- **PS7 Check**: `Install-Dependencies.ps1` includes PowerShell 7.x version check consistent with other scripts.
+
 ## [1.4.1] - 2026-02-27
 
 ### Changed

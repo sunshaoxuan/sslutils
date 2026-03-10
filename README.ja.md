@@ -8,11 +8,11 @@
 ## 概要
 証明書・秘密鍵・CSR を扱う PowerShell スクリプト集です。多機関対応と多言語対応を前提にしています。
 
-## バージョン (v1.4.1)
-- **用語修正**: メニュー/文書内の「サーバー一覧」を「証明書更新TSV」に統一し、目的を明確化。
-- **TSV 既定名**: 既定出力は `cert_renewal_list.tsv` に変更（既存の `server_list.tsv` も互換サポート）。
-- **リポジトリ整理**: ローカル/実行時ファイルや不要追跡ファイルを除外。
-- **詳細履歴**: v1.4.0 の主要変更を含め [CHANGELOG.md](CHANGELOG.md) を参照。
+## バージョン (v1.5.0)
+- **ポータブル OpenSSL**: `Install-Dependencies.ps1` でポータブル版 OpenSSL を自動ダウンロード — システムへのインストール不要。
+- **ツール自動解決**: OpenSSL パスを `utils/bin/` → `config.json` → Git for Windows → システム PATH の順で自動検出。
+- **ツール設定**: `config.json` の `Tools.OpenSsl` でカスタムパスを設定可能。
+- **詳細履歴**: [CHANGELOG.md](CHANGELOG.md) を参照。
 
 ## 事前準備
 - **PowerShell 7.x** 以上（スクリプト起動時に自動チェック、未満の場合はエラー終了）

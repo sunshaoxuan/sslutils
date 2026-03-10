@@ -5,20 +5,21 @@
 - 中文: README.zh.md (本文件)
 - 日本語: [README.ja.md](README.ja.md)
 
-**Ver 1.4.1**
+**Ver 1.5.0**
 https://github.com/sunshaoxuan
 
 这是一个功能强大的 PowerShell 脚本集合，用于自动化管理 SSL 证书、私钥和 CSR。支持多语言（可通过配置文件扩展）、多机构管理，并提供统一的菜单界面。
 
 ---
 
-## 📅 版本更新 (v1.4.1)
-- **术语修正**: 菜单与文档中的“服务器列表”统一更名为“证书更新清单（TSV）”，避免歧义。
-- **TSV 默认文件名**: 优先使用 `cert_renewal_list.tsv`，同时兼容既有 `server_list.tsv`。
-- **仓库清理**: 本地/运行产物与敏感工作文件已从版本跟踪中剔除。
-- **完整历史**: 详见 [CHANGELOG.md](CHANGELOG.md)（含 v1.4.0 大版本功能）。
+## 📅 版本更新 (v1.5.0)
+- **便携 OpenSSL**: 新增 `Install-Dependencies.ps1`，自动下载便携版 OpenSSL，无需系统级安装。
+- **工具路径自动解析**: OpenSSL 路径按 `utils/bin/` → `config.json` → Git for Windows → 系统 PATH 优先级自动查找。
+- **工具配置**: 可在 `config.json` 的 `Tools.OpenSsl` 中自定义 OpenSSL 路径。
+- **完整历史**: 详见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 📅 历史更新
+- **v1.4.x**: 术语统一、TSV 默认文件名调整、仓库清理。
 - **v1.3.x**: 输出目录统一到 `output/`，脚本重命名为 Verb-Noun 格式，新增自签证书生成。
 - **v1.2.x**: 统一菜单入口、PFX 生成、全面多语言支持。
 
@@ -28,11 +29,12 @@ https://github.com/sunshaoxuan
 
 ## 🚀 快速开始
 
-推荐使用集成菜单工具，无需记忆复杂的参数：
-
 ```powershell
+.\Install-Dependencies.ps1   # 首次使用：安装 OpenSSL
 .\Invoke-SSLToolkit.ps1
 ```
+
+推荐使用集成菜单工具，无需记忆复杂的参数。
 
 首次启动默认为英语。可在主菜单中选择 **Language** 切换语言（中文/日语/英语等），选择会自动保存。
 
@@ -60,8 +62,11 @@ ssl_maker/
 │   ├── strings.zh.psd1     # 中文
 │   └── strings.en.psd1     # 英语
 ├── CertConfig.psd1         # 证书匹配规则配置文件
+├── config.json             # 路径与工具配置
+├── Install-Dependencies.ps1 # OpenSSL 自动下载安装
 ├── Invoke-SSLToolkit.ps1   # [入口] 主菜单工具
 └── utils/                  # 各独立功能脚本
+    └── bin/                # 便携工具二进制文件
 ```
 
 ---

@@ -8,11 +8,11 @@ Languages:
 ## Overview
 PowerShell scripts to manage certificates, keys, and CSRs with multi-org and multi-language support.
 
-## What's New (v1.4.1)
-- **Terminology Cleanup**: Replaced "Server List" naming with "Certificate Renewal TSV" across menu, strings, and docs.
-- **TSV Output Defaults**: Preferred filename is now `cert_renewal_list.tsv` (legacy `server_list.tsv` is still supported).
-- **Repository Hygiene**: Local/internal/runtime files are no longer tracked by default.
-- Full feature history (including v1.4.0 major changes): [CHANGELOG.md](CHANGELOG.md).
+## What's New (v1.5.0)
+- **Portable OpenSSL**: Added `Install-Dependencies.ps1` to auto-download portable OpenSSL — no system-wide installation needed.
+- **Unified Tool Resolution**: OpenSSL path auto-resolved via `utils/bin/` → `config.json` → Git for Windows → system PATH.
+- **Tools Configuration**: Custom OpenSSL path configurable in `config.json` (`Tools.OpenSsl`).
+- Full feature history: [CHANGELOG.md](CHANGELOG.md).
 
 ## Prerequisites
 - **PowerShell 7.x** or later (auto-checked on startup; exits with error if below)
