@@ -54,6 +54,10 @@ Desktop.ini
 .claude/
 .antigravity/
 
+# Portable tool binaries (downloaded by Install-Dependencies.ps1)
+utils/bin/*
+!utils/bin/README.md
+
 # User preferences
 .toolkit_lang
 

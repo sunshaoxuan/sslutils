@@ -22,7 +22,7 @@ param(
     [string]$Target = "",
     [switch]$NoPause = $false,
     [Parameter(Mandatory = $false)]
-    [string]$OpenSsl = "C:\Program Files\Git\usr\bin\openssl.exe",
+    [string]$OpenSsl = "",
     [Parameter(Mandatory = $false)]
     [string]$Lang = ""
 )
@@ -41,6 +41,7 @@ catch { }
 $pathsModule = Join-Path $PSScriptRoot "lib\paths.ps1"
 if (Test-Path -LiteralPath $pathsModule -PathType Leaf) { . $pathsModule }
 $ToolkitPaths = if (Get-Command Get-ToolkitPaths -ErrorAction SilentlyContinue) { Get-ToolkitPaths -BaseDir $ToolkitRoot } else { $null }
+$OpenSsl = Resolve-OpenSsl -Explicit $OpenSsl -ToolkitPaths $ToolkitPaths
 
 $newDir = if ($null -ne $ToolkitPaths -and -not [string]::IsNullOrWhiteSpace($ToolkitPaths.New)) { $ToolkitPaths.New } else { Join-Path $ToolkitRoot "new" }
 $mergedDir = if ($null -ne $ToolkitPaths -and -not [string]::IsNullOrWhiteSpace($ToolkitPaths.Merged)) { $ToolkitPaths.Merged } else { Join-Path $ToolkitRoot "output\merged" }

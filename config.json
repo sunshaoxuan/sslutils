@@ -9,6 +9,9 @@
         "Resources": "resources",
         "CertConfig": "CertConfig.psd1"
     },
+    "Tools": {
+        "OpenSsl": ""
+    },
     "DefaultSubject": {
         "C": "JP",
         "ST": "Tokyo",

@@ -73,8 +73,11 @@ if ($PSVersionTable.PSVersion.Major -lt 7) {
   exit 1
 }
 
-$OpenSsl = "C:\Program Files\Git\usr\bin\openssl.exe"
-if (-not (Test-Path $OpenSsl)) { $OpenSsl = "openssl" }
+$pathsModule = Join-Path $PSScriptRoot "lib\paths.ps1"
+if (Test-Path -LiteralPath $pathsModule -PathType Leaf) { . $pathsModule }
+$__ToolkitPaths = if (Get-Command Get-ToolkitPaths -ErrorAction SilentlyContinue) { Get-ToolkitPaths -BaseDir (Split-Path -Parent $PSScriptRoot) } else { $null }
+$OpenSsl = Resolve-OpenSsl -ToolkitPaths $__ToolkitPaths
+if ([string]::IsNullOrWhiteSpace($OpenSsl)) { $OpenSsl = "openssl" }
 
 # Define Schema
 $Columns = @("Common Name", "SAN Config", "Software", "Contact", "Subject DN", "Term", "System ID", "Notes")

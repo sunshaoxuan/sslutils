@@ -228,9 +228,8 @@ function Get-WhoisInfo([string]$domain) {
 }
 
 function Get-OrgFromLocalCert([string]$domain) {
-    # 从本地证书文件读取组织名
-    $openssl = "C:\Program Files\Git\usr\bin\openssl.exe"
-    if (-not (Test-Path -LiteralPath $openssl)) { return $null }
+    $openssl = Resolve-OpenSsl -ToolkitPaths $ToolkitPaths
+    if ([string]::IsNullOrWhiteSpace($openssl)) { return $null }
     
     foreach ($d in $dirsToCheck) {
         $searchPath = Resolve-DirPath $d

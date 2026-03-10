@@ -53,7 +53,7 @@ param(
   [string]$OutFile = "modulus_list.txt",
 
   [Parameter(Mandatory = $false)]
-  [string]$OpenSsl = "C:\Program Files\Git\usr\bin\openssl.exe",
+  [string]$OpenSsl = "",
 
   # 任意：暗号化鍵用のパスフレーズファイル（指定しない場合はパスフレーズ無しで試行）
   [Parameter(Mandatory = $false)]
@@ -66,6 +66,11 @@ param(
 
 
 $ToolkitRoot = Split-Path -Parent $PSScriptRoot
+
+$pathsModule = Join-Path $PSScriptRoot "lib\paths.ps1"
+if (Test-Path -LiteralPath $pathsModule -PathType Leaf) { . $pathsModule }
+$ToolkitPaths = if (Get-Command Get-ToolkitPaths -ErrorAction SilentlyContinue) { Get-ToolkitPaths -BaseDir $ToolkitRoot } else { $null }
+$OpenSsl = Resolve-OpenSsl -Explicit $OpenSsl -ToolkitPaths $ToolkitPaths
 
 $i18nModule = Join-Path $PSScriptRoot "lib\\i18n.ps1"
 if (-not (Test-Path -LiteralPath $i18nModule -PathType Leaf)) { throw (T "Common.I18nModuleNotFound" @($i18nModule)) }

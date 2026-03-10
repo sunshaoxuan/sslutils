@@ -23,7 +23,7 @@
 省略した場合：old\ と new\ をそれぞれ走査して表示
 
 .PARAMETER OpenSsl
-OpenSSL 実行ファイルのパス（既定: C:\Program Files\Git\usr\bin\openssl.exe）
+OpenSSL 実行ファイルのパス（自動解決: utils\bin → config.json → Git for Windows → PATH）
 
 .PARAMETER ChainFile
 証明書とは別のチェーンファイルを指定してチェック（単体チェック時のみ有効）
@@ -73,7 +73,7 @@ param(
   [string]$Path = "",
 
   [Parameter(Mandatory = $false)]
-  [string]$OpenSsl = "C:\Program Files\Git\usr\bin\openssl.exe",
+  [string]$OpenSsl = "",
 
   [Parameter(Mandatory = $false)]
   [string]$ChainFile = "",
@@ -117,6 +117,7 @@ if (-not (Test-Path -LiteralPath $i18nModule -PathType Leaf)) { throw (T "Common
 
 $FixedPassFileName = "passphrase.txt"
 $ToolkitPaths = if (Get-Command Get-ToolkitPaths -ErrorAction SilentlyContinue) { Get-ToolkitPaths -BaseDir $ToolkitRoot } else { $null }
+$OpenSsl = Resolve-OpenSsl -Explicit $OpenSsl -ToolkitPaths $ToolkitPaths
 $toolOldDir = if ($null -ne $ToolkitPaths -and -not [string]::IsNullOrWhiteSpace($ToolkitPaths.Old)) { $ToolkitPaths.Old } else { Join-Path $ToolkitRoot "old" }
 $toolNewDir = if ($null -ne $ToolkitPaths -and -not [string]::IsNullOrWhiteSpace($ToolkitPaths.New)) { $ToolkitPaths.New } else { Join-Path $ToolkitRoot "new" }
 $toolMergedDir = if ($null -ne $ToolkitPaths -and -not [string]::IsNullOrWhiteSpace($ToolkitPaths.Merged)) { $ToolkitPaths.Merged } else { Join-Path $ToolkitRoot "output\merged" }

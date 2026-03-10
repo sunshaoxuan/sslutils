@@ -26,7 +26,7 @@ param(
   [int]$RsaBits = 2048,
 
   [Parameter(Mandatory = $false)]
-  [string]$OpenSsl = "C:\Program Files\Git\usr\bin\openssl.exe",
+  [string]$OpenSsl = "",
 
   [Parameter(Mandatory = $false)]
   [switch]$Overwrite,
@@ -55,6 +55,7 @@ if (Test-Path -LiteralPath $menuModule -PathType Leaf) { . $menuModule }
 $pathsModule = Join-Path $PSScriptRoot "lib\paths.ps1"
 if (Test-Path -LiteralPath $pathsModule -PathType Leaf) { . $pathsModule }
 $ToolkitPaths = if (Get-Command Get-ToolkitPaths -ErrorAction SilentlyContinue) { Get-ToolkitPaths -BaseDir $ToolkitRoot } else { $null }
+$OpenSsl = Resolve-OpenSsl -Explicit $OpenSsl -ToolkitPaths $ToolkitPaths
 
 $ValidityDays = 3650
 

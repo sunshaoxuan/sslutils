@@ -16,8 +16,24 @@ PowerShell scripts to manage certificates, keys, and CSRs with multi-org and mul
 
 ## Prerequisites
 - **PowerShell 7.x** or later (auto-checked on startup; exits with error if below)
-- OpenSSL (default: `C:\Program Files\Git\usr\bin\openssl.exe`)
+- OpenSSL (auto-resolved: `utils/bin/` → `config.json` → Git for Windows → system PATH)
 - `passphrase.txt` for encrypted keys if needed
+
+### OpenSSL Setup
+
+If OpenSSL is not installed on your system, run the setup script to download a portable version:
+
+```powershell
+.\Install-Dependencies.ps1
+```
+
+This will automatically download and install OpenSSL into `utils/bin/`. You can also configure a custom OpenSSL path in `config.json`:
+
+```json
+"Tools": {
+    "OpenSsl": "C:\\path\\to\\openssl.exe"
+}
+```
 
 ## Folder layout
 ```
@@ -33,13 +49,17 @@ ssl_maker/
 │   ├── strings.zh.psd1     # Chinese
 │   └── strings.en.psd1     # English
 ├── CertConfig.psd1         # Certificate matching rules
+├── config.json             # Path & tool configuration
+├── Install-Dependencies.ps1 # Auto-download OpenSSL
 ├── Invoke-SSLToolkit.ps1   # [Entry] Main menu
 └── utils/                  # Individual scripts
+    └── bin/                # Portable tool binaries
 ```
 
 ## Quick Start
 
 ```powershell
+.\Install-Dependencies.ps1   # First time: setup OpenSSL
 .\Invoke-SSLToolkit.ps1
 ```
 

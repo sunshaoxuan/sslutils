@@ -16,8 +16,24 @@
 
 ## 事前準備
 - **PowerShell 7.x** 以上（スクリプト起動時に自動チェック、未満の場合はエラー終了）
-- OpenSSL（既定: `C:\Program Files\Git\usr\bin\openssl.exe`）
+- OpenSSL（自動解決: `utils/bin/` → `config.json` → Git for Windows → システム PATH）
 - 必要なら `passphrase.txt`（暗号化鍵用）
+
+### OpenSSL セットアップ
+
+システムに OpenSSL がない場合、セットアップスクリプトでポータブル版をダウンロードできます:
+
+```powershell
+.\Install-Dependencies.ps1
+```
+
+`utils/bin/` に OpenSSL が自動インストールされます。`config.json` でカスタムパスも設定可能です:
+
+```json
+"Tools": {
+    "OpenSsl": "C:\\path\\to\\openssl.exe"
+}
+```
 
 ## フォルダ構成
 ```
@@ -33,13 +49,17 @@ ssl_maker/
 │   ├── strings.zh.psd1     # 中国語
 │   └── strings.en.psd1     # 英語
 ├── CertConfig.psd1         # 証明書マッチングルール
+├── config.json             # パス・ツール設定
+├── Install-Dependencies.ps1 # OpenSSL 自動ダウンロード
 ├── Invoke-SSLToolkit.ps1   # [入口] メインメニュー
 └── utils/                  # 各独立スクリプト
+    └── bin/                # ポータブルツールバイナリ
 ```
 
 ## クイックスタート
 
 ```powershell
+.\Install-Dependencies.ps1   # 初回: OpenSSL セットアップ
 .\Invoke-SSLToolkit.ps1
 ```
 

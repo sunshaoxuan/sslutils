@@ -112,7 +112,7 @@ param(
   [int]$RsaBits = 2048,
 
   [Parameter(Mandatory = $false)]
-  [string]$OpenSsl = "C:\Program Files\Git\usr\bin\openssl.exe",
+  [string]$OpenSsl = "",
 
   # 出力言語（既定: ja）
   [Parameter(Mandatory = $false)]
@@ -125,6 +125,7 @@ $ToolkitRoot = Split-Path -Parent $PSScriptRoot
 $pathsModule = Join-Path $PSScriptRoot "lib\paths.ps1"
 if (Test-Path -LiteralPath $pathsModule -PathType Leaf) { . $pathsModule }
 $ToolkitPaths = if (Get-Command Get-ToolkitPaths -ErrorAction SilentlyContinue) { Get-ToolkitPaths -BaseDir $ToolkitRoot } else { $null }
+$OpenSsl = Resolve-OpenSsl -Explicit $OpenSsl -ToolkitPaths $ToolkitPaths
 
 $i18nModule = Join-Path $PSScriptRoot "lib\\i18n.ps1"
 if (-not (Test-Path -LiteralPath $i18nModule -PathType Leaf)) { throw (T "Common.I18nModuleNotFound" @($i18nModule)) }

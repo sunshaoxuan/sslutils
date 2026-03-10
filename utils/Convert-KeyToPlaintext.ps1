@@ -63,7 +63,7 @@ param(
 
   # 任意：OpenSSL のパス
   [Parameter(Mandatory = $false)]
-  [string]$OpenSsl = "C:\Program Files\Git\usr\bin\openssl.exe",
+  [string]$OpenSsl = "",
 
   # 任意：パスフレーズファイルを明示（優先）
   [Parameter(Mandatory = $false)]
@@ -96,6 +96,7 @@ $ToolkitRoot = Split-Path -Parent $PSScriptRoot
 $pathsModule = Join-Path $PSScriptRoot "lib\paths.ps1"
 if (Test-Path -LiteralPath $pathsModule -PathType Leaf) { . $pathsModule }
 $ToolkitPaths = if (Get-Command Get-ToolkitPaths -ErrorAction SilentlyContinue) { Get-ToolkitPaths -BaseDir $ToolkitRoot } else { $null }
+$OpenSsl = Resolve-OpenSsl -Explicit $OpenSsl -ToolkitPaths $ToolkitPaths
 $toolOldDir = if ($null -ne $ToolkitPaths -and -not [string]::IsNullOrWhiteSpace($ToolkitPaths.Old)) { $ToolkitPaths.Old } else { Join-Path $ToolkitRoot "old" }
 $toolNewDir = if ($null -ne $ToolkitPaths -and -not [string]::IsNullOrWhiteSpace($ToolkitPaths.New)) { $ToolkitPaths.New } else { Join-Path $ToolkitRoot "new" }
 

@@ -1,4 +1,4 @@
-﻿Set-StrictMode -Version Latest
+Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 function Get-ToolkitPaths {
@@ -65,6 +65,15 @@ function Get-ToolkitPaths {
     $selfSignedAbs = Resolve-FromBase $BaseDir $selfSignedRel
   }
 
+  $toolsOpenSsl = ""
+  try {
+    if ($null -ne $cfg -and $null -ne $cfg.Tools) {
+      $v = $cfg.Tools.OpenSsl
+      if (-not [string]::IsNullOrWhiteSpace([string]$v)) { $toolsOpenSsl = [string]$v }
+    }
+  }
+  catch { }
+
   return [PSCustomObject]@{
     Old             = $oldAbs
     New             = $newAbs
@@ -78,5 +87,48 @@ function Get-ToolkitPaths {
     MergedOld       = (Join-Path $mergedAbs "old")
     OldName         = [IO.Path]::GetFileName($oldAbs.TrimEnd('\','/'))
     NewName         = [IO.Path]::GetFileName($newAbs.TrimEnd('\','/'))
+    ToolsOpenSsl    = $toolsOpenSsl
+    BinDir          = (Join-Path $BaseDir "utils\bin")
   }
+}
+
+function Resolve-OpenSsl {
+  param(
+    [string]$Explicit = "",
+    [object]$ToolkitPaths = $null
+  )
+
+  if (-not [string]::IsNullOrWhiteSpace($Explicit) -and (Test-Path -LiteralPath $Explicit -PathType Leaf)) {
+    return $Explicit
+  }
+
+  $binDir = ""
+  $cfgPath = ""
+  if ($null -ne $ToolkitPaths) {
+    if (-not [string]::IsNullOrWhiteSpace($ToolkitPaths.BinDir)) {
+      $binDir = $ToolkitPaths.BinDir
+    }
+    if (-not [string]::IsNullOrWhiteSpace($ToolkitPaths.ToolsOpenSsl)) {
+      $cfgPath = $ToolkitPaths.ToolsOpenSsl
+    }
+  }
+
+  if (-not [string]::IsNullOrWhiteSpace($binDir)) {
+    $local = Join-Path $binDir "openssl.exe"
+    if (Test-Path -LiteralPath $local -PathType Leaf) { return $local }
+  }
+
+  if (-not [string]::IsNullOrWhiteSpace($cfgPath) -and (Test-Path -LiteralPath $cfgPath -PathType Leaf)) {
+    return $cfgPath
+  }
+
+  $gitDefault = "C:\Program Files\Git\usr\bin\openssl.exe"
+  if (Test-Path -LiteralPath $gitDefault -PathType Leaf) { return $gitDefault }
+
+  $cmd = Get-Command openssl -ErrorAction SilentlyContinue
+  if ($null -ne $cmd -and -not [string]::IsNullOrWhiteSpace($cmd.Source)) {
+    return $cmd.Source
+  }
+
+  return ""
 }

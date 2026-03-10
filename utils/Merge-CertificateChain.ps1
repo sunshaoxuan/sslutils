@@ -87,7 +87,7 @@ param(
 
   # OpenSSL（中間証明書の自動選択に使用）
   [Parameter(Mandatory = $false)]
-  [string]$OpenSsl = "C:\Program Files\Git\usr\bin\openssl.exe",
+  [string]$OpenSsl = "",
 
   # 既にクライアント証明書がフルチェーン（複数 CERT ブロック）なら、中間証明書を追加せずに出力だけ作成します
   [Parameter(Mandatory = $false)]
@@ -123,6 +123,7 @@ if (Test-Path -LiteralPath $pathsModule -PathType Leaf) { . $pathsModule }
 function T([string]$Key, [object[]]$FormatArgs = @()) { return Get-I18nText -I18n $__i18n -Key $Key -FormatArgs $FormatArgs }
 
 $ToolkitPaths = if (Get-Command Get-ToolkitPaths -ErrorAction SilentlyContinue) { Get-ToolkitPaths -BaseDir $ToolkitRoot } else { $null }
+$OpenSsl = Resolve-OpenSsl -Explicit $OpenSsl -ToolkitPaths $ToolkitPaths
 if ([string]::IsNullOrWhiteSpace($OutDir)) {
   if ($null -ne $ToolkitPaths -and -not [string]::IsNullOrWhiteSpace($ToolkitPaths.Merged)) { $OutDir = $ToolkitPaths.Merged }
   else { $OutDir = Join-Path $ToolkitRoot "output\merged" }

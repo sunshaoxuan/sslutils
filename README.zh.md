@@ -160,10 +160,26 @@ SSLCertificateKeyFile   /path/to/new/server.key
 
 ## ⚙️ 环境要求
 - **PowerShell 7.x** 或更高版本（脚本启动时自动检查，低于此版本将报错退出）
-- OpenSSL (推荐安装 Git for Windows，脚本默认查找 `C:\Program Files\Git\usr\bin\openssl.exe`)
+- OpenSSL（自动解析: `utils/bin/` → `config.json` → Git for Windows → 系统 PATH）
+
+### OpenSSL 安装
+
+如果系统中没有 OpenSSL，可以运行以下命令自动下载便携版:
+
+```powershell
+.\Install-Dependencies.ps1
+```
+
+这会将 OpenSSL 自动下载并安装到 `utils/bin/` 目录。也可以在 `config.json` 中自定义路径:
+
+```json
+"Tools": {
+    "OpenSsl": "C:\\path\\to\\openssl.exe"
+}
+```
 
 ## 路径配置（config.json）
-目录名已支持配置化，默认如下：
+目录名和工具路径已支持配置化，默认如下：
 
 ```json
 "Paths": {
@@ -175,6 +191,9 @@ SSLCertificateKeyFile   /path/to/new/server.key
   "Temp": "temp",
   "Resources": "resources",
   "CertConfig": "CertConfig.psd1"
+},
+"Tools": {
+  "OpenSsl": ""
 }
 ```
 
