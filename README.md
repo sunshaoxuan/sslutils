@@ -139,6 +139,31 @@ Generate/maintain a certificate renewal TSV (with legacy field import and manual
 .\utils\New-ServerList.ps1 -Path .\new -OldPath .\old
 ```
 
+## Folder Naming Convention (Auto Organization Lookup)
+
+When you name subfolders under `old/`, `new/`, or `output/merged/` using a **domain name** (e.g., `example.co.jp`), the toolkit automatically attempts to identify the organization behind that domain on startup.
+
+**How it works:**
+
+On each launch, `Invoke-SSLToolkit.ps1` runs `Rename-OrgFolders.ps1 -AutoYes` which:
+
+1. Scans `old/`, `new/`, and `output/merged/` for subfolders that look like domain names (contain `.`)
+2. Looks up the organization name using the following sources (in order):
+   - **Local certificates**: Reads the `O=` (Organization) field from `.cer` files matching the domain
+   - **WHOIS (JPRS)**: For `.jp` domains, queries the JPRS WHOIS registry for the registrant organization
+   - **Website probe**: Connects to `https://<domain>` to read the TLS certificate's organization or the page title
+3. If found, proposes renaming the folder from `example.co.jp` to `ExampleCorp (example)` (organization name + hostname in parentheses)
+4. Renames matching folders across all three directories (`old/`, `new/`, `output/merged/`) to keep them in sync
+
+**Example:**
+
+```
+Before:  old/mail.example.co.jp/   new/mail.example.co.jp/
+After:   old/Example Corp (mail)/  new/Example Corp (mail)/
+```
+
+This makes it easy to identify which organization each certificate belongs to at a glance. Already-renamed folders (containing spaces and parentheses) are automatically skipped.
+
 ## 🌐 Adding a New Language
 
 To add a new language, simply create `resources/strings.xx.psd1` (where `xx` is the language code) containing all translation keys and a `Language.DisplayName` key. No code changes are required — the language will automatically appear in the main menu's language selector.

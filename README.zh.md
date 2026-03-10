@@ -105,8 +105,35 @@ ssl_maker/
 ### 6. 其他工具
 - **PEM 修复**: `Repair-PemFile.ps1` (修复换行符问题)。
 - **同步**: `Sync-ToMerged.ps1` (将 new/ 中的 key/csr/tsv 同步到 output/merged/)。
-- **组织重命名**: 启动时自动执行（标准化文件夹命名）。
+- **组织重命名**: 启动时自动执行（详见下方"文件夹命名约定"章节）。
 - **证书更新清单**: `New-ServerList.ps1`（生成/维护证书更新用 TSV，保留人工字段）。
+
+---
+
+## 📁 文件夹命名约定（自动识别组织名）
+
+将 `old/`、`new/` 或 `output/merged/` 下的子文件夹命名为**域名**（如 `example.co.jp`），工具启动时会自动查询该域名对应的组织名称，并提议重命名文件夹。
+
+**工作原理：**
+
+每次启动 `Invoke-SSLToolkit.ps1` 时，会自动运行 `Rename-OrgFolders.ps1 -AutoYes`：
+
+1. 扫描 `old/`、`new/`、`output/merged/` 下所有看起来像域名的子文件夹（包含 `.`）
+2. 按以下顺序查询组织名：
+   - **本地证书**：从文件夹内的 `.cer` 文件中读取 `O=`（Organization）字段
+   - **WHOIS (JPRS)**：对 `.jp` 域名，查询 JPRS WHOIS 注册信息中的组织名
+   - **网站探测**：访问 `https://<域名>` 读取 TLS 证书中的组织名或页面标题
+3. 查到后，建议将文件夹从 `example.co.jp` 重命名为 `Example Corp (example)`（组织名 + 主机名）
+4. 在三个目录中同步重命名，保持一致性
+
+**示例：**
+
+```
+重命名前:  old/mail.example.co.jp/   new/mail.example.co.jp/
+重命名后:  old/Example Corp (mail)/  new/Example Corp (mail)/
+```
+
+这样可以一目了然地识别每个证书属于哪个组织。已重命名的文件夹（包含空格和括号）会被自动跳过。
 
 ---
 

@@ -138,6 +138,31 @@ PEM の修復・正規化。
 .\utils\New-ServerList.ps1 -Path .\new -OldPath .\old
 ```
 
+## 📁 フォルダ命名規則（組織名の自動検出）
+
+`old/`、`new/`、`output/merged/` 配下のサブフォルダを**ドメイン名**（例: `example.co.jp`）で命名すると、ツール起動時にそのドメインの組織名を自動的に調べ、フォルダのリネームを提案します。
+
+**動作の仕組み：**
+
+`Invoke-SSLToolkit.ps1` を起動するたびに `Rename-OrgFolders.ps1 -AutoYes` が自動実行されます：
+
+1. `old/`、`new/`、`output/merged/` を走査し、ドメイン名に見えるフォルダ（`.` を含む名前）を検出
+2. 以下の順序で組織名を照会：
+   - **ローカル証明書**：フォルダ内の `.cer` ファイルから `O=`（Organization）を読み取り
+   - **WHOIS (JPRS)**：`.jp` ドメインの場合、JPRS WHOIS レジストリから登録者名を取得
+   - **Web サイト探索**：`https://<ドメイン>` に接続し、TLS 証明書の組織名またはページタイトルを取得
+3. 組織名が見つかった場合、`example.co.jp` → `Example Corp (example)` のようにリネームを提案（組織名 + ホスト名）
+4. 3つのディレクトリで同名フォルダを一括リネームし、整合性を維持
+
+**例：**
+
+```
+変更前:  old/mail.example.co.jp/   new/mail.example.co.jp/
+変更後:  old/Example Corp (mail)/  new/Example Corp (mail)/
+```
+
+これにより、各証明書がどの組織に属するか一目で識別できます。リネーム済みのフォルダ（スペースと括弧を含む名前）は自動的にスキップされます。
+
 ## 🌐 多言語拡張
 
 新しい言語を追加するには `resources/strings.xx.psd1`（xx は言語コード）を作成し、`Language.DisplayName` キーと全翻訳キーを含めるだけです。コード変更は不要で、メインメニューの言語選択に自動的に表示されます。
