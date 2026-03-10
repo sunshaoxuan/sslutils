@@ -30,7 +30,7 @@ https://github.com/sunshaoxuan
 ## 🚀 快速开始
 
 ```powershell
-.\Install-Dependencies.ps1   # 首次使用：安装 OpenSSL
+.\utils\Install-Dependencies.ps1   # 首次使用：安装 OpenSSL
 .\Invoke-SSLToolkit.ps1
 ```
 
@@ -63,9 +63,9 @@ ssl_maker/
 │   └── strings.en.psd1     # 英语
 ├── CertConfig.psd1         # 证书匹配规则配置文件
 ├── config.json             # 路径与工具配置
-├── Install-Dependencies.ps1 # OpenSSL 自动下载安装
 ├── Invoke-SSLToolkit.ps1   # [入口] 主菜单工具
 └── utils/                  # 各独立功能脚本
+    ├── Install-Dependencies.ps1 # OpenSSL 自动下载安装
     └── bin/                # 便携工具二进制文件
 ```
 
@@ -199,7 +199,7 @@ SSLCertificateKeyFile   /path/to/new/server.key
 如果系统中没有 OpenSSL，可以运行以下命令自动下载便携版:
 
 ```powershell
-.\Install-Dependencies.ps1
+.\utils\Install-Dependencies.ps1
 ```
 
 这会将 OpenSSL 自动下载并安装到 `utils/bin/` 目录。也可以在 `config.json` 中自定义路径:

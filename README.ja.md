@@ -24,7 +24,7 @@
 システムに OpenSSL がない場合、セットアップスクリプトでポータブル版をダウンロードできます:
 
 ```powershell
-.\Install-Dependencies.ps1
+.\utils\Install-Dependencies.ps1
 ```
 
 `utils/bin/` に OpenSSL が自動インストールされます。`config.json` でカスタムパスも設定可能です:
@@ -50,16 +50,16 @@ ssl_maker/
 │   └── strings.en.psd1     # 英語
 ├── CertConfig.psd1         # 証明書マッチングルール
 ├── config.json             # パス・ツール設定
-├── Install-Dependencies.ps1 # OpenSSL 自動ダウンロード
 ├── Invoke-SSLToolkit.ps1   # [入口] メインメニュー
 └── utils/                  # 各独立スクリプト
+    ├── Install-Dependencies.ps1 # OpenSSL 自動ダウンロード
     └── bin/                # ポータブルツールバイナリ
 ```
 
 ## クイックスタート
 
 ```powershell
-.\Install-Dependencies.ps1   # 初回: OpenSSL セットアップ
+.\utils\Install-Dependencies.ps1   # 初回: OpenSSL セットアップ
 .\Invoke-SSLToolkit.ps1
 ```
 

@@ -24,7 +24,7 @@ PowerShell scripts to manage certificates, keys, and CSRs with multi-org and mul
 If OpenSSL is not installed on your system, run the setup script to download a portable version:
 
 ```powershell
-.\Install-Dependencies.ps1
+.\utils\Install-Dependencies.ps1
 ```
 
 This will automatically download and install OpenSSL into `utils/bin/`. You can also configure a custom OpenSSL path in `config.json`:
@@ -50,16 +50,16 @@ ssl_maker/
 │   └── strings.en.psd1     # English
 ├── CertConfig.psd1         # Certificate matching rules
 ├── config.json             # Path & tool configuration
-├── Install-Dependencies.ps1 # Auto-download OpenSSL
 ├── Invoke-SSLToolkit.ps1   # [Entry] Main menu
 └── utils/                  # Individual scripts
+    ├── Install-Dependencies.ps1 # Auto-download OpenSSL
     └── bin/                # Portable tool binaries
 ```
 
 ## Quick Start
 
 ```powershell
-.\Install-Dependencies.ps1   # First time: setup OpenSSL
+.\utils\Install-Dependencies.ps1   # First time: setup OpenSSL
 .\Invoke-SSLToolkit.ps1
 ```
 

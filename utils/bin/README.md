@@ -7,7 +7,7 @@ This directory is used to store portable tool binaries (e.g., `openssl.exe`) req
 Run the following command from the project root:
 
 ```powershell
-.\Install-Dependencies.ps1
+.\utils\Install-Dependencies.ps1
 ```
 
 This will automatically download and extract the required tools into this directory.

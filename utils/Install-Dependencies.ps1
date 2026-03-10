@@ -13,11 +13,11 @@ Re-download even if utils/bin/openssl.exe already exists.
 Display language (ja / zh / en). Defaults to saved preference or system default.
 
 .EXAMPLE
-.\Install-Dependencies.ps1
+.\utils\Install-Dependencies.ps1
 Check and install OpenSSL if needed.
 
 .EXAMPLE
-.\Install-Dependencies.ps1 -Force
+.\utils\Install-Dependencies.ps1 -Force
 Force re-download of OpenSSL.
 #>
 
@@ -29,13 +29,15 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-. (Join-Path $PSScriptRoot "utils\lib\defaults.ps1")
+$ToolkitRoot = Split-Path -Parent $PSScriptRoot
+
+. (Join-Path $PSScriptRoot "lib\defaults.ps1")
 
 if ($PSVersionTable.PSVersion.Major -lt 7) {
   $__msg = "[ERROR] PowerShell 7.x or later is required."
   $__cur = "Current"
   try {
-    $__resDir = Join-Path $PSScriptRoot "resources"
+    $__resDir = Join-Path $ToolkitRoot "resources"
     $__lc = if (Test-Path variable:Lang) { $Lang } else { $__DefaultLang }
     if ([string]::IsNullOrWhiteSpace($__lc)) { $__lc = "en" }
     $__langFile2 = Join-Path $__resDir ("strings.{0}.psd1" -f $__lc)
@@ -51,7 +53,7 @@ if ($PSVersionTable.PSVersion.Major -lt 7) {
   exit 1
 }
 
-$__langFile = Join-Path $PSScriptRoot ".toolkit_lang"
+$__langFile = Join-Path $ToolkitRoot ".toolkit_lang"
 if ([string]::IsNullOrWhiteSpace($Lang)) {
   if (Test-Path -LiteralPath $__langFile -PathType Leaf) {
     $Lang = (Get-Content -LiteralPath $__langFile -Raw -ErrorAction SilentlyContinue).Trim()
@@ -59,17 +61,17 @@ if ([string]::IsNullOrWhiteSpace($Lang)) {
   if ([string]::IsNullOrWhiteSpace($Lang)) { $Lang = $__DefaultLang }
 }
 
-$i18nModule = Join-Path $PSScriptRoot "utils\lib\i18n.ps1"
+$i18nModule = Join-Path $PSScriptRoot "lib\i18n.ps1"
 if (Test-Path -LiteralPath $i18nModule -PathType Leaf) {
   . $i18nModule
-  $__i18n = Initialize-I18n -Lang $Lang -BaseDir $PSScriptRoot
+  $__i18n = Initialize-I18n -Lang $Lang -BaseDir $ToolkitRoot
 }
 function T([string]$Key, [object[]]$FormatArgs = @()) {
   if ($null -ne $__i18n) { return Get-I18nText -I18n $__i18n -Key $Key -FormatArgs $FormatArgs }
   return $Key
 }
 
-$BinDir = Join-Path $PSScriptRoot "utils\bin"
+$BinDir = Join-Path $PSScriptRoot "bin"
 $OpenSslExe = Join-Path $BinDir "openssl.exe"
 
 function Test-OpenSslWorks([string]$path) {
@@ -120,7 +122,7 @@ $downloadUrls = @(
   }
 )
 
-$tempDir = Join-Path $PSScriptRoot "temp"
+$tempDir = Join-Path $ToolkitRoot "temp"
 if (-not (Test-Path -LiteralPath $tempDir -PathType Container)) {
   New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
 }
