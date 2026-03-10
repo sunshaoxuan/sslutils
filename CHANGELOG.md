@@ -13,7 +13,11 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - **OpenSSL Default**: All 10 scripts now use `Resolve-OpenSsl` instead of hardcoded `C:\Program Files\Git\usr\bin\openssl.exe` default path.
 - **Docs**: Updated all 3 README files with OpenSSL setup instructions, new folder layout, and Quick Start steps.
+- **Docs**: Added "Folder Naming Convention" section to all READMEs explaining automatic organization name lookup via local certs, WHOIS/JPRS, and website probing.
 - **PS7 Check**: `Install-Dependencies.ps1` includes PowerShell 7.x version check consistent with other scripts.
+
+### Fixed
+- **PS 7.4+ Compatibility**: Resolved `Import-PowerShellDataFile` 500-key limit error on PowerShell 7.4+ by adding `Import-SafeDataFile` wrapper with automatic `-SkipLimitCheck` support.
 
 ## [1.4.1] - 2026-02-27
 
