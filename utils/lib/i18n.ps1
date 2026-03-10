@@ -11,7 +11,7 @@ if ($PSVersionTable.PSVersion.Major -lt 7) {
     $__resDir = Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) "resources"
     $__langFile = Join-Path $__resDir ("strings.{0}.psd1" -f $__curLang)
     if (Test-Path -LiteralPath $__langFile -PathType Leaf) {
-      $__d = Import-PowerShellDataFile -LiteralPath $__langFile
+      $__d = Import-SafeDataFile -LiteralPath $__langFile
       if ($__d.ContainsKey("Language.VersionCheckError")) { $__msg = $__d["Language.VersionCheckError"] }
       if ($__d.ContainsKey("Language.VersionCheckCurrent")) { $__cur = $__d["Language.VersionCheckCurrent"] }
     }
@@ -35,7 +35,7 @@ function Get-AvailableLanguages {
     if ($f.Name -match '^strings\.([a-z]{2,})\.psd1$') {
       $code = $matches[1]
       try {
-        $data = Import-PowerShellDataFile -LiteralPath $f.FullName
+        $data = Import-SafeDataFile -LiteralPath $f.FullName
         $displayName = if ($data.ContainsKey("Language.DisplayName")) { $data["Language.DisplayName"] } else { $code }
       }
       catch { $displayName = $code }
@@ -66,10 +66,10 @@ function Initialize-I18n {
     throw ("リソースファイルが見つかりません: {0}" -f $jaPath)
   }
 
-  $ja = Import-PowerShellDataFile -LiteralPath $jaPath
+  $ja = Import-SafeDataFile -LiteralPath $jaPath
   $langTable = @{}
   if ($Lang -ne "ja" -and (Test-Path -LiteralPath $langPath -PathType Leaf)) {
-    $langTable = Import-PowerShellDataFile -LiteralPath $langPath
+    $langTable = Import-SafeDataFile -LiteralPath $langPath
   }
 
   return [PSCustomObject]@{

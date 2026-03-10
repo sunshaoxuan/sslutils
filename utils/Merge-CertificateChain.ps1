@@ -140,7 +140,7 @@ $configPath = if ($null -ne $ToolkitPaths -and -not [string]::IsNullOrWhiteSpace
 if (-not (Test-Path -LiteralPath $configPath -PathType Leaf)) {
   throw (T "Common.FileNotFound" @("Configuration file", $configPath))
 }
-$CertConfig = Import-PowerShellDataFile -Path $configPath
+$CertConfig = Import-SafeDataFile -LiteralPath $configPath
 
 # Helper to get all patterns from config
 function Get-AllCertPatterns() {

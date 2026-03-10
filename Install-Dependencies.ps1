@@ -40,7 +40,7 @@ if ($PSVersionTable.PSVersion.Major -lt 7) {
     if ([string]::IsNullOrWhiteSpace($__lc)) { $__lc = "en" }
     $__langFile2 = Join-Path $__resDir ("strings.{0}.psd1" -f $__lc)
     if (Test-Path -LiteralPath $__langFile2 -PathType Leaf) {
-      $__d = Import-PowerShellDataFile -LiteralPath $__langFile2
+      $__d = Import-SafeDataFile -LiteralPath $__langFile2
       if ($__d.ContainsKey("Language.VersionCheckError")) { $__msg = $__d["Language.VersionCheckError"] }
       if ($__d.ContainsKey("Language.VersionCheckCurrent")) { $__cur = $__d["Language.VersionCheckCurrent"] }
     }
