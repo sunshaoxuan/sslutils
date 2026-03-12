@@ -291,28 +291,61 @@ try {
         # ツール実行
         $selectedTool = $tools[$selection - 1]
         
-        # SubMenu がある場合は二級メニューを表示
+        # SubMenu がある場合は二級メニューをループ表示
         if ($selectedTool.ContainsKey('SubMenu') -and $selectedTool.SubMenu.Count -gt 0) {
-            $subItems = @()
-            foreach ($sub in $selectedTool.SubMenu) {
-                $subScript = Join-Path $PSScriptRoot $sub.Script
-                $subStatus = if (Test-Path -LiteralPath $subScript -PathType Leaf) { "" } else { " [N/A]" }
-                $subItems += "{0,-24} - {1}{2}" -f $sub.Name, (T $sub.DescKey), $subStatus
+            while ($true) {
+                $subItems = @()
+                foreach ($sub in $selectedTool.SubMenu) {
+                    $subScript = Join-Path $PSScriptRoot $sub.Script
+                    $subStatus = if (Test-Path -LiteralPath $subScript -PathType Leaf) { "" } else { " [N/A]" }
+                    $subItems += "{0,-24} - {1}{2}" -f $sub.Name, (T $sub.DescKey), $subStatus
+                }
+                $subItems += (T "Toolkit.Menu.Back")
+
+                $subTitle = T "Toolkit.Menu.SubMenuSelect" @((T $selectedTool.DescKey))
+                $subSel = Show-MenuSelect -title $subTitle -items $subItems
+                if ($null -eq $subSel -or $subSel -eq $subItems.Count) { break }
+
+                $chosenSub = $selectedTool.SubMenu[$subSel - 1]
+                $scriptPath = Join-Path $PSScriptRoot $chosenSub.Script
+                $runName = $chosenSub.Name
+
+                if (-not (Test-Path -LiteralPath $scriptPath -PathType Leaf)) {
+                    Clear-Host
+                    Write-Host ""
+                    Write-Host (T "Toolkit.Menu.ScriptNotFound" @($scriptPath)) -ForegroundColor Red
+                    Write-Host ""
+                    Write-Host (T "Toolkit.Menu.PressAnyKey") -ForegroundColor DarkGray
+                    try { $null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") } catch { }
+                    continue
+                }
+
+                Clear-Host
+                Write-Host ""
+                Write-Host (T "Toolkit.Menu.Starting" @($runName)) -ForegroundColor Yellow
+                Write-Host ""
+
+                try {
+                    try { $host.UI.RawUI.FlushInputBuffer() } catch { }
+                    & $scriptPath -Lang $Lang
+                }
+                catch {
+                    Write-Host ""
+                    Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red
+                }
+                finally {
+                    if ($selectedTool.Wait -and $LASTEXITCODE -ne 99) {
+                        Write-Host ""
+                        Write-Host (T "Toolkit.Menu.PressAnyKey") -ForegroundColor DarkGray
+                        try { $null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") } catch { }
+                    }
+                }
             }
-            $subItems += (T "Toolkit.Menu.Back")
-
-            $subTitle = T "Toolkit.Menu.SubMenuSelect" @((T $selectedTool.DescKey))
-            $subSel = Show-MenuSelect -title $subTitle -items $subItems
-            if ($null -eq $subSel -or $subSel -eq $subItems.Count) { continue }
-
-            $chosenSub = $selectedTool.SubMenu[$subSel - 1]
-            $scriptPath = Join-Path $PSScriptRoot $chosenSub.Script
-            $runName = $chosenSub.Name
+            continue
         }
-        else {
-            $scriptPath = Join-Path $PSScriptRoot $selectedTool.Script
-            $runName = $selectedTool.Name
-        }
+        
+        $scriptPath = Join-Path $PSScriptRoot $selectedTool.Script
+        $runName = $selectedTool.Name
         
         if (-not (Test-Path -LiteralPath $scriptPath -PathType Leaf)) {
             Clear-Host
