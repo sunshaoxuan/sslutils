@@ -223,13 +223,13 @@ basicConstraints = CA:FALSE
     Write-Host (T "SS.Info.OutDir" @($targetOutDir))
     Write-Host ""
 
-    $args = @(
-      "req", "-x509", "-newkey", "rsa:$RsaBits", "-sha256", "-nodes",
+    $sslArgs = @(
+      "req", "-x509", "-batch", "-newkey", "rsa:$RsaBits", "-sha256", "-nodes",
       "-days", "$ValidityDays", "-keyout", $keyPath, "-out", $crtPath,
       "-subj", $subjectFinal, "-extensions", "v3_req", "-config", $cfgPath
     )
 
-    Invoke-OpenSsl $openSslCmd $args | Out-Null
+    Invoke-OpenSsl $openSslCmd $sslArgs | Out-Null
 
     $endDateOut = @(Invoke-OpenSsl $openSslCmd @("x509", "-in", $crtPath, "-noout", "-enddate"))
     $endDate = ""
