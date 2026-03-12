@@ -451,7 +451,7 @@ function Get-OrgCandidates() {
   $list = New-Object System.Collections.Generic.List[object]
 
   # old 直下に証明書がある場合は (root) も機関として扱う
-  $rootCerts = @(Get-ChildItem -LiteralPath $OldDir -File -Include *.cer, *.crt -ErrorAction SilentlyContinue)
+  $rootCerts = @(Get-ChildItem -LiteralPath $OldDir -File -Include $__CertPatterns -ErrorAction SilentlyContinue)
   if ($rootCerts.Count -gt 0) {
     $list.Add([PSCustomObject]@{ Name = "(root)"; FullName = $OldDir }) | Out-Null
   }
@@ -631,10 +631,10 @@ function Export-TsvRow([string]$outPath, [string]$tsvLine) {
 function Get-NextExpiryDate([object]$candidate) {
   $isRoot = ($candidate.Name -eq "(root)")
   $certs = @(if ($isRoot) {
-      @(Get-ChildItem -LiteralPath $candidate.FullName -File -Include *.cer, *.crt, *.pem -ErrorAction SilentlyContinue)
+      @(Get-ChildItem -LiteralPath $candidate.FullName -File -Include $__CertPatterns -ErrorAction SilentlyContinue)
     }
     else {
-      @(Get-ChildItem -LiteralPath $candidate.FullName -Recurse -File -Include *.cer, *.crt, *.pem -ErrorAction SilentlyContinue)
+      @(Get-ChildItem -LiteralPath $candidate.FullName -Recurse -File -Include $__CertPatterns -ErrorAction SilentlyContinue)
     })
   if ($certs.Count -eq 0) { return $null }
 
@@ -655,7 +655,7 @@ function Get-NewStatusSummary([object]$candidate) {
 
   # (root) の場合
   if ($name -eq "(root)") {
-    $rootCerts = @(Get-ChildItem -LiteralPath $candidate.FullName -File -Include *.cer, *.crt -ErrorAction SilentlyContinue)
+    $rootCerts = @(Get-ChildItem -LiteralPath $candidate.FullName -File -Include $__CertPatterns -ErrorAction SilentlyContinue)
     if ($rootCerts.Count -eq 0) { return (T "Renew.New.NotGenerated") }
 
     $done = 0
@@ -724,10 +724,10 @@ function Read-SelectOrgs([object[]]$candidates) {
       $name = $cand.Name
       $certCount = 0
       if ($name -eq "(root)") {
-        $certCount = @(Get-ChildItem -LiteralPath $cand.FullName -File -Include *.cer, *.crt -ErrorAction SilentlyContinue).Count
+        $certCount = @(Get-ChildItem -LiteralPath $cand.FullName -File -Include $__CertPatterns -ErrorAction SilentlyContinue).Count
       }
       else {
-        $certCount = @(Get-ChildItem -LiteralPath $cand.FullName -Recurse -File -Include *.cer, *.crt, *.pem -ErrorAction SilentlyContinue).Count
+        $certCount = @(Get-ChildItem -LiteralPath $cand.FullName -Recurse -File -Include $__CertPatterns -ErrorAction SilentlyContinue).Count
       }
       
       # 原始証明書の最早有効期限を取得
@@ -766,10 +766,10 @@ function Read-SelectOrgs([object[]]$candidates) {
       $name = $candidateList[$i].Name
       $certCount = 0
       if ($name -eq "(root)") {
-        $certCount = @(Get-ChildItem -LiteralPath $candidateList[$i].FullName -File -Include *.cer, *.crt -ErrorAction SilentlyContinue).Count
+        $certCount = @(Get-ChildItem -LiteralPath $candidateList[$i].FullName -File -Include $__CertPatterns -ErrorAction SilentlyContinue).Count
       }
       else {
-        $certCount = @(Get-ChildItem -LiteralPath $candidateList[$i].FullName -Recurse -File -Include *.cer, *.crt -ErrorAction SilentlyContinue).Count
+        $certCount = @(Get-ChildItem -LiteralPath $candidateList[$i].FullName -Recurse -File -Include $__CertPatterns -ErrorAction SilentlyContinue).Count
       }
       $newStatus = Get-NewStatusSummary $candidates[$i]
       Write-Host ("[{0}] {1}  (certs={2}, {3})" -f ($i + 1), $name, $certCount, $newStatus)
@@ -841,7 +841,7 @@ $validCands = $null
 
 if (-not [string]::IsNullOrWhiteSpace($Org)) {
   if ($Org -eq "(root)" -or $Org -eq "." -or $Org -eq "root") {
-    $rootCerts = @(Get-ChildItem -LiteralPath $OldDir -File -Include *.cer, *.crt -ErrorAction SilentlyContinue)
+    $rootCerts = @(Get-ChildItem -LiteralPath $OldDir -File -Include $__CertPatterns -ErrorAction SilentlyContinue)
     if ($rootCerts.Count -eq 0) { throw (T "Renew.RootNoCerts") }
     $orgDirs = @([PSCustomObject]@{ Name = "(root)"; FullName = $OldDir })
   }

@@ -408,7 +408,7 @@ function Find-RootCandidates() {
 
   foreach ($path in $searchPaths) {
     if (-not (Test-Path -LiteralPath $path -PathType Container)) { continue }
-    $items = @(Get-ChildItem -LiteralPath $path -File -Include *.cer, *.crt, *.pem -ErrorAction SilentlyContinue)
+    $items = @(Get-ChildItem -LiteralPath $path -File -Include $__CertPatterns -ErrorAction SilentlyContinue)
     foreach ($i in $items) { $found.Add($i.FullName) | Out-Null }
   }
   return @($found | Select-Object -Unique)
@@ -726,7 +726,7 @@ function Merge-One([string]$clientCertPath, [string]$SelectedIntermediate = "", 
   Write-Success (T "MergeCert.Done")
 }
 
-function Find-ClientCerts([string]$root, [switch]$OnlyNew, [switch]$OnlyCer) {
+function Find-ClientCerts([string]$root, [switch]$OnlyNew) {
   $dirs = @()
   $new = Join-Path $root $newDirName
   if ($OnlyNew) {
@@ -739,7 +739,7 @@ function Find-ClientCerts([string]$root, [switch]$OnlyNew, [switch]$OnlyCer) {
   }
   if ($dirs.Count -eq 0) { $dirs += $root }
 
-  $patterns = if ($OnlyCer) { @("*.cer") } else { @("*.cer", "*.crt", "*.pem") }
+  $patterns = $__CertPatterns
   $all = New-Object System.Collections.Generic.List[string]
   foreach ($d in $dirs) {
     foreach ($f in @(Get-ChildItem -LiteralPath $d -Recurse -File -Include $patterns -ErrorAction SilentlyContinue)) {
@@ -827,7 +827,7 @@ if ([string]::IsNullOrWhiteSpace($ClientCert)) {
   Write-Host (T "MergeCert.RootDir" @((Resolve-Path -LiteralPath $RootDir)))
   Write-Host (T "MergeCert.OutDir" @((Resolve-Path -LiteralPath $OutDir)))
 
-  $targets = @(Find-ClientCerts $RootDir -OnlyNew -OnlyCer)
+  $targets = @(Find-ClientCerts $RootDir -OnlyNew)
   if ($targets.Count -eq 0) {
     Write-Host (T "MergeCert.NoTargets")
     exit 0

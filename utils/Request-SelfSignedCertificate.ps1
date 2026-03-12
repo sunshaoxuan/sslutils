@@ -254,7 +254,7 @@ function Start-QuickMode([string]$openSslCmd, [string]$baseOutDir) {
     Write-Host (T "SS.Quick.StartOrg" @($selected.Name)) -ForegroundColor Cyan
 
     $certFiles = @(Get-ChildItem -LiteralPath $selected.FullName -Recurse -File -ErrorAction SilentlyContinue |
-      Where-Object { $_.Extension -in @(".cer", ".crt", ".pem") })
+      Where-Object { $_.Extension -in $__CertExtensions })
 
     if ($certFiles.Count -eq 0) {
       Write-Host (T "SS.Menu.NoCertInOrg" @($selected.Name)) -ForegroundColor Yellow

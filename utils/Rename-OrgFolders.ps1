@@ -235,8 +235,7 @@ function Get-OrgFromLocalCert([string]$domain) {
         $searchPath = Resolve-DirPath $d
         if (-not (Test-Path $searchPath)) { continue }
         
-        # 搜索包含该域名的 .cer 文件
-        $certs = Get-ChildItem -LiteralPath $searchPath -Recurse -Filter "*.cer" -ErrorAction SilentlyContinue |
+        $certs = Get-ChildItem -LiteralPath $searchPath -Recurse -File -Include $__CertPatterns -ErrorAction SilentlyContinue |
         Where-Object { $_.Name -match [regex]::Escape($domain) -or $_.Directory.Name -eq $domain }
         
         foreach ($cert in $certs) {

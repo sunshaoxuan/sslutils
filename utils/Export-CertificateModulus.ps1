@@ -146,7 +146,7 @@ Write-Host (T "ShowModulus.Calculating") -ForegroundColor Cyan
 # データ収集用ハッシュ: Key = Modulus, Value = @{ Certs = @(); Keys = @() }
 $modulusGroups = @{}
 
-$certFiles = Get-ChildItem -LiteralPath $root -Recurse -File -Include *.cer, *.crt, *.pem -ErrorAction SilentlyContinue
+$certFiles = Get-ChildItem -LiteralPath $root -Recurse -File -Include $__CertPatterns -ErrorAction SilentlyContinue
 $keyFiles = Get-ChildItem -LiteralPath $root -Recurse -File -Include *.key -ErrorAction SilentlyContinue
 
 $certCount = 0

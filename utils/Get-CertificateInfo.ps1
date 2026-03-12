@@ -906,10 +906,17 @@ function Show-FileMatching([string]$filePath, [string[]]$passphrases = @()) {
   if (-not $csrFile) { $csrFile = Get-ChildItem -LiteralPath $dir -Filter "*.csr" -File -ErrorAction SilentlyContinue | Select-Object -First 1 }
   $keyFile = Get-ChildItem -LiteralPath $dir -Filter "$base.key" -File -ErrorAction SilentlyContinue | Select-Object -First 1
   if (-not $keyFile) { $keyFile = Get-ChildItem -LiteralPath $dir -Filter "*.key" -File -ErrorAction SilentlyContinue | Select-Object -First 1 }
-  $cerFile = Get-ChildItem -LiteralPath $dir -Filter "$base.cer" -File -ErrorAction SilentlyContinue | Select-Object -First 1
-  if (-not $cerFile) { $cerFile = Get-ChildItem -LiteralPath $dir -Filter "$base.crt" -File -ErrorAction SilentlyContinue | Select-Object -First 1 }
-  if (-not $cerFile) { $cerFile = Get-ChildItem -LiteralPath $dir -Filter "*.cer" -File -ErrorAction SilentlyContinue | Select-Object -First 1 }
-  if (-not $cerFile) { $cerFile = Get-ChildItem -LiteralPath $dir -Filter "*.crt" -File -ErrorAction SilentlyContinue | Select-Object -First 1 }
+  $cerFile = $null
+  foreach ($ext in $__CertExtensions) {
+    $cerFile = Get-ChildItem -LiteralPath $dir -Filter "$base$ext" -File -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($cerFile) { break }
+  }
+  if (-not $cerFile) {
+    foreach ($pat in $__CertPatterns) {
+      $cerFile = Get-ChildItem -LiteralPath $dir -Filter $pat -File -ErrorAction SilentlyContinue | Select-Object -First 1
+      if ($cerFile) { break }
+    }
+  }
   $tsvFile = Get-ChildItem -LiteralPath $dir -Filter "$base.tsv" -File -ErrorAction SilentlyContinue | Select-Object -First 1
   if (-not $tsvFile) { $tsvFile = Get-ChildItem -LiteralPath $dir -Filter "*.tsv" -File -ErrorAction SilentlyContinue | Select-Object -First 1 }
   $pfxFile = Get-ChildItem -LiteralPath $dir -Filter "$base.pfx" -File -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -1140,7 +1147,7 @@ function Show-OneFile {
     $storeDir = Join-Path $ToolkitRoot $certStoreRoot
     if (-not (Test-Path -LiteralPath $storeDir -PathType Container)) { return "" }
     $needle = $pemBlock.Trim() -replace "`r`n", "`n" -replace "`r", "`n"
-    $cerFiles = @(Get-ChildItem -LiteralPath $storeDir -Recurse -File -Include *.cer, *.crt, *.pem -ErrorAction SilentlyContinue)
+    $cerFiles = @(Get-ChildItem -LiteralPath $storeDir -Recurse -File -Include $__CertPatterns -ErrorAction SilentlyContinue)
     foreach ($f in $cerFiles) {
       $content = (Get-Content -LiteralPath $f.FullName -Raw) -replace "`r`n", "`n" -replace "`r", "`n"
       if ($content.Contains($needle)) {
@@ -1666,7 +1673,7 @@ function Show-Folder([string]$folderPath, [string]$label, [string]$oldRootForNew
 
   # 機関（第一階層）
   $orgDirs = @(Get-ChildItem -LiteralPath $folderPath -Directory -ErrorAction SilentlyContinue)
-  $rootFiles = @(Get-ChildItem -LiteralPath $folderPath -File -Include *.cer, *.crt, *.pem, *.csr, *.key -ErrorAction SilentlyContinue)
+  $rootFiles = @(Get-ChildItem -LiteralPath $folderPath -File -Include ($__CertPatterns + @("*.csr", "*.key")) -ErrorAction SilentlyContinue)
   if ($rootFiles.Count -gt 0) {
     $orgDirs = @([PSCustomObject]@{ FullName = $folderPath; Name = "(root)" }) + $orgDirs
   }
@@ -1705,10 +1712,10 @@ function Show-Folder([string]$folderPath, [string]$label, [string]$oldRootForNew
     $files = @()
     if ($orgName -eq "(root)" -and $hasOrgSubdirs) {
       # (root) は直下のみ（サブフォルダ機関と重複させない）
-      $files = @(Get-ChildItem -LiteralPath $orgPath -File -Include *.cer, *.crt, *.pem, *.csr, *.key -ErrorAction SilentlyContinue)
+      $files = @(Get-ChildItem -LiteralPath $orgPath -File -Include ($__CertPatterns + @("*.csr", "*.key")) -ErrorAction SilentlyContinue)
     }
     else {
-      $files = @(Get-ChildItem -LiteralPath $orgPath -Recurse -File -Include *.cer, *.crt, *.pem, *.csr, *.key -ErrorAction SilentlyContinue)
+      $files = @(Get-ChildItem -LiteralPath $orgPath -Recurse -File -Include ($__CertPatterns + @("*.csr", "*.key")) -ErrorAction SilentlyContinue)
     }
     if ($files.Count -eq 0) {
       Write-TreeLine 0 ("{0}\{1}\" -f $label, $orgName) {
@@ -1758,7 +1765,7 @@ function Show-Folder([string]$folderPath, [string]$label, [string]$oldRootForNew
       }
       catch { }
 
-      if ($ext -in @(".cer", ".crt", ".pem")) {
+      if ($ext -in $__CertExtensions) {
         $sum = Get-CertChainSummary $f.FullName
         $subject = Get-SubjectRfc2253FromCert $f.FullName
         $san = Get-SubjectAltNamesFromCert $f.FullName
