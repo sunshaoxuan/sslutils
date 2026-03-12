@@ -13,9 +13,9 @@ https://github.com/sunshaoxuan
 ---
 
 ## 📅 版本更新 (v1.5.0)
+- **多格式证书支持**: 所有脚本统一支持 `.cer`、`.crt`、`.pem` 证书文件（通过集中常量管理）。
 - **便携 OpenSSL**: 新增 `Install-Dependencies.ps1`，自动下载便携版 OpenSSL，无需系统级安装。
 - **工具路径自动解析**: OpenSSL 路径按 `utils/bin/` → `config.json` → Git for Windows → 系统 PATH 优先级自动查找。
-- **工具配置**: 可在 `config.json` 的 `Tools.OpenSsl` 中自定义 OpenSSL 路径。
 - **完整历史**: 详见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 📅 历史更新

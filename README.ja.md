@@ -9,9 +9,9 @@
 証明書・秘密鍵・CSR を扱う PowerShell スクリプト集です。多機関対応と多言語対応を前提にしています。
 
 ## バージョン (v1.5.0)
+- **マルチフォーマット対応**: すべてのスクリプトが `.cer`、`.crt`、`.pem` 証明書ファイルを統一的にサポート（共有定数で一元管理）。
 - **ポータブル OpenSSL**: `Install-Dependencies.ps1` でポータブル版 OpenSSL を自動ダウンロード — システムへのインストール不要。
 - **ツール自動解決**: OpenSSL パスを `utils/bin/` → `config.json` → Git for Windows → システム PATH の順で自動検出。
-- **ツール設定**: `config.json` の `Tools.OpenSsl` でカスタムパスを設定可能。
 - **詳細履歴**: [CHANGELOG.md](CHANGELOG.md) を参照。
 
 ## 事前準備
