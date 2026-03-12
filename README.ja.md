@@ -8,7 +8,8 @@
 ## 概要
 証明書・秘密鍵・CSR を扱う PowerShell スクリプト集です。多機関対応と多言語対応を前提にしています。
 
-## バージョン (v1.5.1)
+## バージョン (v1.5.2)
+- **証明書有効期間の選択**: 自己署名証明書の有効期間を対話メニューで選択可能（90日 / 1年 / 3年 / 10年）。CLI では `-Days` パラメータも利用可能。
 - **マルチフォーマット対応**: すべてのスクリプトが `.cer`、`.crt`、`.pem` 証明書ファイルを統一的にサポート（共有定数で一元管理）。
 - **ポータブル OpenSSL**: `Install-Dependencies.ps1` でポータブル版 OpenSSL を自動ダウンロード — システムへのインストール不要。
 - **ツール自動解決**: OpenSSL パスを `utils/bin/` → `config.json` → Git for Windows → システム PATH の順で自動検出。
@@ -121,10 +122,11 @@ Docker + certbot で Let's Encrypt を申請。
 ```
 
 8) `Request-SelfSignedCertificate.ps1`
-10年有効の自己署名証明書を生成。
+自己署名証明書を生成（有効期間を選択可能: 90日 / 1年 / 3年 / 10年）。
 ```powershell
-.\utils\Request-SelfSignedCertificate.ps1 -CN internal.example.local -Lang ja
+.\utils\Request-SelfSignedCertificate.ps1 -CN internal.example.local -Days 365 -Lang ja
 ```
+対話メニューで有効期間を選択し、Quick モードまたは Custom モードで生成。
 
 9) `Repair-PemFile.ps1`
 PEM の修復・正規化。

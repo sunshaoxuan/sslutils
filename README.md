@@ -8,7 +8,8 @@ Languages:
 ## Overview
 PowerShell scripts to manage certificates, keys, and CSRs with multi-org and multi-language support.
 
-## What's New (v1.5.1)
+## What's New (v1.5.2)
+- **Selectable Certificate Validity**: Self-signed certificates now offer interactive validity selection (90 days / 1 year / 3 years / 10 years) and CLI `-Days` parameter.
 - **Multi-Format Certificates**: All scripts now consistently support `.cer`, `.crt`, and `.pem` certificate files (centralized via shared constants).
 - **Portable OpenSSL**: Added `Install-Dependencies.ps1` to auto-download portable OpenSSL — no system-wide installation needed.
 - **Unified Tool Resolution**: OpenSSL path auto-resolved via `utils/bin/` → `config.json` → Git for Windows → system PATH.
@@ -120,10 +121,11 @@ Request Let's Encrypt cert using Docker + certbot.
 ```
 
 8) `Request-SelfSignedCertificate.ps1`
-Generate a 10-year self-signed certificate.
+Generate a self-signed certificate with selectable validity period (90 days / 1 year / 3 years / 10 years).
 ```powershell
-.\utils\Request-SelfSignedCertificate.ps1 -CN internal.example.local -Lang en
+.\utils\Request-SelfSignedCertificate.ps1 -CN internal.example.local -Days 365 -Lang en
 ```
+Interactive menu lets you choose validity period, then Quick or Custom mode.
 Quick mode: choose an organization under `old/`, then generate self-signed certs from existing certificate CNs.
 Custom mode: manually input CN/Subject/SAN.
 

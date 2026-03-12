@@ -23,7 +23,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$ToolkitVersion = "1.5.1"
+$ToolkitVersion = "1.5.2"
 $ToolkitLastUpdated = "2026-03-10"
 
 . (Join-Path $PSScriptRoot "utils\lib\defaults.ps1")
@@ -124,9 +124,9 @@ $tools = @(
         Wait    = $true
         SubMenu = @(
             @{
-                Name    = "10-Year Self-Signed"
+                Name    = "Self-Signed"
                 Script  = "utils\Request-SelfSignedCertificate.ps1"
-                DescKey = "Toolkit.SubTool.SelfSigned10Y"
+                DescKey = "Toolkit.SubTool.SelfSigned"
             },
             @{
                 Name    = "Let's Encrypt"

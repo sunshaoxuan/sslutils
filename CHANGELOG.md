@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.2] - 2026-03-10
+
+### Added
+- **Selectable Certificate Validity**: Self-signed certificate generation now offers an interactive menu to choose validity period: 90 days, 1 year, 3 years, or 10 years. Also supports `-Days` parameter for CLI usage.
+
+### Changed
+- **Self-Signed Menu Refactor**: Removed hardcoded "10-Year" from menu labels. Validity period selection is now a separate interactive step within the self-signed workflow.
+- **i18n Updates**: Added validity period selection strings (`SS.Menu.ValidityTitle`, `SS.Validity.*`) to all 3 language files (en/ja/zh). Updated `SS.Menu.Title` and `SS.Starting` to display the selected validity dynamically.
+
 ## [1.5.1] - 2026-03-10
 
 ### Changed

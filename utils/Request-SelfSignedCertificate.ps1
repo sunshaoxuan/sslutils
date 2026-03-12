@@ -1,9 +1,10 @@
 <#
 .SYNOPSIS
-10年有效期の自己署名証明書を生成するスクリプト
+自己署名証明書を生成するスクリプト（有効期間を選択可能）
 
 .DESCRIPTION
-Let's Encrypt とは別機能として、OpenSSL を使って自己署名証明書を生成します。
+OpenSSL を使って自己署名証明書を生成します。
+有効期間は 90日 / 1年 / 3年 / 10年 から対話メニューで選択、または -Days で任意指定可能。
 Quick モードでは old 配下の既存証明書から CN を抽出して、機関単位で生成します。
 Custom モードでは手動入力で 1 件を生成します。
 #>
@@ -20,6 +21,10 @@ param(
 
   [Parameter(Mandatory = $false)]
   [string]$OutDir = "",
+
+  [Parameter(Mandatory = $false)]
+  [ValidateRange(1, 36500)]
+  [int]$Days = 0,
 
   [Parameter(Mandatory = $false)]
   [ValidateRange(2048, 16384)]
@@ -57,7 +62,23 @@ if (Test-Path -LiteralPath $pathsModule -PathType Leaf) { . $pathsModule }
 $ToolkitPaths = if (Get-Command Get-ToolkitPaths -ErrorAction SilentlyContinue) { Get-ToolkitPaths -BaseDir $ToolkitRoot } else { $null }
 $OpenSsl = Resolve-OpenSsl -Explicit $OpenSsl -ToolkitPaths $ToolkitPaths
 
-$ValidityDays = 3650
+$__ValidityPresets = @(
+  @{ Days = 90;   LabelKey = "SS.Validity.90d"  },
+  @{ Days = 365;  LabelKey = "SS.Validity.1y"   },
+  @{ Days = 1095; LabelKey = "SS.Validity.3y"   },
+  @{ Days = 3650; LabelKey = "SS.Validity.10y"  }
+)
+
+$ValidityDays = if ($Days -gt 0) { $Days } else { 0 }
+
+function Select-ValidityPeriod {
+  $items = @($__ValidityPresets | ForEach-Object { T $_.LabelKey })
+  $items += ("[ {0} ]" -f (T "Common.MenuBack"))
+
+  $pick = Show-MenuSelect -title (T "SS.Menu.ValidityTitle") -items $items -helpText (T "CheckBasic.Menu.Instruction")
+  if ($null -eq $pick -or $pick -eq $items.Count) { return -1 }
+  return $__ValidityPresets[$pick - 1].Days
+}
 
 function Wait-Continue([string]$message) {
   if (Get-Command Wait-AnyKey -ErrorAction SilentlyContinue) {
@@ -194,7 +215,7 @@ basicConstraints = CA:FALSE
     Set-Content -LiteralPath $cfgPath -Value $cfg -Encoding Ascii -NoNewline
 
     Write-Host ""
-    Write-Host (T "SS.Starting") -ForegroundColor Cyan
+    Write-Host (T "SS.Starting" @($ValidityDays, [math]::Round($ValidityDays / 365, 1))) -ForegroundColor Cyan
     Write-Host (T "SS.Info.CN" @($cn))
     Write-Host (T "SS.Info.Subject" @($subjectFinal))
     Write-Host (T "SS.Info.SAN" @($sanLine))
@@ -331,28 +352,43 @@ try {
   $openSslCmd = Resolve-OpenSslCommand $OpenSsl
 
   if (-not [string]::IsNullOrWhiteSpace($CN)) {
+    if ($ValidityDays -le 0) { $script:ValidityDays = 3650 }
     Start-CustomMode $openSslCmd $false
     exit 0
   }
 
   if (Get-Command Show-MenuSelect -ErrorAction SilentlyContinue) {
-    while ($true) {
-      $menuItems = @(
-        (T "SS.Menu.Quick"),
-        (T "SS.Menu.Custom"),
-        ("[ {0} ]" -f (T "Common.MenuBack"))
-      )
+    :validityLoop while ($true) {
+      if ($ValidityDays -le 0) {
+        $chosen = Select-ValidityPeriod
+        if ($chosen -lt 0) { exit 99 }
+        $script:ValidityDays = $chosen
+      }
 
-      $pick = Show-MenuSelect -title (T "SS.Menu.Title") -items $menuItems -helpText (T "CheckBasic.Menu.Instruction")
-      if ($null -eq $pick -or $pick -eq $menuItems.Count) { exit 99 }
+      while ($true) {
+        $menuItems = @(
+          (T "SS.Menu.Quick"),
+          (T "SS.Menu.Custom"),
+          ("[ {0} ]" -f (T "Common.MenuBack"))
+        )
 
-      switch ($pick) {
-        1 { Start-QuickMode $openSslCmd $OutDir }
-        2 { Start-CustomMode $openSslCmd $true }
+        $modeTitle = T "SS.Menu.Title" @($ValidityDays, [math]::Round($ValidityDays / 365, 1))
+        $pick = Show-MenuSelect -title $modeTitle -items $menuItems -helpText (T "CheckBasic.Menu.Instruction")
+        if ($null -eq $pick -or $pick -eq $menuItems.Count) {
+          if ($Days -gt 0) { exit 99 }
+          $script:ValidityDays = 0
+          continue validityLoop
+        }
+
+        switch ($pick) {
+          1 { Start-QuickMode $openSslCmd $OutDir }
+          2 { Start-CustomMode $openSslCmd $true }
+        }
       }
     }
   }
 
+  if ($ValidityDays -le 0) { $script:ValidityDays = 3650 }
   Start-CustomMode $openSslCmd $true
 }
 catch {

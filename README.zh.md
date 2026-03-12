@@ -12,7 +12,8 @@ https://github.com/sunshaoxuan
 
 ---
 
-## 📅 版本更新 (v1.5.1)
+## 📅 版本更新 (v1.5.2)
+- **自签证书有效期可选**: 自签证书生成现在支持交互式选择有效期（90天 / 1年 / 3年 / 10年），CLI 模式下可通过 `-Days` 参数指定。
 - **多格式证书支持**: 所有脚本统一支持 `.cer`、`.crt`、`.pem` 证书文件（通过集中常量管理）。
 - **便携 OpenSSL**: 新增 `Install-Dependencies.ps1`，自动下载便携版 OpenSSL，无需系统级安装。
 - **工具路径自动解析**: OpenSSL 路径按 `utils/bin/` → `config.json` → Git for Windows → 系统 PATH 优先级自动查找。
@@ -99,7 +100,7 @@ ssl_maker/
 
 ### 5. 自签证书
 通过主菜单的"自签证书"子菜单选择：
-- **10年自签证书**: `Request-SelfSignedCertificate.ps1`（内部/测试用途）。
+- **自签证书**: `Request-SelfSignedCertificate.ps1` — 交互式选择有效期（90天 / 1年 / 3年 / 10年），支持 Quick 模式和 Custom 模式。CLI 可用 `-Days` 参数直接指定天数。
 - **Let's Encrypt**: `Request-LetsEncryptCertificate.ps1` (Docker + Certbot 封装)。
 
 ### 6. 其他工具
