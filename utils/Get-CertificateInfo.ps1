@@ -193,11 +193,11 @@ function Assert-ExistsFile([string]$p, [string]$label) {
 }
 
 function Invoke-OpenSsl([string[]]$OpenSslArgs) {
-  $out = & $OpenSsl @OpenSslArgs 2>&1 | ForEach-Object { $_.ToString() }
+  $out = @(& $OpenSsl @OpenSslArgs 2>&1 | ForEach-Object { $_.ToString() })
   if ($LASTEXITCODE -ne 0) {
     throw (T "Common.OpenSslCmdFailed" @(($OpenSslArgs -join " "), (($out | Where-Object { $_ -ne "" }) -join "`n")))
   }
-  return $out
+  return ,$out
 }
 
 function Invoke-Pkcs12([string[]]$Pkcs12Args) {
@@ -411,14 +411,14 @@ function Get-SubjectAltNamesFromCert([string]$certPath) {
   $out = @()
   $informArgs = Get-InformArgs $certPath
   try {
-    $out = Invoke-OpenSsl (@("x509") + $informArgs + @("-in", $certPath, "-noout", "-ext", "subjectAltName"))
+    $out = @(Invoke-OpenSsl (@("x509") + $informArgs + @("-in", $certPath, "-noout", "-ext", "subjectAltName")))
   }
   catch {
     $out = @()
   }
-  if ($out.Count -eq 0) {
+  if (@($out).Count -eq 0) {
     try {
-      $out = Invoke-OpenSsl (@("x509") + $informArgs + @("-in", $certPath, "-noout", "-text"))
+      $out = @(Invoke-OpenSsl (@("x509") + $informArgs + @("-in", $certPath, "-noout", "-text")))
     }
     catch {
       return ""
@@ -831,7 +831,13 @@ function Show-InteractiveMenu([string]$oldDir, [string]$newDir) {
           $f = $files[$fileSel - 1]
           $passFiles = Get-PassFilesForOrg $org.FullName $folder $oldRootForNew $org.Name
           $passphrases = Get-Passphrases $passFiles
-          Show-OneFile -FilePath $f.FullName -Passphrases $passphrases -PassFiles $passFiles
+          try {
+            Show-OneFile -FilePath $f.FullName -Passphrases $passphrases -PassFiles $passFiles
+          }
+          catch {
+            Write-Host ""
+            Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red
+          }
           Write-Host (T "CheckBasic.Menu.BackPrompt") -ForegroundColor DarkGray
           try { $null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") } catch { }
         }
@@ -1078,8 +1084,7 @@ function Show-OneFile {
   )
   Assert-ExistsFile $FilePath "入力ファイル"
 
-  # 画面をクリアして専用ビューとして表示（メニューとの混在を防ぐ）
-  Clear-Host
+  try { Clear-Host } catch { }
 
   # --- Local UI Helpers ---
   function Write-HeaderBar([string]$title, [string]$path) {
