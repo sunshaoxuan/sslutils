@@ -23,7 +23,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$ToolkitVersion = "1.5.0"
+$ToolkitVersion = "1.5.1"
 $ToolkitLastUpdated = "2026-03-10"
 
 . (Join-Path $PSScriptRoot "utils\lib\defaults.ps1")

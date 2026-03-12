@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.1] - 2026-03-10
+
+### Changed
+- **Multi-Format Certificate Support**: Centralized supported certificate file extensions (`.cer`, `.crt`, `.pem`) into shared constants `$__CertExtensions` and `$__CertPatterns` in `defaults.ps1`. All 7 scripts now use these constants instead of hardcoded extension lists.
+- **Consistent Extension Handling**: Fixed `Rename-OrgFolders.ps1` (previously only searched `*.cer`), `Merge-CertificateChain.ps1` (removed `-OnlyCer` restriction), and `New-CertificateSigningRequestFromOld.ps1` (added missing `*.pem` support in 9+ locations) to consistently recognize all supported certificate formats.
+- **Project Layout**: Moved `Install-Dependencies.ps1` from project root to `utils/` for consistent single-entry-point design.
+
+### Fixed
+- **PS 7.4+ Compatibility**: Resolved `Import-PowerShellDataFile` 500-key limit error on PowerShell 7.4+ by adding `Import-SafeDataFile` wrapper with automatic `-SkipLimitCheck` support.
+
 ## [1.5.0] - 2026-03-10
 
 ### Added
@@ -11,15 +21,9 @@ All notable changes to this project will be documented in this file.
 - **utils/bin/**: New directory for portable tool binaries (excluded from Git).
 
 ### Changed
-- **Certificate Extensions**: Centralized supported certificate file extensions (`.cer`, `.crt`, `.pem`) into shared constants `$__CertExtensions` and `$__CertPatterns` in `defaults.ps1`. All 7 scripts now use these constants instead of hardcoded extension lists.
-- **Multi-Format Support**: Fixed `Rename-OrgFolders.ps1` (previously only searched `*.cer`), `Merge-CertificateChain.ps1` (removed `-OnlyCer` restriction), and `New-CertificateSigningRequestFromOld.ps1` (added missing `*.pem` support in 9+ locations) to consistently recognize `.cer`, `.crt`, and `.pem` certificate files.
 - **OpenSSL Default**: All 10 scripts now use `Resolve-OpenSsl` instead of hardcoded `C:\Program Files\Git\usr\bin\openssl.exe` default path.
-- **Project Layout**: Moved `Install-Dependencies.ps1` from project root to `utils/` for consistent single-entry-point design.
 - **Docs**: Updated all 3 README files with OpenSSL setup instructions, folder naming convention, and Quick Start steps.
 - **PS7 Check**: `Install-Dependencies.ps1` includes PowerShell 7.x version check consistent with other scripts.
-
-### Fixed
-- **PS 7.4+ Compatibility**: Resolved `Import-PowerShellDataFile` 500-key limit error on PowerShell 7.4+ by adding `Import-SafeDataFile` wrapper with automatic `-SkipLimitCheck` support.
 
 ## [1.4.1] - 2026-02-27
 

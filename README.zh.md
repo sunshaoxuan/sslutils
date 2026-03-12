@@ -5,14 +5,14 @@
 - 中文: README.zh.md (本文件)
 - 日本語: [README.ja.md](README.ja.md)
 
-**Ver 1.5.0**
+**Ver 1.5.1**
 https://github.com/sunshaoxuan
 
 这是一个功能强大的 PowerShell 脚本集合，用于自动化管理 SSL 证书、私钥和 CSR。支持多语言（可通过配置文件扩展）、多机构管理，并提供统一的菜单界面。
 
 ---
 
-## 📅 版本更新 (v1.5.0)
+## 📅 版本更新 (v1.5.1)
 - **多格式证书支持**: 所有脚本统一支持 `.cer`、`.crt`、`.pem` 证书文件（通过集中常量管理）。
 - **便携 OpenSSL**: 新增 `Install-Dependencies.ps1`，自动下载便携版 OpenSSL，无需系统级安装。
 - **工具路径自动解析**: OpenSSL 路径按 `utils/bin/` → `config.json` → Git for Windows → 系统 PATH 优先级自动查找。

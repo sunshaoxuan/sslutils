@@ -8,7 +8,7 @@ Languages:
 ## Overview
 PowerShell scripts to manage certificates, keys, and CSRs with multi-org and multi-language support.
 
-## What's New (v1.5.0)
+## What's New (v1.5.1)
 - **Multi-Format Certificates**: All scripts now consistently support `.cer`, `.crt`, and `.pem` certificate files (centralized via shared constants).
 - **Portable OpenSSL**: Added `Install-Dependencies.ps1` to auto-download portable OpenSSL — no system-wide installation needed.
 - **Unified Tool Resolution**: OpenSSL path auto-resolved via `utils/bin/` → `config.json` → Git for Windows → system PATH.
