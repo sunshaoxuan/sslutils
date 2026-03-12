@@ -248,8 +248,21 @@ $script:ChainDirMappings = @(
   @{ Source = $toolNewDir; Target = $toolLegacyMergedNewDir }
 )
 
+function Test-IsDerEncoded([string]$certPath) {
+  try {
+    $bytes = [System.IO.File]::ReadAllBytes($certPath)
+    if ($bytes.Length -lt 5) { return $false }
+    return -not ($bytes[0] -eq 0x2D -and $bytes[1] -eq 0x2D -and $bytes[2] -eq 0x2D -and $bytes[3] -eq 0x2D -and $bytes[4] -eq 0x2D)
+  }
+  catch { return $false }
+}
+
+function Get-InformArgs([string]$certPath) {
+  if (Test-IsDerEncoded $certPath) { return @("-inform", "DER") }
+  return @()
+}
+
 function Get-CertContainerInfo([string]$certPath) {
-  # 形式判定（PEM/DER）と、PEM の場合は証明書ブロック数を数える
   try {
     $bytes = [System.IO.File]::ReadAllBytes($certPath)
   }
@@ -264,7 +277,6 @@ function Get-CertContainerInfo([string]$certPath) {
 
   $isPem = $false
   if ($bytes.Length -ge 10) {
-    # "-----BEGIN" = 2D 2D 2D 2D 2D 42 45 47 49 4E
     $isPem = ($bytes[0] -eq 0x2D -and $bytes[1] -eq 0x2D -and $bytes[2] -eq 0x2D -and $bytes[3] -eq 0x2D -and $bytes[4] -eq 0x2D)
   }
 
@@ -377,7 +389,8 @@ function Find-IntermediateCertFiles() {
 
 function Get-IssuerRfc2253FromCert([string]$certPath) {
   try {
-    $out = Invoke-OpenSsl @("x509", "-in", $certPath, "-noout", "-issuer", "-nameopt", "RFC2253")
+    $informArgs = Get-InformArgs $certPath
+    $out = Invoke-OpenSsl (@("x509") + $informArgs + @("-in", $certPath, "-noout", "-issuer", "-nameopt", "RFC2253"))
     $line = ($out | Select-Object -First 1)
     return ([string]$line).Trim().Replace("issuer=", "")
   }
@@ -386,7 +399,8 @@ function Get-IssuerRfc2253FromCert([string]$certPath) {
 
 function Get-SubjectRfc2253FromCert([string]$certPath) {
   try {
-    $out = Invoke-OpenSsl @("x509", "-in", $certPath, "-noout", "-subject", "-nameopt", "RFC2253")
+    $informArgs = Get-InformArgs $certPath
+    $out = Invoke-OpenSsl (@("x509") + $informArgs + @("-in", $certPath, "-noout", "-subject", "-nameopt", "RFC2253"))
     $line = ($out | Select-Object -First 1)
     return ([string]$line).Trim().Replace("subject=", "")
   }
@@ -395,15 +409,16 @@ function Get-SubjectRfc2253FromCert([string]$certPath) {
 
 function Get-SubjectAltNamesFromCert([string]$certPath) {
   $out = @()
+  $informArgs = Get-InformArgs $certPath
   try {
-    $out = Invoke-OpenSsl @("x509", "-in", $certPath, "-noout", "-ext", "subjectAltName")
+    $out = Invoke-OpenSsl (@("x509") + $informArgs + @("-in", $certPath, "-noout", "-ext", "subjectAltName"))
   }
   catch {
     $out = @()
   }
   if ($out.Count -eq 0) {
     try {
-      $out = Invoke-OpenSsl @("x509", "-in", $certPath, "-noout", "-text")
+      $out = Invoke-OpenSsl (@("x509") + $informArgs + @("-in", $certPath, "-noout", "-text"))
     }
     catch {
       return ""
@@ -522,7 +537,8 @@ function Format-FinalUse([string]$code) {
 
 function Get-NotAfterFromCert([string]$certPath) {
   try {
-    $out = Invoke-OpenSsl @("x509", "-in", $certPath, "-noout", "-dates")
+    $informArgs = Get-InformArgs $certPath
+    $out = Invoke-OpenSsl (@("x509") + $informArgs + @("-in", $certPath, "-noout", "-dates"))
     $line = ($out | Where-Object { $_ -match "^notAfter=" } | Select-Object -First 1)
     if (-not $line) { return "" }
     return ([string]$line).Trim().Replace("notAfter=", "")
@@ -949,7 +965,8 @@ function Show-FileMatching([string]$filePath, [string[]]$passphrases = @()) {
     try {
       $keyMod = Get-KeyModulus $keyFile.FullName $passphrases
       if ($null -eq $keyMod) { throw "Cannot read key modulus" }
-      $cerMod = (Invoke-OpenSsl @("x509", "-in", $cerFile.FullName, "-noout", "-modulus") | Out-String) -replace "Modulus=", ""
+      $cerInform = Get-InformArgs $cerFile.FullName
+      $cerMod = (Invoke-OpenSsl (@("x509") + $cerInform + @("-in", $cerFile.FullName, "-noout", "-modulus")) | Out-String) -replace "Modulus=", ""
       $match = ($keyMod.Trim() -eq $cerMod.Trim())
       $label = "{0} [{1} / {2}]" -f (T "Matching.KeyCer"), $keyFile.Name, $cerFile.Name
       $results += @{ Name = $label; Pass = $match }
@@ -1344,15 +1361,13 @@ function Show-OneFile {
         }
       }
       else {
-        # 証明書ファイル：複数ブロックの場合は個別に表示
+        $certInformArgs = Get-InformArgs $path
         $pemBlocks = @(Split-PemCertBlocks $path)
         if ($pemBlocks.Count -gt 1) {
-          # 全ブロックを先に解析
           $allBlockData = @()
           foreach ($block in $pemBlocks) {
             $allBlockData += Parse-CertBlockData $block
           }
-          # 各ブロックを表示（Issuer が次ブロックの Subject と一致する場合は省略）
           for ($bi = 0; $bi -lt $pemBlocks.Count; $bi++) {
             $isLastBlock = ($bi -eq ($pemBlocks.Count - 1))
             $blockLabel = Get-ChainBlockLabel $bi $pemBlocks.Count
@@ -1372,7 +1387,7 @@ function Show-OneFile {
           }
         }
         else {
-          $raw = Invoke-OpenSsl @("x509", "-in", $path, "-noout", "-subject", "-issuer", "-dates", "-nameopt", "RFC2253")
+          $raw = Invoke-OpenSsl (@("x509") + $certInformArgs + @("-in", $path, "-noout", "-subject", "-issuer", "-dates", "-nameopt", "RFC2253"))
 
           $data = @{}
           foreach ($line in $raw) {
