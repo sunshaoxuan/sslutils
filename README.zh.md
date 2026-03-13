@@ -5,18 +5,18 @@
 - 中文: README.zh.md (本文件)
 - 日本語: [README.ja.md](README.ja.md)
 
-**Ver 1.5.1**
+**Ver 1.5.3**
 https://github.com/sunshaoxuan
 
 这是一个功能强大的 PowerShell 脚本集合，用于自动化管理 SSL 证书、私钥和 CSR。支持多语言（可通过配置文件扩展）、多机构管理，并提供统一的菜单界面。
 
 ---
 
-## 📅 版本更新 (v1.5.2)
-- **自签证书有效期可选**: 自签证书生成现在支持交互式选择有效期（90天 / 1年 / 3年 / 10年），CLI 模式下可通过 `-Days` 参数指定。
-- **多格式证书支持**: 所有脚本统一支持 `.cer`、`.crt`、`.pem` 证书文件（通过集中常量管理）。
-- **便携 OpenSSL**: 新增 `Install-Dependencies.ps1`，自动下载便携版 OpenSSL，无需系统级安装。
-- **工具路径自动解析**: OpenSSL 路径按 `utils/bin/` → `config.json` → Git for Windows → 系统 PATH 优先级自动查找。
+## 📅 版本更新 (v1.5.3)
+- **Let's Encrypt 输出整理**: 默认导出到 `output/self-signed/lets-encrypt/<domain>`，临时工作目录移到 `temp/lets-encrypt/`，成功后自动清理。
+- **PEM 自动修复**: 导出的 `fullchain.pem` 和 `privkey.pem` 会自动规范化换行和头尾格式，生成后可直接使用。
+- **CAA SERVFAIL 自动重试**: 遇到临时性的 DNS `CAA SERVFAIL` 时，Let's Encrypt 申请会自动重试。
+- **私钥识别改进**: `Get-CertificateInfo.ps1` 现在能更准确识别 PEM 私钥，并兼容 PKCS#8 / EC 私钥读取。
 - **完整历史**: 详见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 📅 历史更新
@@ -102,9 +102,11 @@ ssl_maker/
 通过主菜单的"自签证书"子菜单选择：
 - **自签证书**: `Request-SelfSignedCertificate.ps1` — 交互式选择有效期（90天 / 1年 / 3年 / 10年），支持 Quick 模式和 Custom 模式。CLI 可用 `-Days` 参数直接指定天数。
 - **Let's Encrypt**: `Request-LetsEncryptCertificate.ps1` (Docker + Certbot 封装)。
+  默认导出目录为 `output/self-signed/lets-encrypt/<domain>`；运行时工作文件位于 `temp/lets-encrypt/`，成功后自动删除。当前 challenge 信息会写入工作目录中的 `current-challenge.txt`。
 
 ### 6. 其他工具
 - **PEM 修复**: `Repair-PemFile.ps1` (修复换行符问题)。
+  不传参数时，会先让你从 `old`、`new`、`output/merged`、`output/self-signed` 中选来源，再选检测到的 PEM 配对；手工输入绝对路径是最后一个选项。
 - **同步**: `Sync-ToMerged.ps1` (将 new/ 中的 key/csr/tsv 同步到 output/merged/)。
 - **组织重命名**: 启动时自动执行（详见下方"文件夹命名约定"章节）。
 - **证书更新清单**: `New-ServerList.ps1`（生成/维护证书更新用 TSV，保留人工字段）。

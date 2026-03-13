@@ -28,6 +28,12 @@ Let's Encrypt 登録用メールアドレス（必須）
 .PARAMETER PollIntervalSec
 チャレンジファイル検証のポーリング間隔（秒）
 
+.PARAMETER CaaServfailRetries
+CAA SERVFAIL 発生時の certbot 自動再試行回数（初回実行を除く）
+
+.PARAMETER CaaServfailRetryDelaySec
+CAA SERVFAIL 再試行前の待機時間（秒）
+
 .PARAMETER ExportDir
 証明書エクスポート先ディレクトリ
 
@@ -67,6 +73,12 @@ param(
   [int]$PollIntervalSec = 3,
 
   [Parameter(Mandatory = $false)]
+  [int]$CaaServfailRetries = 3,
+
+  [Parameter(Mandatory = $false)]
+  [int]$CaaServfailRetryDelaySec = 30,
+
+  [Parameter(Mandatory = $false)]
   [string]$ExportDir = "",
 
   [Parameter(Mandatory = $false)]
@@ -91,6 +103,13 @@ if (-not (Test-Path -LiteralPath $i18nModule -PathType Leaf)) { throw "i18n modu
 . $i18nModule
 $__i18n = Initialize-I18n -Lang $Lang -BaseDir $ToolkitRoot
 function T([string]$Key, [object[]]$FormatArgs = @()) { return Get-I18nText -I18n $__i18n -Key $Key -FormatArgs $FormatArgs }
+
+# パス設定を読み込む
+$pathsModule = Join-Path $PSScriptRoot "lib\paths.ps1"
+if (Test-Path -LiteralPath $pathsModule -PathType Leaf) {
+  . $pathsModule
+}
+$ToolkitPaths = if (Get-Command Get-ToolkitPaths -ErrorAction SilentlyContinue) { Get-ToolkitPaths -BaseDir $ToolkitRoot } else { $null }
 
 # Exit with Pause helper
 function Wait-And-Exit([int]$ExitCode = 99) {
@@ -135,6 +154,60 @@ function Write-Utf8NoBomLf([string]$path, [string]$content) {
   [System.IO.File]::WriteAllText($path, $c, $enc)
 }
 
+function Write-AsciiLf([string]$path, [string]$content) {
+  $c = ($content -replace "`r`n", "`n").TrimEnd("`r", "`n") + "`n"
+  $enc = [System.Text.Encoding]::ASCII
+  [System.IO.File]::WriteAllText($path, $c, $enc)
+}
+
+function Normalize-PemFile([string]$path, [string]$kind) {
+  $text = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::ASCII) -replace "`r", ""
+  $text = $text -replace "-----BEGINCERTIFICATE-----", "-----BEGIN CERTIFICATE-----"
+  $text = $text -replace "-----ENDCERTIFICATE-----", "-----END CERTIFICATE-----"
+  $text = $text -replace "-----BEGINPRIVATEKEY-----", "-----BEGIN PRIVATE KEY-----"
+  $text = $text -replace "-----ENDPRIVATEKEY-----", "-----END PRIVATE KEY-----"
+  $text = $text -replace "-----BEGINECPRIVATEKEY-----", "-----BEGIN EC PRIVATE KEY-----"
+  $text = $text -replace "-----ENDECPRIVATEKEY-----", "-----END EC PRIVATE KEY-----"
+  $text = $text -replace "-----BEGINRSAPRIVATEKEY-----", "-----BEGIN RSA PRIVATE KEY-----"
+  $text = $text -replace "-----ENDRSAPRIVATEKEY-----", "-----END RSA PRIVATE KEY-----"
+  $text = $text -replace "-----BEGINENCRYPTEDPRIVATEKEY-----", "-----BEGIN ENCRYPTED PRIVATE KEY-----"
+  $text = $text -replace "-----ENDENCRYPTEDPRIVATEKEY-----", "-----END ENCRYPTED PRIVATE KEY-----"
+
+  $matches = [regex]::Matches($text, "-----BEGIN [^-]+-----.*?-----END [^-]+-----", "Singleline")
+  if ($matches.Count -eq 0) {
+    throw "No PEM block found in $path"
+  }
+
+  $lines = New-Object System.Collections.Generic.List[string]
+  foreach ($match in $matches) {
+    $parsed = [regex]::Match($match.Value, "^(-----BEGIN [^-]+-----)\s*(.*?)\s*(-----END [^-]+-----)$", "Singleline")
+    if (-not $parsed.Success) {
+      throw "Invalid PEM block in $path"
+    }
+
+    $begin = $parsed.Groups[1].Value
+    $body = [regex]::Replace($parsed.Groups[2].Value, "\s+", "")
+    $end = $parsed.Groups[3].Value
+
+    if ($kind -eq "fullchain" -and $begin -notmatch "BEGIN CERTIFICATE") {
+      throw "Unexpected PEM header in $path"
+    }
+    if ($kind -eq "privkey" -and $begin -notmatch "BEGIN (ENCRYPTED |RSA |EC )?PRIVATE KEY") {
+      throw "Unexpected PEM header in $path"
+    }
+
+    $lines.Add($begin) | Out-Null
+    for ($i = 0; $i -lt $body.Length; $i += 64) {
+      $chunkLen = [Math]::Min(64, $body.Length - $i)
+      $lines.Add($body.Substring($i, $chunkLen)) | Out-Null
+    }
+    $lines.Add($end) | Out-Null
+    $lines.Add("") | Out-Null
+  }
+
+  Write-AsciiLf $path (($lines -join "`n").TrimEnd())
+}
+
 # コンテナから証明書をエクスポート
 function Export-CertificateFromContainer([string]$dstDir, [string]$leMount, [string]$domain) {
   New-Item -ItemType Directory -Force -Path $dstDir | Out-Null
@@ -145,12 +218,20 @@ function Export-CertificateFromContainer([string]$dstDir, [string]$leMount, [str
   # fullchain
   $fc = docker run --rm -v "${leMount}:/etc/letsencrypt:ro" alpine:3.19 sh -c "cat /etc/letsencrypt/live/$domain/fullchain.pem"
   if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($fc)) { return 10 }
-  $fc | Set-Content -Encoding ascii -NoNewline $fullchain
+  Write-AsciiLf $fullchain (@($fc) -join "`n")
 
   # privkey
   $pk = docker run --rm -v "${leMount}:/etc/letsencrypt:ro" alpine:3.19 sh -c "cat /etc/letsencrypt/live/$domain/privkey.pem"
   if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($pk)) { return 11 }
-  $pk | Set-Content -Encoding ascii -NoNewline $privkey
+  Write-AsciiLf $privkey (@($pk) -join "`n")
+
+  try {
+    Normalize-PemFile $fullchain "fullchain"
+    Normalize-PemFile $privkey "privkey"
+  }
+  catch {
+    return 15
+  }
 
   # サイズ検証
   $len1 = (Get-Item $fullchain).Length
@@ -213,7 +294,13 @@ try {
 
   # 作業ディレクトリ構築（既存ディレクトリを再利用、-Clean 指定時は削除）
   $safeDomain = $Domain.Replace('*', '_').Replace('\', '_').Replace('/', '_').Replace(':', '_')
-  $Base = Join-Path $PSScriptRoot ("le-work-" + $safeDomain)
+  $tempRoot = if ($null -ne $ToolkitPaths -and -not [string]::IsNullOrWhiteSpace([string]$ToolkitPaths.Temp)) {
+    [string]$ToolkitPaths.Temp
+  }
+  else {
+    Join-Path $ToolkitRoot "temp"
+  }
+  $Base = Join-Path (Join-Path $tempRoot "lets-encrypt") ("le-work-" + $safeDomain)
   $Work = Join-Path $Base "work"
   $Challenges = Join-Path $Work "challenges"
   $LetsEncrypt = Join-Path $Base "letsencrypt"
@@ -246,7 +333,13 @@ try {
 
   # エクスポート先（存在しない場合は自動作成、失敗時はフォールバック）
   if ([string]::IsNullOrWhiteSpace($ExportDir)) {
-    $ExportDir = Join-Path $Base "out"
+    $selfSignedRoot = if ($null -ne $ToolkitPaths -and -not [string]::IsNullOrWhiteSpace([string]$ToolkitPaths.SelfSigned)) {
+      [string]$ToolkitPaths.SelfSigned
+    }
+    else {
+      Join-Path $ToolkitRoot "output\self-signed"
+    }
+    $ExportDir = Join-Path (Join-Path $selfSignedRoot "lets-encrypt") $safeDomain
   }
   try {
     if (-not (Test-Path -LiteralPath $ExportDir -PathType Container)) {
@@ -279,9 +372,22 @@ VALIDATION="${CERTBOT_VALIDATION}"
 
 CHALL_DIR="/work/challenges"
 CHALL_FILE="${CHALL_DIR}/${TOKEN}"
+SERVER_CHALL_DIR="/server-challenges"
+SERVER_CHALL_FILE="${SERVER_CHALL_DIR}/${TOKEN}"
+INFO_FILE="/work/current-challenge.txt"
 
 mkdir -p "${CHALL_DIR}"
+mkdir -p "${SERVER_CHALL_DIR}"
 printf "%s" "${VALIDATION}" > "${CHALL_FILE}"
+cp "${CHALL_FILE}" "${SERVER_CHALL_FILE}"
+cat > "${INFO_FILE}" <<EOF
+TOKEN=${TOKEN}
+CONTENT=${VALIDATION}
+SERVER_PATH=/.well-known/acme-challenge/${TOKEN}
+URL=http://${DOMAIN}/.well-known/acme-challenge/${TOKEN}
+LOCAL_FILE=${CHALL_FILE}
+SERVER_FILE=${SERVER_CHALL_FILE}
+EOF
 
 echo ""
 echo "============================================================"
@@ -291,6 +397,8 @@ echo "  Content: ${VALIDATION}"
 echo ""
 echo "Server path:"
 echo "  /.well-known/acme-challenge/${TOKEN}"
+echo "Mounted server file:"
+echo "  ${SERVER_CHALL_FILE}"
 echo ""
 echo "Validation URL:"
 echo "  http://${DOMAIN}/.well-known/acme-challenge/${TOKEN}"
@@ -310,7 +418,14 @@ while true; do
     exit 2
   fi
 
-  BODY="$(curl -fsS "${URL}" 2>/dev/null || true)"
+  if command -v curl >/dev/null 2>&1; then
+    BODY="$(curl -fsS "${URL}" 2>/dev/null || true)"
+  elif command -v wget >/dev/null 2>&1; then
+    BODY="$(wget -qO- "${URL}" 2>/dev/null || true)"
+  else
+    echo "ERROR: Neither curl nor wget is available in the container."
+    exit 3
+  fi
   if [ "${BODY}" = "${VALIDATION}" ]; then
     echo "OK: Challenge verified, proceeding..."
     exit 0
@@ -326,6 +441,7 @@ done
 set -eu
 TOKEN="${CERTBOT_TOKEN}"
 rm -f "/work/challenges/${TOKEN}" || true
+rm -f "/server-challenges/${TOKEN}" || true
 exit 0
 '@
 
@@ -335,10 +451,15 @@ exit 0
   Write-Utf8NoBomLf $authPath $authSh
   Write-Utf8NoBomLf $cleanupPath $cleanupSh
 
+  if (-not (Test-Path -LiteralPath $ServerChallengeDir -PathType Container)) {
+    New-Item -ItemType Directory -Force -Path $ServerChallengeDir -ErrorAction Stop | Out-Null
+  }
+
   # Docker マウントパス
   $workMount = ConvertTo-DockerPath $Work
   $leMount = ConvertTo-DockerPath $LetsEncrypt
   $logsMount = ConvertTo-DockerPath $Logs
+  $serverChallengeMount = ConvertTo-DockerPath $ServerChallengeDir
 
   Write-Host ""
   Write-Host (T "LE.Ready") -ForegroundColor Cyan
@@ -353,7 +474,7 @@ exit 0
 
   # Docker マウント自己チェック
   Write-Host (T "LE.DockerMountCheck") -ForegroundColor Cyan
-  docker run --rm -v "${workMount}:/work" alpine:3.19 sh -c "ls -la /work && test -f /work/auth.sh && echo OK_AUTH_SH"
+  docker run --rm -v "${workMount}:/work" -v "${serverChallengeMount}:/server-challenges" alpine:3.19 sh -c "ls -la /work && test -f /work/auth.sh && ls -la /server-challenges && echo OK_AUTH_SH"
   if ($LASTEXITCODE -ne 0) {
     throw (T "LE.DockerMountFailed")
   }
@@ -367,6 +488,7 @@ exit 0
     "-e", "WAIT_TIMEOUT_SEC=$WaitTimeoutSec",
     "-e", "POLL_INTERVAL_SEC=$PollIntervalSec",
     "-v", "${workMount}:/work",
+    "-v", "${serverChallengeMount}:/server-challenges",
     "-v", "${leMount}:/etc/letsencrypt",
     "-v", "${logsMount}:/var/log/letsencrypt",
     "certbot/certbot:latest",
@@ -381,23 +503,35 @@ exit 0
     "-m", $Email
   )
 
-  # certbot 実行（出力は標準出力に表示されるが、エラー検出のためログも確認）
-  docker @cmd 2>&1 | Tee-Object -Variable dockerOutput
-  $exitCode = $LASTEXITCODE
+  # certbot 実行（CAA SERVFAIL のみ自動再試行）
+  $logPath = Join-Path $Logs "letsencrypt.log"
+  $maxAttempts = [Math]::Max(1, $CaaServfailRetries + 1)
+  $attempt = 0
+  $exitCode = 1
 
-  if ($exitCode -ne 0) {
-    # ログファイルからエラー内容を読み取る（可能な場合）
-    $logPath = Join-Path $Logs "letsencrypt.log"
+  while ($attempt -lt $maxAttempts) {
+    $attempt++
+    if ($maxAttempts -gt 1) {
+      Write-Host (T "LE.CertbotAttempt" @($attempt, $maxAttempts)) -ForegroundColor Cyan
+    }
+
+    $dockerOutput = @()
+    docker @cmd 2>&1 | Tee-Object -Variable dockerOutput
+    $exitCode = $LASTEXITCODE
+
+    if ($exitCode -eq 0) {
+      break
+    }
+
     $errorDetails = ""
+    $logContent = @()
     if (Test-Path -LiteralPath $logPath -PathType Leaf) {
       $logContent = Get-Content -LiteralPath $logPath -Tail 50 -ErrorAction SilentlyContinue
       $errorDetails = ($logContent -join "`n")
     }
 
-    # 出力とログからエラーパターンを検出
     $allOutput = ($dockerOutput -join "`n") + "`n" + $errorDetails
 
-    # レート制限エラーの検出（例外を投げずに警告のみ）
     if ($allOutput -match "too many certificates.*already issued" -or
       $allOutput -match "rate.*limit" -or
       $allOutput -match "retry after") {
@@ -413,9 +547,25 @@ exit 0
       throw (T "LE.RateLimitFailed")
     }
 
-    # その他のエラー
+    $isCaaServfail = ($allOutput -match "DNS problem: SERVFAIL looking up CAA")
+    if ($isCaaServfail -and $attempt -lt $maxAttempts) {
+      Write-Host ""
+      Write-Host (T "LE.CaaServfailRetryDetected" @($attempt, $maxAttempts, $CaaServfailRetryDelaySec)) -ForegroundColor Yellow
+      if (-not [string]::IsNullOrWhiteSpace($errorDetails)) {
+        Write-Host ""
+        Write-Host (T "LE.ErrorLogTail") -ForegroundColor Yellow
+        Write-Host ($logContent -join "`n")
+      }
+      Start-Sleep -Seconds $CaaServfailRetryDelaySec
+      Write-Host ""
+      continue
+    }
+
     Write-Host ""
     Write-Host (T "LE.CertbotFailed" @($exitCode, $logPath)) -ForegroundColor Red
+    if ($isCaaServfail) {
+      Write-Host (T "LE.CaaServfailRetryExhausted" @($maxAttempts)) -ForegroundColor Yellow
+    }
     if (-not [string]::IsNullOrWhiteSpace($errorDetails)) {
       Write-Host ""
       Write-Host (T "LE.ErrorLogTail") -ForegroundColor Yellow
@@ -494,6 +644,16 @@ exit 0
   Write-Host ""
   Write-Host (T "LE.ExportSuccess" @($privkey, $len2)) -ForegroundColor Green
   Write-Host ""
+
+  try {
+    $baseResolved = (Resolve-Path -LiteralPath $Base).Path.TrimEnd('\', '/')
+    $exportResolved = (Resolve-Path -LiteralPath $ExportDir).Path.TrimEnd('\', '/')
+    if (-not $exportResolved.StartsWith($baseResolved, [System.StringComparison]::OrdinalIgnoreCase)) {
+      Remove-Item -LiteralPath $Base -Recurse -Force -ErrorAction SilentlyContinue
+    }
+  }
+  catch { }
+
   Write-Host (T "LE.CompletedMsg")
   Wait-And-Exit 99
 }
@@ -502,5 +662,3 @@ catch {
   Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red
   Wait-And-Exit 99
 }
-
-

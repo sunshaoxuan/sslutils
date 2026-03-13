@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.3] - 2026-03-13
+
+### Changed
+- **Let's Encrypt Output Path**: `Request-LetsEncryptCertificate.ps1` now exports issued artifacts to `output/self-signed/lets-encrypt/<domain>` by default instead of leaving them under `utils/le-work-*`.
+- **Let's Encrypt Temp Handling**: Working directories now live under `temp/lets-encrypt/` and are removed automatically after successful export, keeping `utils/` free of runtime leftovers.
+- **Let's Encrypt Challenge Workflow**: The auth hook now records the active challenge in `current-challenge.txt` and copies challenge files into `ServerChallengeDir` automatically on the local machine.
+- **PEM Export Normalization**: Exported `fullchain.pem` and `privkey.pem` are normalized automatically so they can be used directly without a separate repair step.
+- **PEM Repair UX**: `Repair-PemFile.ps1` now offers interactive source selection (`old`, `new`, `output/merged`, `output/self-signed`) before falling back to manual path input.
+
+### Fixed
+- **CAA Retry**: `Request-LetsEncryptCertificate.ps1` now detects `CAA SERVFAIL` responses from certbot and retries automatically with configurable backoff.
+- **Docker Hook Compatibility**: The Let's Encrypt auth hook now falls back to `wget` when `curl` is unavailable in the certbot Docker image.
+- **Private Key Viewing**: `Get-CertificateInfo.ps1` now classifies PEM private keys correctly and reads PKCS#8 / EC private keys via `openssl pkey` fallback instead of assuming RSA-only input.
+
 ## [1.5.2] - 2026-03-10
 
 ### Added

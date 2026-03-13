@@ -8,11 +8,11 @@ Languages:
 ## Overview
 PowerShell scripts to manage certificates, keys, and CSRs with multi-org and multi-language support.
 
-## What's New (v1.5.2)
-- **Selectable Certificate Validity**: Self-signed certificates now offer interactive validity selection (90 days / 1 year / 3 years / 10 years) and CLI `-Days` parameter.
-- **Multi-Format Certificates**: All scripts now consistently support `.cer`, `.crt`, and `.pem` certificate files (centralized via shared constants).
-- **Portable OpenSSL**: Added `Install-Dependencies.ps1` to auto-download portable OpenSSL — no system-wide installation needed.
-- **Unified Tool Resolution**: OpenSSL path auto-resolved via `utils/bin/` → `config.json` → Git for Windows → system PATH.
+## What's New (v1.5.3)
+- **Let's Encrypt Output Cleanup**: Issued certificates now go to `output/self-signed/lets-encrypt/<domain>`, while temporary work data moves to `temp/lets-encrypt/` and is cleaned automatically after success.
+- **Automatic PEM Normalization**: Exported `fullchain.pem` and `privkey.pem` are normalized automatically, so they are usable without a separate repair step.
+- **CAA SERVFAIL Retry**: Let's Encrypt requests now auto-retry on transient `CAA SERVFAIL` DNS failures.
+- **Private Key Detection**: `Get-CertificateInfo.ps1` now recognizes PEM private keys more accurately, including PKCS#8 / EC keys.
 - Full feature history: [CHANGELOG.md](CHANGELOG.md).
 
 ## Prerequisites
@@ -119,6 +119,7 @@ Request Let's Encrypt cert using Docker + certbot.
 ```powershell
 .\utils\Request-LetsEncryptCertificate.ps1 -Domain example.com -Email admin@example.com
 ```
+By default, issued files are exported to `output/self-signed/lets-encrypt/<domain>`. Runtime files are created under `temp/lets-encrypt/` and removed automatically after a successful export. The current challenge metadata is also written to `current-challenge.txt` inside the working directory.
 
 8) `Request-SelfSignedCertificate.ps1`
 Generate a self-signed certificate with selectable validity period (90 days / 1 year / 3 years / 10 years).
@@ -134,6 +135,7 @@ Repair/normalize PEM files.
 ```powershell
 .\utils\Repair-PemFile.ps1 -Fullchain .\fullchain.pem -Privkey .\privkey.pem
 ```
+If you omit the parameters, the script first lets you pick a source area (`old`, `new`, `output/merged`, `output/self-signed`) and then select a detected PEM pair. Manual absolute path input is the fallback, not the default flow.
 
 10) `New-ServerList.ps1`
 Generate/maintain a certificate renewal TSV (with legacy field import and manual edit preservation).

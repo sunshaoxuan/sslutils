@@ -8,11 +8,11 @@
 ## 概要
 証明書・秘密鍵・CSR を扱う PowerShell スクリプト集です。多機関対応と多言語対応を前提にしています。
 
-## バージョン (v1.5.2)
-- **証明書有効期間の選択**: 自己署名証明書の有効期間を対話メニューで選択可能（90日 / 1年 / 3年 / 10年）。CLI では `-Days` パラメータも利用可能。
-- **マルチフォーマット対応**: すべてのスクリプトが `.cer`、`.crt`、`.pem` 証明書ファイルを統一的にサポート（共有定数で一元管理）。
-- **ポータブル OpenSSL**: `Install-Dependencies.ps1` でポータブル版 OpenSSL を自動ダウンロード — システムへのインストール不要。
-- **ツール自動解決**: OpenSSL パスを `utils/bin/` → `config.json` → Git for Windows → システム PATH の順で自動検出。
+## バージョン (v1.5.3)
+- **Let's Encrypt 出力整理**: 証明書は既定で `output/self-signed/lets-encrypt/<domain>` に出力され、一時作業は `temp/lets-encrypt/` に移動し、成功後に自動削除されます。
+- **PEM 自動正規化**: 出力される `fullchain.pem` / `privkey.pem` は自動で改行・ヘッダを正規化し、そのまま利用しやすくなりました。
+- **CAA SERVFAIL 自動再試行**: 一時的な DNS `CAA SERVFAIL` 失敗時に Let's Encrypt 申請を自動再試行します。
+- **秘密鍵判定改善**: `Get-CertificateInfo.ps1` が PEM 秘密鍵をより正確に判定し、PKCS#8 / EC 鍵も読み取りやすくなりました。
 - **詳細履歴**: [CHANGELOG.md](CHANGELOG.md) を参照。
 
 ## 事前準備
@@ -120,6 +120,7 @@ Docker + certbot で Let's Encrypt を申請。
 ```powershell
 .\utils\Request-LetsEncryptCertificate.ps1 -Domain example.com -Email admin@example.com
 ```
+既定では証明書は `output/self-signed/lets-encrypt/<domain>` に出力されます。作業用ファイルは `temp/lets-encrypt/` に作成され、成功後に自動削除されます。現在の challenge 情報は作業ディレクトリ内の `current-challenge.txt` に保存されます。
 
 8) `Request-SelfSignedCertificate.ps1`
 自己署名証明書を生成（有効期間を選択可能: 90日 / 1年 / 3年 / 10年）。
@@ -133,6 +134,7 @@ PEM の修復・正規化。
 ```powershell
 .\utils\Repair-PemFile.ps1 -Fullchain .\fullchain.pem -Privkey .\privkey.pem
 ```
+引数を省略した場合は、まず `old`、`new`、`output/merged`、`output/self-signed` から対象領域を選び、その後に検出された PEM ペアを選択します。絶対パスの手入力は最後の手段です。
 
 10) `New-ServerList.ps1`
 証明書更新用 TSV を生成/保守（旧 TSV の項目継承と手修正値の保持に対応）。

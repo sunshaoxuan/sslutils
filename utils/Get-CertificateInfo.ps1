@@ -642,12 +642,33 @@ function Write-TreeLine([int]$indent, [string]$name, [scriptblock]$emitTags) {
   Write-Host ""
 }
 
+function Invoke-KeyTextOutput([string]$keyPath, [string]$passFile = "") {
+  $commands = @(
+    @("pkey", "-in", $keyPath, "-noout", "-text"),
+    @("rsa",  "-in", $keyPath, "-noout", "-text"),
+    @("ec",   "-in", $keyPath, "-noout", "-text")
+  )
+
+  foreach ($args in $commands) {
+    $cmdArgs = @($args)
+    if (-not [string]::IsNullOrWhiteSpace($passFile)) {
+      $cmdArgs += @("-passin", ("file:{0}" -f $passFile))
+    }
+    try {
+      return @(Invoke-OpenSsl $cmdArgs)
+    }
+    catch { }
+  }
+
+  throw "Unsupported or unreadable private key: $keyPath"
+}
+
 function Test-KeyReadable([string]$keyPath, [string[]]$passphrases) {
   # 対話プロンプトを絶対に出さないため、暗号化鍵は必ず -passin で読む
   $isEnc = Test-KeyEncrypted $keyPath
   if (-not $isEnc) {
     try {
-      Invoke-OpenSsl @("rsa", "-in", $keyPath, "-noout", "-text") | Out-Null
+      Invoke-KeyTextOutput $keyPath | Out-Null
       return (T "Common.Success")
     }
     catch {
@@ -663,7 +684,7 @@ function Test-KeyReadable([string]$keyPath, [string[]]$passphrases) {
     try {
       Invoke-TempPassFile $p {
         param($tmpPass)
-        Invoke-OpenSsl @("rsa", "-in", $keyPath, "-noout", "-text", "-passin", ("file:{0}" -f $tmpPass)) | Out-Null
+        Invoke-KeyTextOutput $keyPath $tmpPass | Out-Null
       } | Out-Null
       return (T "Common.Success")
     }
@@ -860,7 +881,7 @@ function Get-KeyBit([string]$keyPath, [string[]]$passphrases) {
   $isEnc = Test-KeyEncrypted $keyPath
   if (-not $isEnc) {
     try {
-      $out = Invoke-OpenSsl @("rsa", "-in", $keyPath, "-noout", "-text")
+      $out = Invoke-KeyTextOutput $keyPath
       $line = ($out | Select-Object -First 1)
       if ($line) { $line | Write-Output }
       return $true
@@ -873,7 +894,7 @@ function Get-KeyBit([string]$keyPath, [string[]]$passphrases) {
     try {
       Invoke-TempPassFile $p {
         param($tmpPass)
-        $out = Invoke-OpenSsl @("rsa", "-in", $keyPath, "-noout", "-text", "-passin", ("file:{0}" -f $tmpPass))
+        $out = Invoke-KeyTextOutput $keyPath $tmpPass
         $line = ($out | Select-Object -First 1)
         if ($line) { $line | Write-Output }
       }
@@ -1537,6 +1558,39 @@ function Show-OneFile {
     }
     ".pem" {
       $sum = Get-CertChainSummary $FilePath
+      if ([int]$sum.CertBlocks -eq 0 -and [bool]$sum.HasPrivateKey) {
+        Write-TreeProp $false (T "CheckBasic.Pretty.File") ([IO.Path]::GetFileName($FilePath)) "Cyan"
+        Write-TreeProp $false (T "CheckBasic.Pretty.Path") (Split-Path -Parent $FilePath) "DarkGray"
+        Write-TreeProp $false (T "Label.FileType") (T "Label.Key") "Cyan"
+
+        $isEnc = Test-KeyEncrypted $FilePath
+        $existingPassFiles = @($PassFiles | Where-Object { -not [string]::IsNullOrWhiteSpace($_) -and (Test-Path -LiteralPath $_ -PathType Leaf) } | Select-Object -Unique)
+        $passFileText = if ($existingPassFiles.Count -gt 0) { ($existingPassFiles -join "; ") } else { (T "Common.None") }
+
+        Write-TreeProp $false (T "Label.Encrypted") (Format-YesNo $isEnc)
+        Write-TreeProp $false (T "Label.PassFile") $passFileText
+
+        if (-not [string]::IsNullOrWhiteSpace($env:PASS_FILE)) {
+          $envPassExists = Test-Path -LiteralPath $env:PASS_FILE -PathType Leaf
+          $envPassName = [IO.Path]::GetFileName($env:PASS_FILE)
+          $msg = if ($envPassExists) { (T "Common.Exists") } else { (T "Common.NotExists") }
+          Write-TreeProp $false "PASS_FILE" ("{0} ({1})" -f $envPassName, $msg)
+        }
+        else {
+          Write-TreeProp $false "PASS_FILE" (T "Common.NotSet")
+        }
+
+        Write-TreeProp $false (T "Label.AutoMode") (Format-AutoModeStatus $isEnc $Passphrases)
+
+        $ok = Get-KeyBit $FilePath $Passphrases
+        $usable = @($Passphrases | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count -gt 0
+        $decryptStatus = if ($ok) { (T "Common.Success") } elseif ($isEnc -and -not $usable) { (T "CheckBasic.Key.SkipNoPassLong") } else { (T "Common.Failed") }
+
+        $col = if ($ok) { [ConsoleColor]::Green } else { [ConsoleColor]::Red }
+        Write-TreeProp $true (T "Label.DecryptCheck") $decryptStatus $col
+        break
+      }
+
       $san = Get-SubjectAltNamesFromCert $FilePath
       
       Write-TreeProp $false (T "CheckBasic.Pretty.File") ([IO.Path]::GetFileName($FilePath)) "Cyan"
