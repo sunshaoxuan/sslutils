@@ -43,11 +43,9 @@ param(
 
 $ToolkitRoot = Split-Path -Parent $PSScriptRoot
 
-try {
-  [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
-  $OutputEncoding = [Console]::OutputEncoding
-}
-catch { }
+$runtimeModule = Join-Path $PSScriptRoot "lib\runtime.ps1"
+if (Test-Path -LiteralPath $runtimeModule -PathType Leaf) { . $runtimeModule }
+Initialize-ToolkitConsoleEncoding
 
 $i18nModule = Join-Path $PSScriptRoot "lib\i18n.ps1"
 if (-not (Test-Path -LiteralPath $i18nModule -PathType Leaf)) { throw "i18n module not found: $i18nModule" }
@@ -396,5 +394,4 @@ catch {
   Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red
   throw
 }
-
 

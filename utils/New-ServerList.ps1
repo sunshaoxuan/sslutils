@@ -52,26 +52,12 @@ if ([string]::IsNullOrWhiteSpace($TsvFile)) {
     else { $TsvFile = $preferred }
 }
 
+$runtimeModule = Join-Path $PSScriptRoot "lib\runtime.ps1"
+if (Test-Path -LiteralPath $runtimeModule -PathType Leaf) { . $runtimeModule }
+Assert-ToolkitPowerShell
+
 . (Join-Path $PSScriptRoot "lib\defaults.ps1")
 if ([string]::IsNullOrWhiteSpace($Lang)) { $Lang = $__DefaultLang }
-
-if ($PSVersionTable.PSVersion.Major -lt 7) {
-  $__msg = "[エラー] PowerShell 7.x 以上が必要です。"
-  $__cur = "現在のバージョン"
-  try {
-    $__resDir = Join-Path (Split-Path -Parent $PSScriptRoot) "resources"
-    $__langFile = Join-Path $__resDir ("strings.{0}.psd1" -f $Lang)
-    if (Test-Path -LiteralPath $__langFile -PathType Leaf) {
-      $__d = Import-SafeDataFile -LiteralPath $__langFile
-      if ($__d.ContainsKey("Language.VersionCheckError")) { $__msg = $__d["Language.VersionCheckError"] }
-      if ($__d.ContainsKey("Language.VersionCheckCurrent")) { $__cur = $__d["Language.VersionCheckCurrent"] }
-    }
-  } catch {}
-  Write-Host $__msg -ForegroundColor Red
-  Write-Host ("        {0}: {1}" -f $__cur, $PSVersionTable.PSVersion) -ForegroundColor Red
-  Write-Host "        https://github.com/PowerShell/PowerShell/releases" -ForegroundColor Yellow
-  exit 1
-}
 
 $pathsModule = Join-Path $PSScriptRoot "lib\paths.ps1"
 if (Test-Path -LiteralPath $pathsModule -PathType Leaf) { . $pathsModule }

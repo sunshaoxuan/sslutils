@@ -20,12 +20,9 @@ param(
     [string]$Lang = ""
 )
 
-if ($PSVersionTable.PSVersion.Major -lt 7) {
-    Write-Host "[ERROR] PowerShell 7.x or later is required." -ForegroundColor Red
-    Write-Host ("Current version: {0}" -f $PSVersionTable.PSVersion) -ForegroundColor Yellow
-    Write-Host "Run with: pwsh -File .\Invoke-SSLToolkit.ps1" -ForegroundColor Cyan
-    exit 1
-}
+$runtimeModule = Join-Path $PSScriptRoot "utils\lib\runtime.ps1"
+if (Test-Path -LiteralPath $runtimeModule -PathType Leaf) { . $runtimeModule }
+Assert-ToolkitPowerShell -CommandHint "pwsh -File .\Invoke-SSLToolkit.ps1"
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -43,12 +40,7 @@ if ([string]::IsNullOrWhiteSpace($Lang)) {
     if ([string]::IsNullOrWhiteSpace($Lang)) { $Lang = $__DefaultLang }
 }
 
-# UTF-8出力設定
-try {
-    [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
-    $OutputEncoding = [Console]::OutputEncoding
-}
-catch { }
+Initialize-ToolkitConsoleEncoding
 
 # 共通モジュール読み込み
 $ScriptsDir = Join-Path $PSScriptRoot "utils"

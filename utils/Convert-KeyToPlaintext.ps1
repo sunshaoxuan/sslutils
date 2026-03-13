@@ -93,19 +93,16 @@ param(
 
 $ToolkitRoot = Split-Path -Parent $PSScriptRoot
 
+$runtimeModule = Join-Path $PSScriptRoot "lib\runtime.ps1"
+if (Test-Path -LiteralPath $runtimeModule -PathType Leaf) { . $runtimeModule }
+Initialize-ToolkitConsoleEncoding
+
 $pathsModule = Join-Path $PSScriptRoot "lib\paths.ps1"
 if (Test-Path -LiteralPath $pathsModule -PathType Leaf) { . $pathsModule }
 $ToolkitPaths = if (Get-Command Get-ToolkitPaths -ErrorAction SilentlyContinue) { Get-ToolkitPaths -BaseDir $ToolkitRoot } else { $null }
 $OpenSsl = Resolve-OpenSsl -Explicit $OpenSsl -ToolkitPaths $ToolkitPaths
 $toolOldDir = if ($null -ne $ToolkitPaths -and -not [string]::IsNullOrWhiteSpace($ToolkitPaths.Old)) { $ToolkitPaths.Old } else { Join-Path $ToolkitRoot "old" }
 $toolNewDir = if ($null -ne $ToolkitPaths -and -not [string]::IsNullOrWhiteSpace($ToolkitPaths.New)) { $ToolkitPaths.New } else { Join-Path $ToolkitRoot "new" }
-
-# 出力の文字化け対策（環境差異があるため、失敗しても続行）
-try {
-  [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
-  $OutputEncoding = [Console]::OutputEncoding
-}
-catch { }
 
 $i18nModule = Join-Path $PSScriptRoot "lib\\i18n.ps1"
 if (-not (Test-Path -LiteralPath $i18nModule -PathType Leaf)) { throw (T "Common.I18nModuleNotFound" @($i18nModule)) }

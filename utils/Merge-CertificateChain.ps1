@@ -105,12 +105,9 @@ param(
 
 $ToolkitRoot = Split-Path -Parent $PSScriptRoot
 
-# 出力の文字化け対策（環境差異があるため、失敗しても続行）
-try {
-  [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
-  $OutputEncoding = [Console]::OutputEncoding
-}
-catch { }
+$runtimeModule = Join-Path $PSScriptRoot "lib\runtime.ps1"
+if (Test-Path -LiteralPath $runtimeModule -PathType Leaf) { . $runtimeModule }
+Initialize-ToolkitConsoleEncoding
 
 $i18nModule = Join-Path $PSScriptRoot "lib\\i18n.ps1"
 if (-not (Test-Path -LiteralPath $i18nModule -PathType Leaf)) { throw (T "Common.I18nModuleNotFound" @($i18nModule)) }
@@ -949,5 +946,4 @@ if ([string]::IsNullOrWhiteSpace($ClientCert)) {
 }
 
 Merge-One $ClientCert
-
 

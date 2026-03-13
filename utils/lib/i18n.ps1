@@ -1,26 +1,10 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-. (Join-Path $PSScriptRoot "defaults.ps1")
+. (Join-Path $PSScriptRoot "runtime.ps1")
+Assert-ToolkitPowerShell
 
-if ($PSVersionTable.PSVersion.Major -lt 7) {
-  $__curLang = if (Test-Path variable:Lang) { $Lang } else { $__DefaultLang }
-  $__msg = "[エラー] PowerShell 7.x 以上が必要です。"
-  $__cur = "現在のバージョン"
-  try {
-    $__resDir = Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) "resources"
-    $__langFile = Join-Path $__resDir ("strings.{0}.psd1" -f $__curLang)
-    if (Test-Path -LiteralPath $__langFile -PathType Leaf) {
-      $__d = Import-SafeDataFile -LiteralPath $__langFile
-      if ($__d.ContainsKey("Language.VersionCheckError")) { $__msg = $__d["Language.VersionCheckError"] }
-      if ($__d.ContainsKey("Language.VersionCheckCurrent")) { $__cur = $__d["Language.VersionCheckCurrent"] }
-    }
-  } catch {}
-  Write-Host $__msg -ForegroundColor Red
-  Write-Host ("        {0}: {1}" -f $__cur, $PSVersionTable.PSVersion) -ForegroundColor Red
-  Write-Host "        https://github.com/PowerShell/PowerShell/releases" -ForegroundColor Yellow
-  exit 1
-}
+. (Join-Path $PSScriptRoot "defaults.ps1")
 
 function Get-AvailableLanguages {
   param(

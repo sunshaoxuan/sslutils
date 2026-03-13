@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - **Let's Encrypt Challenge Workflow**: The auth hook now records the active challenge in `current-challenge.txt` and copies challenge files into `ServerChallengeDir` automatically on the local machine.
 - **PEM Export Normalization**: Exported `fullchain.pem` and `privkey.pem` are normalized automatically so they can be used directly without a separate repair step.
 - **PEM Repair UX**: `Repair-PemFile.ps1` now offers interactive source selection (`old`, `new`, `output/merged`, `output/self-signed`) before falling back to manual path input.
+- **Runtime Bootstrap**: Added shared `utils/lib/runtime.ps1` so entry scripts reuse the same PowerShell 7 guard and UTF-8 console initialization instead of duplicating that logic.
 
 ### Fixed
 - **CAA Retry**: `Request-LetsEncryptCertificate.ps1` now detects `CAA SERVFAIL` responses from certbot and retries automatically with configurable backoff.

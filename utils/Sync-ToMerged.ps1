@@ -31,12 +31,9 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 $ToolkitRoot = Split-Path -Parent $PSScriptRoot
 
-# UTF-8出力設定
-try {
-    [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
-    $OutputEncoding = [Console]::OutputEncoding
-}
-catch { }
+$runtimeModule = Join-Path $PSScriptRoot "lib\runtime.ps1"
+if (Test-Path -LiteralPath $runtimeModule -PathType Leaf) { . $runtimeModule }
+Initialize-ToolkitConsoleEncoding
 
 $pathsModule = Join-Path $PSScriptRoot "lib\paths.ps1"
 if (Test-Path -LiteralPath $pathsModule -PathType Leaf) { . $pathsModule }
