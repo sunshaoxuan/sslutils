@@ -245,7 +245,7 @@
   "DecryptKey.PassEnvUnset"                  = "[PASS] 环境变量 PASS_FILE: 未设置"
   "DecryptKey.NoPassphrase"                  = "未找到密码（不进行交互输入）。请准备 {0} 或 PASS_FILE。"
   "DecryptKey.InPlaceNeedOverwrite"          = "InPlace 风险较高，必须指定 -Overwrite（会创建备份）。"
-  "DecryptKey.WhatThisDoes"                  = "[信息] 这个工具会把“加密的私钥”转换成“无需密码、可直接部署的 key 文件”。"
+  "DecryptKey.WhatThisDoes"                  = "[信息] 这个工具会把加密的私钥转换成无需密码、可直接部署的 key 文件。"
   "DecryptKey.OutputLine"                    = "[信息] 输出路径: {0}"
   "DecryptKey.InPlaceWillReplace"            = "[信息] 使用 -InPlace 时，会先创建备份，再用解密后的内容替换原 key 文件。"
   "DecryptKey.InPlaceConfirmPrompt"          = "是否用解密后的内容替换原 key 文件？ [Y/N]"

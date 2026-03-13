@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
 SSL証明書管理ツールキット - 統合メニュー
 
@@ -20,11 +20,18 @@ param(
     [string]$Lang = ""
 )
 
+if ($PSVersionTable.PSVersion.Major -lt 7) {
+    Write-Host "[ERROR] PowerShell 7.x or later is required." -ForegroundColor Red
+    Write-Host ("Current version: {0}" -f $PSVersionTable.PSVersion) -ForegroundColor Yellow
+    Write-Host "Run with: pwsh -File .\Invoke-SSLToolkit.ps1" -ForegroundColor Cyan
+    exit 1
+}
+
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$ToolkitVersion = "1.5.2"
-$ToolkitLastUpdated = "2026-03-10"
+$ToolkitVersion = "1.5.3"
+$ToolkitLastUpdated = "2026-03-13"
 
 . (Join-Path $PSScriptRoot "utils\lib\defaults.ps1")
 
