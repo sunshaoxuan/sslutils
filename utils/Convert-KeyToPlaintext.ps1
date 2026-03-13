@@ -210,6 +210,11 @@ function Get-DefaultOutPath([string]$keyPath) {
   return (Join-Path $dir ($base + ".decrypted.key"))
 }
 
+function Confirm-YesNo([string]$message) {
+  $ans = (Read-Host $message).Trim()
+  return ($ans -match '^(?i:y|yes)$')
+}
+
 function Get-KeyCandidates([string]$p) {
   if ([string]::IsNullOrWhiteSpace($p)) {
     $newDir = $toolNewDir
@@ -298,9 +303,21 @@ function Unprotect-OneKey([string]$keyPath) {
   $srcKeyPath = $keyPath
   $out = $OutPath
   if ([string]::IsNullOrWhiteSpace($out)) { $out = Get-DefaultOutPath $keyPath }
+  $overwriteAllowed = [bool]$Overwrite
+
+  Write-Host (T "DecryptKey.WhatThisDoes")
+  Write-Host (T "DecryptKey.OutputLine" @($out))
+
   if ($InPlace) {
-    if (-not $Overwrite) {
-      throw (T "DecryptKey.InPlaceNeedOverwrite")
+    Write-Host (T "DecryptKey.InPlaceWillReplace" @($keyPath))
+    if (-not $overwriteAllowed) {
+      $confirmed = Confirm-YesNo (T "DecryptKey.InPlaceConfirmPrompt")
+      if (-not $confirmed) {
+        Write-Host (T "DecryptKey.SkipByUser")
+        Write-Host ""
+        return
+      }
+      $overwriteAllowed = $true
     }
     # 先に元ファイルをバックアップし、バックアップを入力として復号 → 元の名前へ出力
     $bak = Backup-IfExists $keyPath
@@ -312,10 +329,20 @@ function Unprotect-OneKey([string]$keyPath) {
   }
 
   if (-not $InPlace -and (Test-Path -LiteralPath $out -PathType Leaf)) {
-    if (-not $Overwrite) {
-      throw (T "DecryptKey.OutExistsNoOverwrite" @((Resolve-Path -LiteralPath $out)))
+    if (-not $overwriteAllowed) {
+      Write-Host (T "DecryptKey.OutExistsNoOverwrite" @((Resolve-Path -LiteralPath $out)))
+      $confirmed = Confirm-YesNo (T "DecryptKey.OutExistsConfirmPrompt")
+      if (-not $confirmed) {
+        Write-Host (T "DecryptKey.SkipByUser")
+        Write-Host ""
+        return
+      }
+      $overwriteAllowed = $true
     }
-    Backup-IfExists $out
+    $bak = Backup-IfExists $out
+    if (-not [string]::IsNullOrWhiteSpace($bak)) {
+      Write-Host (T "DecryptKey.BackupLineOut" @($bak))
+    }
   }
 
   $done = $false

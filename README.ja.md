@@ -96,6 +96,7 @@ fullchain を生成（証明書 + 中間）。3枚結合（推奨）または 4�
 .\utils\Convert-KeyToPlaintext.ps1 -Path .\new\example.com\server.key
 .\utils\Convert-KeyToPlaintext.ps1 -Path .\new -Recurse -Overwrite
 ```
+パスフレーズ付き `.key` を、サーバー投入用の「パスワード不要 key」に変換します。既に `<元名>.decrypted.key` がある場合は、実行中にバックアップして上書きするか確認します。
 
 4) `New-CertificateSigningRequest.ps1`
 CSR と秘密鍵を生成。

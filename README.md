@@ -95,6 +95,7 @@ Decrypt encrypted private keys.
 ```powershell
 .\utils\Convert-KeyToPlaintext.ps1 -Path .\new -Recurse -Overwrite
 ```
+This converts a passphrase-protected `.key` into a password-free deployment key. If `<name>.decrypted.key` already exists, the script now asks whether to back it up and overwrite it during execution.
 
 4) `New-CertificateSigningRequest.ps1`
 Generate CSR and private key.
