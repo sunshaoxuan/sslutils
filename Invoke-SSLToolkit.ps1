@@ -325,7 +325,7 @@ try {
                     Write-ToolkitException -ErrorRecord $_
                 }
                 finally {
-                    if ($selectedTool.Wait -and $LASTEXITCODE -ne 99) {
+                    if ($selectedTool.Wait -and -not (Test-ToolkitCancelledExitCode -ExitCode $LASTEXITCODE)) {
                         Write-Host ""
                         Wait-ToolkitAnyKey -Message (T "Toolkit.Menu.PressAnyKey")
                     }
@@ -360,7 +360,7 @@ try {
             Write-ToolkitException -ErrorRecord $_
         }
         finally {
-            if ($selectedTool.Wait -and $LASTEXITCODE -ne 99) {
+            if ($selectedTool.Wait -and -not (Test-ToolkitCancelledExitCode -ExitCode $LASTEXITCODE)) {
                 Write-Host ""
                 Wait-ToolkitAnyKey -Message (T "Toolkit.Menu.PressAnyKey")
             }

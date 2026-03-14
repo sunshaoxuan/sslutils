@@ -1,5 +1,24 @@
 Set-StrictMode -Version Latest
 
+$script:ToolkitCancelExitCode = 99
+
+function Get-ToolkitCancelExitCode {
+  return $script:ToolkitCancelExitCode
+}
+
+function Test-ToolkitCancelledExitCode {
+  param(
+    [Parameter(Mandatory = $false)]
+    [int]$ExitCode = 0
+  )
+
+  return ($ExitCode -eq $script:ToolkitCancelExitCode)
+}
+
+function Exit-ToolkitCancelled {
+  exit $script:ToolkitCancelExitCode
+}
+
 function Assert-ToolkitPowerShell {
   param(
     [Parameter(Mandatory = $false)]
@@ -119,7 +138,7 @@ function Exit-ToolkitWithPause {
     [string]$Message = "Press any key to continue...",
 
     [Parameter(Mandatory = $false)]
-    [int]$ExitCode = 99
+    [int]$ExitCode = $script:ToolkitCancelExitCode
   )
 
   Write-Host ""

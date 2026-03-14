@@ -369,7 +369,7 @@ function Test-PemHeader {
 
 if ([string]::IsNullOrWhiteSpace($Fullchain) -or [string]::IsNullOrWhiteSpace($Privkey)) {
   $selectedPair = Select-PemPairInteractively
-  if ($null -eq $selectedPair) { exit 99 }
+  if ($null -eq $selectedPair) { Exit-ToolkitCancelled }
   $Fullchain = [string]$selectedPair.Fullchain
   $Privkey = [string]$selectedPair.Privkey
 }

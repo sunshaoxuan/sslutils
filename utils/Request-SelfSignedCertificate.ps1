@@ -306,21 +306,21 @@ function Start-CustomMode([string]$openSslCmd, [bool]$interactiveInput) {
   if ([string]::IsNullOrWhiteSpace($CN)) {
     Write-Host (T "SS.InputCnPrompt")
     $inputCn = Read-Input (T "SS.Prompt.CN") $false
-    if ($null -eq $inputCn -or [string]::IsNullOrWhiteSpace($inputCn)) { exit 99 }
+    if ($null -eq $inputCn -or [string]::IsNullOrWhiteSpace($inputCn)) { Exit-ToolkitCancelled }
     $script:CN = $inputCn
   }
 
   if ($interactiveInput -and [string]::IsNullOrWhiteSpace($Subject)) {
     Write-Host (T "SS.InputSubjectPrompt")
     $inputSubject = Read-Input (T "SS.Prompt.SubjectOptional") $true
-    if ($null -eq $inputSubject) { exit 99 }
+    if ($null -eq $inputSubject) { Exit-ToolkitCancelled }
     if (-not [string]::IsNullOrWhiteSpace($inputSubject)) { $script:Subject = $inputSubject }
   }
 
   if ($interactiveInput -and [string]::IsNullOrWhiteSpace($SAN)) {
     Write-Host (T "SS.InputSanPrompt")
     $inputSan = Read-Input (T "SS.Prompt.SANOptional") $true
-    if ($null -eq $inputSan) { exit 99 }
+    if ($null -eq $inputSan) { Exit-ToolkitCancelled }
     $script:SAN = $inputSan
   }
 
@@ -345,7 +345,7 @@ try {
     :validityLoop while ($true) {
       if ($ValidityDays -le 0) {
         $chosen = Select-ValidityPeriod
-        if ($chosen -lt 0) { exit 99 }
+        if ($chosen -lt 0) { Exit-ToolkitCancelled }
         $script:ValidityDays = $chosen
       }
 
@@ -359,7 +359,7 @@ try {
         $modeTitle = T "SS.Menu.Title" @($ValidityDays, [math]::Round($ValidityDays / 365, 1))
         $pick = Show-MenuSelect -title $modeTitle -items $menuItems -helpText (T "CheckBasic.Menu.Instruction")
         if ($null -eq $pick -or $pick -eq $menuItems.Count) {
-          if ($Days -gt 0) { exit 99 }
+          if ($Days -gt 0) { Exit-ToolkitCancelled }
           $script:ValidityDays = 0
           continue validityLoop
         }

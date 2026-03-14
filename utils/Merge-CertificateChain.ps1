@@ -837,8 +837,8 @@ if ([string]::IsNullOrWhiteSpace($ClientCert)) {
 
   while ($true) {
     $pick = Show-MenuSelect -title (T "MergeCert.BatchCertMenuTitle") -items $targetItems
-    if ($null -eq $pick) { exit 99 }
-    if ($pick -eq $targetItems.Count) { exit 99 }  # Last item is Quit
+    if ($null -eq $pick) { Exit-ToolkitCancelled }
+    if ($pick -eq $targetItems.Count) { Exit-ToolkitCancelled }  # Last item is Quit
 
     $t = $targets[$pick - 1]  # Show-MenuSelect returns 1-based
     try {
@@ -903,9 +903,9 @@ if ([string]::IsNullOrWhiteSpace($ClientCert)) {
 
       $title = (T "MergeCert.BatchMenuTitle")
       $choice = Show-MenuSelect -title $title -items $menuItems
-      if ($null -eq $choice) { exit 99 }
+      if ($null -eq $choice) { Exit-ToolkitCancelled }
       $selectedAction = $actions[$choice - 1]  # Show-MenuSelect returns 1-based
-      if ($selectedAction -eq "Quit") { exit 99 }
+      if ($selectedAction -eq "Quit") { Exit-ToolkitCancelled }
       if ($selectedAction -eq "Back") { continue }
       if ($selectedAction -eq "Skip") { continue }
 
@@ -938,7 +938,7 @@ if ([string]::IsNullOrWhiteSpace($ClientCert)) {
       Wait-AnyKey (T "Common.PressAnyKey")
     }
   }
-  exit 99
+  Exit-ToolkitCancelled
 }
 
 Merge-One $ClientCert

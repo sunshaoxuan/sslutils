@@ -146,7 +146,7 @@ if ([string]::IsNullOrWhiteSpace($CN)) {
 
     Clear-ToolkitInputBuffer
     $CN = Read-HostWithEsc "CN"
-    if ($null -eq $CN) { exit 99 }
+    if ($null -eq $CN) { Exit-ToolkitCancelled }
     $CN = $CN.Trim()
   }
   else {
@@ -155,7 +155,7 @@ if ([string]::IsNullOrWhiteSpace($CN)) {
 }
 
 if ([string]::IsNullOrWhiteSpace($CN)) {
-  exit 99
+  Exit-ToolkitCancelled
 }
 
 if ([string]::IsNullOrWhiteSpace($OutDir)) {
@@ -437,4 +437,3 @@ Write-Host ""
 Write-Host (T "MakeCsr.PreviewTitle")
 Invoke-OpenSsl @("req", "-in", $csrPath, "-noout", "-subject") | Write-Output
 Invoke-OpenSsl @("req", "-in", $csrPath, "-noout", "-text") | Select-String -Pattern "Subject Alternative Name" -Context 0, 2 | ForEach-Object { $_.ToString() } | Write-Output
-
