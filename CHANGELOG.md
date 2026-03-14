@@ -21,6 +21,7 @@ All notable changes to this project will be documented in this file.
 - **CAA Retry**: `Request-LetsEncryptCertificate.ps1` now detects `CAA SERVFAIL` responses from certbot and retries automatically with configurable backoff.
 - **Docker Hook Compatibility**: The Let's Encrypt auth hook now falls back to `wget` when `curl` is unavailable in the certbot Docker image.
 - **Private Key Viewing**: `Get-CertificateInfo.ps1` now classifies PEM private keys correctly and reads PKCS#8 / EC private keys via `openssl pkey` fallback instead of assuming RSA-only input.
+- **Launcher Regression**: Fixed shared runtime scoping so OpenSSL resolution, language switching, and default certificate constants are available to menu-driven scripts again. This restores startup for the affected main-menu flows and prevents immediate exits from missing helper functions/variables.
 
 ## [1.5.2] - 2026-03-10
 

@@ -109,6 +109,8 @@ $ModuleRoot = $PSScriptRoot
 $ToolkitRoot = Get-ToolkitBaseDir -ModuleRoot $ModuleRoot
 Initialize-ToolkitConsoleEncoding
 
+. (Join-Path $PSScriptRoot "lib\defaults.ps1")
+
 $__i18n = Initialize-ToolkitI18nContext -ModuleRoot $ModuleRoot -Lang $Lang -BaseDir $ToolkitRoot
 $securityModule = Join-Path $PSScriptRoot "lib\security.ps1"
 if (Test-Path -LiteralPath $securityModule -PathType Leaf) { . $securityModule }

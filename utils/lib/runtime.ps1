@@ -217,6 +217,28 @@ function Initialize-ToolkitI18nContext {
   return (Initialize-I18n -Lang $Lang -BaseDir $BaseDir)
 }
 
+function Get-ToolkitAvailableLanguages {
+  param(
+    [Parameter(Mandatory)]
+    [string]$ModuleRoot,
+
+    [Parameter(Mandatory = $false)]
+    [string]$BaseDir = ""
+  )
+
+  if ([string]::IsNullOrWhiteSpace($BaseDir)) {
+    $BaseDir = Get-ToolkitBaseDir -ModuleRoot $ModuleRoot
+  }
+
+  $i18nModule = Join-Path $ModuleRoot "lib\i18n.ps1"
+  if (-not (Test-Path -LiteralPath $i18nModule -PathType Leaf)) {
+    return @()
+  }
+
+  . $i18nModule
+  return @(Get-AvailableLanguages -BaseDir $BaseDir)
+}
+
 function Get-ToolkitPathsContext {
   param(
     [Parameter(Mandatory)]
@@ -261,6 +283,11 @@ function Resolve-ToolkitOpenSsl {
 
   $toolkitPaths = Get-ToolkitPathsContext -ModuleRoot $ModuleRoot -BaseDir $BaseDir
   $openSsl = $Explicit
+  $pathsModule = Join-Path $ModuleRoot "lib\paths.ps1"
+
+  if (Test-Path -LiteralPath $pathsModule -PathType Leaf) {
+    . $pathsModule
+  }
 
   if (Get-Command Resolve-OpenSsl -ErrorAction SilentlyContinue) {
     $openSsl = Resolve-OpenSsl -Explicit $Explicit -ToolkitPaths $toolkitPaths

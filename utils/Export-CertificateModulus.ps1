@@ -70,6 +70,8 @@ $ModuleRoot = $PSScriptRoot
 $ToolkitRoot = Get-ToolkitBaseDir -ModuleRoot $ModuleRoot
 Initialize-ToolkitConsoleEncoding
 
+. (Join-Path $PSScriptRoot "lib\defaults.ps1")
+
 $openSslContext = Resolve-ToolkitOpenSsl -ModuleRoot $ModuleRoot -Explicit $OpenSsl -BaseDir $ToolkitRoot
 $ToolkitPaths = $openSslContext.ToolkitPaths
 $OpenSsl = $openSslContext.OpenSsl
@@ -265,6 +267,5 @@ Write-Host (T "ShowModulus.SummaryCertCount" @($certCount))
 Write-Host (T "ShowModulus.SummaryKeyCount" @($keyCount))
 Write-Host ""
 Write-Host (T "ShowModulus.SavedTo" @((Resolve-Path -LiteralPath $OutFile)))
-
 
 

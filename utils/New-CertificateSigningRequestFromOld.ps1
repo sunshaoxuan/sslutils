@@ -119,6 +119,8 @@ $ModuleRoot = $PSScriptRoot
 $ToolkitRoot = Get-ToolkitBaseDir -ModuleRoot $ModuleRoot
 Initialize-ToolkitConsoleEncoding
 
+. (Join-Path $PSScriptRoot "lib\defaults.ps1")
+
 $openSslContext = Resolve-ToolkitOpenSsl -ModuleRoot $ModuleRoot -Explicit $OpenSsl -BaseDir $ToolkitRoot
 $ToolkitPaths = $openSslContext.ToolkitPaths
 $OpenSsl = $openSslContext.OpenSsl

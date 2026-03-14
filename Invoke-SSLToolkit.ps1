@@ -260,7 +260,7 @@ try {
         }
         
         if ($selection -eq $langIdx) {
-            $availLangs = @(Get-AvailableLanguages -BaseDir $PSScriptRoot)
+            $availLangs = @(Get-ToolkitAvailableLanguages -ModuleRoot $ModuleRoot -BaseDir $PSScriptRoot)
             $langItems = @()
             foreach ($al in $availLangs) {
                 $mark = if ($al.Code -eq $Lang) { " *" } else { "" }
@@ -273,7 +273,7 @@ try {
                 $newLang = $availLangs[$langSel - 1].Code
                 if ($newLang -ne $Lang) {
                     $Lang = $newLang
-                    $__i18n = Initialize-I18n -Lang $Lang -BaseDir $PSScriptRoot
+                    $__i18n = Initialize-ToolkitI18nContext -ModuleRoot $ModuleRoot -Lang $Lang -BaseDir $PSScriptRoot
                     Save-ToolkitLanguage -Lang $Lang -BaseDir $PSScriptRoot
                 }
             }
