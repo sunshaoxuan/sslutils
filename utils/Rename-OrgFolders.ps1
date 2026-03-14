@@ -15,15 +15,17 @@ $ErrorActionPreference = "Stop"
 $runtimeModule = Join-Path $PSScriptRoot "lib\runtime.ps1"
 if (Test-Path -LiteralPath $runtimeModule -PathType Leaf) { . $runtimeModule }
 Assert-ToolkitPowerShell
+Initialize-ToolkitConsoleEncoding
 
 . (Join-Path $PSScriptRoot "lib\defaults.ps1")
 
-$ToolkitRoot = Split-Path -Parent $PSScriptRoot
+$ModuleRoot = $PSScriptRoot
+$ToolkitRoot = Get-ToolkitBaseDir -ModuleRoot $ModuleRoot
 
 $rootPath = $ToolkitRoot
-$pathsModule = Join-Path $PSScriptRoot "lib\paths.ps1"
-if (Test-Path -LiteralPath $pathsModule -PathType Leaf) { . $pathsModule }
-$ToolkitPaths = if (Get-Command Get-ToolkitPaths -ErrorAction SilentlyContinue) { Get-ToolkitPaths -BaseDir $ToolkitRoot } else { $null }
+$openSslContext = Resolve-ToolkitOpenSsl -ModuleRoot $ModuleRoot -BaseDir $ToolkitRoot
+$ToolkitPaths = $openSslContext.ToolkitPaths
+$OpenSsl = $openSslContext.OpenSsl
 $oldDir = if ($null -ne $ToolkitPaths -and -not [string]::IsNullOrWhiteSpace($ToolkitPaths.Old)) { $ToolkitPaths.Old } else { Join-Path $rootPath "old" }
 $newDir = if ($null -ne $ToolkitPaths -and -not [string]::IsNullOrWhiteSpace($ToolkitPaths.New)) { $ToolkitPaths.New } else { Join-Path $rootPath "new" }
 $mergedDir = if ($null -ne $ToolkitPaths -and -not [string]::IsNullOrWhiteSpace($ToolkitPaths.Merged)) { $ToolkitPaths.Merged } else { Join-Path $rootPath "output\merged" }
@@ -213,8 +215,7 @@ function Get-WhoisInfo([string]$domain) {
 }
 
 function Get-OrgFromLocalCert([string]$domain) {
-    $openssl = Resolve-OpenSsl -ToolkitPaths $ToolkitPaths
-    if ([string]::IsNullOrWhiteSpace($openssl)) { return $null }
+    if ([string]::IsNullOrWhiteSpace($OpenSsl)) { return $null }
     
     foreach ($d in $dirsToCheck) {
         $searchPath = Resolve-DirPath $d
@@ -225,7 +226,7 @@ function Get-OrgFromLocalCert([string]$domain) {
         
         foreach ($cert in $certs) {
             try {
-                $subj = & $openssl x509 -in $cert.FullName -noout -subject 2>&1
+                $subj = & $OpenSsl x509 -in $cert.FullName -noout -subject 2>&1
                 if ($LASTEXITCODE -ne 0) { continue }
                 
                 # 提取 O= 组织名
@@ -352,96 +353,90 @@ function Find-OrgName([string]$domain) {
     return $null
 }
 
-# 2. 全ディレクトリをスキャン
-Write-Host "Scanning directories..." -ForegroundColor Cyan
-$allDomains = @()
-foreach ($d in $dirsToCheck) {
-    $path = Resolve-DirPath $d
-    if (Test-Path $path) {
-        $subdirs = Get-ChildItem -LiteralPath $path -Directory
-        foreach ($s in $subdirs) {
-            $allDomains += $s.Name
+Invoke-ToolkitMain -ScriptBlock {
+    Write-Host "Scanning directories..." -ForegroundColor Cyan
+    $allDomains = @()
+    foreach ($d in $dirsToCheck) {
+        $path = Resolve-DirPath $d
+        if (Test-Path $path) {
+            $subdirs = Get-ChildItem -LiteralPath $path -Directory
+            foreach ($s in $subdirs) {
+                $allDomains += $s.Name
+            }
         }
     }
-}
-$uniqueDomains = $allDomains | Select-Object -Unique | Sort-Object
+    $uniqueDomains = $allDomains | Select-Object -Unique | Sort-Object
 
-if ($uniqueDomains.Count -eq 0) {
-    Write-Host "No folders found." -ForegroundColor Yellow
-    exit
-}
-
-# 3. 個別に処理
-foreach ($domain in $uniqueDomains) {
-    # 既にリネーム済み (例: "北見工業大学 (jinji)") や、ドメインでないフォルダはスキップ
-    if ($domain -notmatch "\." -or $domain -match ".+\s\(.+\)$") {
-        continue
+    if ($uniqueDomains.Count -eq 0) {
+        Write-Host "No folders found." -ForegroundColor Yellow
+        return
     }
 
-    Write-Host "`nProcessing: $domain" -ForegroundColor Cyan
-    
-    try {
-        $info = Find-OrgName $domain
-    }
-    catch {
-        Write-Host "  Error: $($_.Exception.Message)" -ForegroundColor Red
-        continue
-    }
-    
-    if (-not $info) {
-        Write-Host "  No organization info found." -ForegroundColor DarkGray
-        continue
-    }
+    foreach ($domain in $uniqueDomains) {
+        if ($domain -notmatch "\." -or $domain -match ".+\s\(.+\)$") {
+            continue
+        }
 
-    $orgName = $info.Name
-    $orgName = ConvertTo-SafeFileName $orgName
-    $orgName = $orgName.Trim('"').Trim("'")
-
-    if ($orgName -eq $domain) {
-        Write-Host "  Org name is same as domain, skipping."
-        continue
-    }
-    
-    $domainParts = $domain -split "\."
-    $hostPart = $domainParts[0]
-    
-    $newName = "{0} ({1})" -f $orgName, $hostPart
-
-    if ($orgName -eq $domain) {
-        Write-Host "  Org name is same as domain, skipping."
-        continue
-    }
-
-    Write-Host "  Found: $orgName" -ForegroundColor Yellow
-    Write-Host "  Proposal: $domain -> $newName" -ForegroundColor Green
-
-    if ($DryRun) {
-        Write-Host "  [DryRun] Would rename in all folders." -ForegroundColor Magenta
-        continue
-    }
-    
-    if (-not $AutoYes) {
-        $confirm = Read-Host "  Rename in all folders? (y/n)"
-        if ($confirm -ne "y") { continue }
-    }
-
-    foreach ($type in $dirsToCheck) {
-        $basePath = Resolve-DirPath $type
-        $oldPath = Join-Path $basePath $domain
-        $newPath = Join-Path $basePath $newName
+        Write-Host "`nProcessing: $domain" -ForegroundColor Cyan
         
-        if (Test-Path -LiteralPath $oldPath) {
-            if (Test-Path -LiteralPath $newPath) {
-                Write-Host "    Skipping $type/$domain : Destination exists." -ForegroundColor Red
-            }
-            else {
-                Rename-Item -LiteralPath $oldPath -NewName $newName
-                Write-Host "    Renamed: $type/$domain" -ForegroundColor Gray
+        try {
+            $info = Find-OrgName $domain
+        }
+        catch {
+            Write-Host "  Error: $($_.Exception.Message)" -ForegroundColor Red
+            continue
+        }
+        
+        if (-not $info) {
+            Write-Host "  No organization info found." -ForegroundColor DarkGray
+            continue
+        }
+
+        $orgName = $info.Name
+        $orgName = ConvertTo-SafeFileName $orgName
+        $orgName = $orgName.Trim('"').Trim("'")
+
+        if ($orgName -eq $domain) {
+            Write-Host "  Org name is same as domain, skipping."
+            continue
+        }
+        
+        $domainParts = $domain -split "\."
+        $hostPart = $domainParts[0]
+        
+        $newName = "{0} ({1})" -f $orgName, $hostPart
+
+        Write-Host "  Found: $orgName" -ForegroundColor Yellow
+        Write-Host "  Proposal: $domain -> $newName" -ForegroundColor Green
+
+        if ($DryRun) {
+            Write-Host "  [DryRun] Would rename in all folders." -ForegroundColor Magenta
+            continue
+        }
+        
+        if (-not $AutoYes) {
+            $confirm = Read-Host "  Rename in all folders? (y/n)"
+            if ($confirm -ne "y") { continue }
+        }
+
+        foreach ($type in $dirsToCheck) {
+            $basePath = Resolve-DirPath $type
+            $oldPath = Join-Path $basePath $domain
+            $newPath = Join-Path $basePath $newName
+            
+            if (Test-Path -LiteralPath $oldPath) {
+                if (Test-Path -LiteralPath $newPath) {
+                    Write-Host "    Skipping $type/$domain : Destination exists." -ForegroundColor Red
+                }
+                else {
+                    Rename-Item -LiteralPath $oldPath -NewName $newName
+                    Write-Host "    Renamed: $type/$domain" -ForegroundColor Gray
+                }
             }
         }
     }
-}
 
-Write-Host "`nDone." -ForegroundColor Green
+    Write-Host "`nDone." -ForegroundColor Green
+}
 
 

@@ -55,14 +55,19 @@ if ([string]::IsNullOrWhiteSpace($TsvFile)) {
 $runtimeModule = Join-Path $PSScriptRoot "lib\runtime.ps1"
 if (Test-Path -LiteralPath $runtimeModule -PathType Leaf) { . $runtimeModule }
 Assert-ToolkitPowerShell
+Initialize-ToolkitConsoleEncoding
+
+$ModuleRoot = $PSScriptRoot
+$ToolkitRoot = Get-ToolkitBaseDir -ModuleRoot $ModuleRoot
 
 . (Join-Path $PSScriptRoot "lib\defaults.ps1")
-if ([string]::IsNullOrWhiteSpace($Lang)) { $Lang = $__DefaultLang }
+if ([string]::IsNullOrWhiteSpace($Lang)) {
+    $Lang = Resolve-ToolkitLanguage -Lang $Lang -BaseDir $ToolkitRoot -DefaultLang $__DefaultLang
+}
 
-$pathsModule = Join-Path $PSScriptRoot "lib\paths.ps1"
-if (Test-Path -LiteralPath $pathsModule -PathType Leaf) { . $pathsModule }
-$__ToolkitPaths = if (Get-Command Get-ToolkitPaths -ErrorAction SilentlyContinue) { Get-ToolkitPaths -BaseDir (Split-Path -Parent $PSScriptRoot) } else { $null }
-$OpenSsl = Resolve-OpenSsl -ToolkitPaths $__ToolkitPaths
+$openSslContext = Resolve-ToolkitOpenSsl -ModuleRoot $ModuleRoot -BaseDir $ToolkitRoot
+$__ToolkitPaths = $openSslContext.ToolkitPaths
+$OpenSsl = $openSslContext.OpenSsl
 if ([string]::IsNullOrWhiteSpace($OpenSsl)) { $OpenSsl = "openssl" }
 
 # Define Schema
@@ -132,7 +137,7 @@ function Build-LegacyIndex([string]$rootPath) {
         try {
             # HOKKAIDO FORMAT PARSING
             # Read all lines
-            $lines = Get-Content $f.FullName -Encoding UTF8 | Where-Object { $_.Trim() -ne "" }
+            $lines = @(Get-Content -LiteralPath $f.FullName -Encoding UTF8 | Where-Object { $_.Trim() -ne "" })
             if ($lines.Count -ge 1) {
                 # Line 1: Subject, Term, SystemID
                 $parts1 = $lines[0] -split "`t"
@@ -164,164 +169,155 @@ function Build-LegacyIndex([string]$rootPath) {
     return $index
 }
 
-# --- Main Logic ---
+Invoke-ToolkitMain -ScriptBlock {
+    $legacyIndex = Build-LegacyIndex $OldPath
+    $defaults = @{ "Software" = "nginx"; "Contact" = ""; "Term" = "1"; "System ID" = "" }
 
-$legacyIndex = Build-LegacyIndex $OldPath
-$defaults = @{ "Software" = "nginx"; "Contact" = ""; "Term" = "1"; "System ID" = "" }
-
-if ($Interactive) {
-    Write-Host "`n[Interactive Setup] Defaults for completely NEW records." -ForegroundColor Cyan
-    $p = Read-Host "Default Software Name [nginx]"; if ($p) { $defaults.Software = $p }
-    $p = Read-Host "Default Contact Person       "; if ($p) { $defaults.Contact = $p }
-    $p = Read-Host "Default Term                 "; if ($p) { $defaults.Term = $p }
-    $p = Read-Host "Default System ID            "; if ($p) { $defaults.'System ID' = $p }
-}
-else {
-    if ($DefaultSoftware) { $defaults.Software = $DefaultSoftware }
-    if ($DefaultContact) { $defaults.Contact = $DefaultContact }
-    if ($DefaultTerm) { $defaults.Term = $DefaultTerm }
-    if ($DefaultSystemId) { $defaults.'System ID' = $DefaultSystemId }
-}
-
-$existingData = @{}
-if (Test-Path $TsvFile) {
-    Write-Host "Loading existing renewal TSV..."
-    Import-Csv -LiteralPath $TsvFile -Delimiter "`t" | ForEach-Object {
-        $cn = $_.'Common Name'
-        if ($cn) { $existingData[$cn] = $_ }
+    if ($Interactive) {
+        Write-Host "`n[Interactive Setup] Defaults for completely NEW records." -ForegroundColor Cyan
+        $p = Read-Host "Default Software Name [nginx]"; if ($p) { $defaults.Software = $p }
+        $p = Read-Host "Default Contact Person       "; if ($p) { $defaults.Contact = $p }
+        $p = Read-Host "Default Term                 "; if ($p) { $defaults.Term = $p }
+        $p = Read-Host "Default System ID            "; if ($p) { $defaults.'System ID' = $p }
     }
-}
+    else {
+        if ($DefaultSoftware) { $defaults.Software = $DefaultSoftware }
+        if ($DefaultContact) { $defaults.Contact = $DefaultContact }
+        if ($DefaultTerm) { $defaults.Term = $DefaultTerm }
+        if ($DefaultSystemId) { $defaults.'System ID' = $DefaultSystemId }
+    }
 
-Write-Host "Scanning '$Path' for .csr files..."
-$csrFiles = @(Get-ChildItem -LiteralPath $Path -Recurse -Filter *.csr -File)
+    $existingData = @{}
+    if (Test-Path $TsvFile) {
+        Write-Host "Loading existing renewal TSV..."
+        Import-Csv -LiteralPath $TsvFile -Delimiter "`t" | ForEach-Object {
+            $cn = $_.'Common Name'
+            if ($cn) { $existingData[$cn] = $_ }
+        }
+    }
 
-$mergedList = New-Object System.Collections.Generic.List[object]
-$processedCNs = @()
+    Write-Host "Scanning '$Path' for .csr files..."
+    $csrFiles = @(Get-ChildItem -LiteralPath $Path -Recurse -Filter *.csr -File)
 
-foreach ($f in $csrFiles) {
-    $infoObj = Get-CsrInfo $f.FullName
-    $cn = $infoObj.CN
-    $autoData = $infoObj.Info
-    if (-not $cn) { continue }
+    $mergedList = New-Object System.Collections.Generic.List[object]
+    $processedCNs = @()
 
-    $finalRow = New-Object psobject
-    $processedCNs += $cn
+    foreach ($f in $csrFiles) {
+        $infoObj = Get-CsrInfo $f.FullName
+        $cn = $infoObj.CN
+        $autoData = $infoObj.Info
+        if (-not $cn) { continue }
 
-    if ($existingData.ContainsKey($cn)) {
-        # CASE 1: Exists in TSV -> Preserve edits
-        $oldRow = $existingData[$cn]
-        foreach ($col in $Columns) {
-            if ($col -in @("Common Name", "Subject DN", "SAN Config")) {
-                $finalRow | Add-Member -MemberType NoteProperty -Name $col -Value $autoData[$col]
+        $finalRow = New-Object psobject
+        $processedCNs += $cn
+
+        if ($existingData.ContainsKey($cn)) {
+            # CASE 1: Exists in TSV -> Preserve edits
+            $oldRow = $existingData[$cn]
+            foreach ($col in $Columns) {
+                if ($col -in @("Common Name", "Subject DN", "SAN Config")) {
+                    $finalRow | Add-Member -MemberType NoteProperty -Name $col -Value $autoData[$col]
+                }
+                else {
+                    $finalRow | Add-Member -MemberType NoteProperty -Name $col -Value $oldRow.$col
+                }
+            }
+        }
+        elseif ($legacyIndex.ContainsKey($cn)) {
+            # CASE 2: New in TSV, but found in Legacy -> Prompt
+            $leg = $legacyIndex[$cn]
+            $useLeg = $false
+            
+            Write-Host "`n[Match Found] $cn" -ForegroundColor Cyan
+            Write-Host "  Legacy Data: Contact='$($leg.Contact)', Software='$($leg.Software)', Term='$($leg.Term)'" -ForegroundColor Gray
+            
+            if ($Interactive -and $LegacyAction -eq "Ask") {
+                $choice = Read-Host "  Use this legacy data? (Y/n/Edit)"
+                if ($choice -eq "n") { 
+                    $useLeg = $false 
+                }
+                elseif ($choice -match "^e") {
+                    $useLeg = $true
+                    $p = Read-Host "  Contact  [$($leg.Contact)]"; if ($p) { $leg.Contact = $p }
+                    $p = Read-Host "  Software [$($leg.Software)]"; if ($p) { $leg.Software = $p }
+                }
+                else { 
+                    $useLeg = $true 
+                }
+            }
+            elseif ($LegacyAction -eq "No") {
+                $useLeg = $false
             }
             else {
-                $finalRow | Add-Member -MemberType NoteProperty -Name $col -Value $oldRow.$col
-            }
-        }
-    }
-    elseif ($legacyIndex.ContainsKey($cn)) {
-        # CASE 2: New in TSV, but found in Legacy -> Prompt
-        $leg = $legacyIndex[$cn]
-        $useLeg = $false
-        
-        Write-Host "`n[Match Found] $cn" -ForegroundColor Cyan
-        Write-Host "  Legacy Data: Contact='$($leg.Contact)', Software='$($leg.Software)', Term='$($leg.Term)'" -ForegroundColor Gray
-        
-        if ($Interactive -and $LegacyAction -eq "Ask") {
-            $choice = Read-Host "  Use this legacy data? (Y/n/Edit)"
-            if ($choice -eq "n") { 
-                $useLeg = $false 
-            }
-            elseif ($choice -match "^e") {
                 $useLeg = $true
-                $p = Read-Host "  Contact  [$($leg.Contact)]"; if ($p) { $leg.Contact = $p }
-                $p = Read-Host "  Software [$($leg.Software)]"; if ($p) { $leg.Software = $p }
             }
-            else { 
-                $useLeg = $true 
+
+            foreach ($col in $Columns) {
+                $val = ""
+                if ($autoData.ContainsKey($col)) { 
+                    $val = $autoData[$col] 
+                }
+                elseif ($useLeg -and $leg.ContainsKey($col)) {
+                    $val = $leg[$col]
+                }
+                elseif ($defaults.ContainsKey($col)) {
+                    $val = $defaults[$col]
+                }
+                $finalRow | Add-Member -MemberType NoteProperty -Name $col -Value $val
             }
-        }
-        elseif ($LegacyAction -eq "No") {
-            $useLeg = $false
         }
         else {
-            $useLeg = $true # Yes or Default
-        }
-
-        foreach ($col in $Columns) {
-            $val = ""
-            if ($autoData.ContainsKey($col)) { 
-                $val = $autoData[$col] 
+            # CASE 3: Completely New -> Defaults
+            foreach ($col in $Columns) {
+                $val = ""
+                if ($autoData.ContainsKey($col)) { $val = $autoData[$col] }
+                elseif ($defaults.ContainsKey($col)) { $val = $defaults[$col] }
+                $finalRow | Add-Member -MemberType NoteProperty -Name $col -Value $val
             }
-            elseif ($useLeg -and $leg.ContainsKey($col)) {
-                $val = $leg[$col]
+        }
+        $mergedList.Add($finalRow)
+    }
+
+    foreach ($cn in $existingData.Keys) {
+        if ($processedCNs -notcontains $cn) { $mergedList.Add($existingData[$cn]) }
+    }
+
+    $sortedList = @($mergedList | Sort-Object "Common Name")
+
+    if (Test-Path $TsvFile) {
+        if ($Overwrite) {
+            $ts = (Get-Date).ToString("yyyyMMdd_HHmmss")
+            $base = [System.IO.Path]::GetFileNameWithoutExtension($TsvFile)
+            $ext = [System.IO.Path]::GetExtension($TsvFile)
+            $bakName = "$base.bak_$ts$ext"
+            
+            Write-Host "Backing up existing file to: $bakName" -ForegroundColor Gray
+            Rename-Item -LiteralPath $TsvFile -NewName $bakName -Force
+        }
+        elseif ($Interactive) {
+            Write-Host "`n[File Exists] '$TsvFile'" -ForegroundColor Yellow
+            $choice = Read-Host "  Overwrite this file? (Backups will be created) [y/N]"
+            if ($choice -notmatch "^[yY]") {
+                Write-Host "Operation cancelled by user." -ForegroundColor Yellow
+                Exit-ToolkitCancelled
             }
-            elseif ($defaults.ContainsKey($col)) {
-                $val = $defaults[$col]
-            }
-            $finalRow | Add-Member -MemberType NoteProperty -Name $col -Value $val
+            
+            $ts = (Get-Date).ToString("yyyyMMdd_HHmmss")
+            $base = [System.IO.Path]::GetFileNameWithoutExtension($TsvFile)
+            $ext = [System.IO.Path]::GetExtension($TsvFile)
+            $bakName = "$base.bak_$ts$ext"
+            
+            Write-Host "Backing up existing file to: $bakName" -ForegroundColor Gray
+            Rename-Item -LiteralPath $TsvFile -NewName $bakName -Force
+        }
+        else {
+            throw "Target file '$TsvFile' exists. Specify -Overwrite to proceed."
         }
     }
-    else {
-        # CASE 3: Completely New -> Defaults
-        foreach ($col in $Columns) {
-            $val = ""
-            if ($autoData.ContainsKey($col)) { $val = $autoData[$col] }
-            elseif ($defaults.ContainsKey($col)) { $val = $defaults[$col] }
-            $finalRow | Add-Member -MemberType NoteProperty -Name $col -Value $val
-        }
-    }
-    $mergedList.Add($finalRow)
+
+    Write-Host "`nSaving $($sortedList.Count) records to $TsvFile..." -ForegroundColor Cyan
+    $sortedList | Select-Object $Columns | Export-Csv -LiteralPath $TsvFile -Delimiter "`t" -NoTypeInformation -Encoding UTF8
+    Write-Host "Done." -ForegroundColor Green
 }
-
-# Orphans
-foreach ($cn in $existingData.Keys) {
-    if ($processedCNs -notcontains $cn) { $mergedList.Add($existingData[$cn]) }
-}
-
-$sortedList = $mergedList | Sort-Object "Common Name"
-
-# --- Safety & Backup ---
-if (Test-Path $TsvFile) {
-    if ($Overwrite) {
-        # Auto-Backup mode
-        $ts = (Get-Date).ToString("yyyyMMdd_HHmmss")
-        $base = [System.IO.Path]::GetFileNameWithoutExtension($TsvFile)
-        $ext = [System.IO.Path]::GetExtension($TsvFile)
-        $bakName = "$base.bak_$ts$ext"
-        $bakPath = Join-Path (Split-Path $TsvFile -Parent) $bakName
-        
-        Write-Host "Backing up existing file to: $bakName" -ForegroundColor Gray
-        Rename-Item -LiteralPath $TsvFile -NewName $bakName -Force
-    }
-    elseif ($Interactive) {
-        # Prompt mode
-        Write-Host "`n[File Exists] '$TsvFile'" -ForegroundColor Yellow
-        $choice = Read-Host "  Overwrite this file? (Backups will be created) [y/N]"
-        if ($choice -notmatch "^[yY]") {
-            Write-Host "Operation cancelled by user." -ForegroundColor Yellow
-            exit 0
-        }
-        
-        # User accepted -> Backup
-        $ts = (Get-Date).ToString("yyyyMMdd_HHmmss")
-        $base = [System.IO.Path]::GetFileNameWithoutExtension($TsvFile)
-        $ext = [System.IO.Path]::GetExtension($TsvFile)
-        $bakName = "$base.bak_$ts$ext"
-        $bakPath = Join-Path (Split-Path $TsvFile -Parent) $bakName
-        
-        Write-Host "Backing up existing file to: $bakName" -ForegroundColor Gray
-        Rename-Item -LiteralPath $TsvFile -NewName $bakName -Force
-    }
-    else {
-        # Non-interactive and no -Overwrite -> Fail safe
-        Write-Error "Target file '$TsvFile' exists. Specify -Overwrite to proceed."
-        exit 1
-    }
-}
-
-Write-Host "`nSaving $($sortedList.Count) records to $TsvFile..." -ForegroundColor Cyan
-$sortedList | Select-Object $Columns | Export-Csv -LiteralPath $TsvFile -Delimiter "`t" -NoTypeInformation -Encoding UTF8
-Write-Host "Done." -ForegroundColor Green
 
 

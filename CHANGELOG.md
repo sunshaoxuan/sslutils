@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - **Script Initialization Helpers**: Added shared runtime helpers for toolkit base-dir discovery, i18n initialization, toolkit path resolution, OpenSSL resolution, and common text lookup to reduce script entry boilerplate.
 - **Wider Entry Cleanup**: Applied the shared initialization helpers to CSR generation, CSR-from-old, PEM repair, sync, and modulus export scripts, and removed stray debug output from `New-CertificateSigningRequest.ps1`.
 - **Cancel Semantics**: Centralized the toolkit cancel exit code and related helpers in `runtime.ps1`, so scripts no longer scatter raw `exit 99` handling through business logic.
+- **Entry Wrapper**: Added shared `Invoke-ToolkitMain` error wrapper in `runtime.ps1` and moved remaining legacy entry scripts onto the shared bootstrap/helpers path instead of each carrying bespoke startup and error handling.
 - **Cleanup**: Removed dead helper code and outdated messages from `Convert-KeyToPlaintext.ps1`, `Request-SelfSignedCertificate.ps1`, and `Request-LetsEncryptCertificate.ps1` to keep the business scripts easier to maintain.
 
 ### Fixed

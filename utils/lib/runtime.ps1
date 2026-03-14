@@ -169,6 +169,29 @@ function Write-ToolkitException {
   Write-Host ("{0}: {1}" -f $Prefix, $message) -ForegroundColor Red
 }
 
+function Invoke-ToolkitMain {
+  param(
+    [Parameter(Mandatory)]
+    [scriptblock]$ScriptBlock,
+
+    [Parameter(Mandatory = $false)]
+    [string]$ErrorPrefix = "Error",
+
+    [Parameter(Mandatory = $false)]
+    [switch]$Rethrow
+  )
+
+  try {
+    & $ScriptBlock
+  }
+  catch {
+    Write-Host ""
+    Write-ToolkitException -ErrorRecord $_ -Prefix $ErrorPrefix
+    if ($Rethrow) { throw }
+    exit 1
+  }
+}
+
 function Initialize-ToolkitI18nContext {
   param(
     [Parameter(Mandatory)]
