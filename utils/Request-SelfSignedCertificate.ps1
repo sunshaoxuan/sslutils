@@ -78,16 +78,6 @@ function Select-ValidityPeriod {
   return $__ValidityPresets[$pick - 1].Days
 }
 
-function Wait-Continue([string]$message) {
-  if (Get-Command Wait-AnyKey -ErrorAction SilentlyContinue) {
-    Wait-AnyKey $message
-    return
-  }
-  Write-Host $message -NoNewline
-  try { $null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") } catch { }
-  Write-Host ""
-}
-
 function Resolve-OpenSslCommand([string]$openSslPath) {
   if (-not [string]::IsNullOrWhiteSpace($openSslPath) -and (Test-Path -LiteralPath $openSslPath -PathType Leaf)) {
     return $openSslPath
@@ -255,7 +245,7 @@ function Start-QuickMode([string]$openSslCmd, [string]$baseOutDir) {
   $orgDirs = @(Get-OldOrgDirs)
   if ($orgDirs.Count -eq 0) {
     Write-Host (T "SS.Menu.NoOrg") -ForegroundColor Yellow
-    Wait-Continue (T "SS.PressAnyKeyReturnOrg")
+    Wait-ToolkitAnyKey -Message (T "SS.PressAnyKeyReturnOrg")
     return
   }
 
@@ -277,7 +267,7 @@ function Start-QuickMode([string]$openSslCmd, [string]$baseOutDir) {
 
     if ($certFiles.Count -eq 0) {
       Write-Host (T "SS.Menu.NoCertInOrg" @($selected.Name)) -ForegroundColor Yellow
-      Wait-Continue (T "SS.PressAnyKeyReturnOrg")
+      Wait-ToolkitAnyKey -Message (T "SS.PressAnyKeyReturnOrg")
       continue
     }
 
@@ -312,7 +302,7 @@ function Start-QuickMode([string]$openSslCmd, [string]$baseOutDir) {
     Write-Host (T "SS.Quick.Completed" @($selected.Name)) -ForegroundColor Cyan
     Write-Host (T "SS.Quick.SuccessCount" @($ok)) -ForegroundColor Green
     Write-Host (T "SS.Quick.FailCount" @($ng)) -ForegroundColor Yellow
-    Wait-Continue (T "SS.PressAnyKeyReturnOrg")
+    Wait-ToolkitAnyKey -Message (T "SS.PressAnyKeyReturnOrg")
   }
 }
 
@@ -394,4 +384,3 @@ catch {
   Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red
   throw
 }
-

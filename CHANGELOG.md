@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - **PEM Export Normalization**: Exported `fullchain.pem` and `privkey.pem` are normalized automatically so they can be used directly without a separate repair step.
 - **PEM Repair UX**: `Repair-PemFile.ps1` now offers interactive source selection (`old`, `new`, `output/merged`, `output/self-signed`) before falling back to manual path input.
 - **Runtime Bootstrap**: Added shared `utils/lib/runtime.ps1` so entry scripts reuse the same PowerShell 7 guard, saved-language resolution, any-key wait handling, exception output, and UTF-8 console initialization instead of duplicating that logic.
+- **Cleanup**: Removed dead helper code and outdated messages from `Convert-KeyToPlaintext.ps1`, `Request-SelfSignedCertificate.ps1`, and `Request-LetsEncryptCertificate.ps1` to keep the business scripts easier to maintain.
 
 ### Fixed
 - **CAA Retry**: `Request-LetsEncryptCertificate.ps1` now detects `CAA SERVFAIL` responses from certbot and retries automatically with configurable backoff.

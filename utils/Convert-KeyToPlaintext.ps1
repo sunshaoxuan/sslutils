@@ -51,8 +51,8 @@ new\ 配下のすべての .key を再帰的に復号化
 
 .NOTES
 - パスワードファイルは、鍵ファイルのディレクトリから上位階層を自動探索します
-- 対話入力は行いません。passphrase.txt または PASS_FILE 環境変数が必要です
-- -InPlace は危険な操作のため、必ず -Overwrite と併用してください
+- パスフレーズの対話入力は行いません。passphrase.txt または PASS_FILE 環境変数が必要です
+- 既存の出力ファイルがある場合は、実行中にバックアップして上書きするか確認します
 #>
 
 param(
@@ -227,10 +227,6 @@ function Get-KeyCandidates([string]$p) {
     return @((Resolve-Path -LiteralPath $p).Path)
   }
   if (Test-Path -LiteralPath $p -PathType Container) {
-    if (-not $Recurse) {
-      # new/old の構造は階層が深いので、未指定でも再帰をデフォルト ON
-      return @((Get-ChildItem -LiteralPath $p -Recurse -File -Filter "*.key" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName))
-    }
     return @((Get-ChildItem -LiteralPath $p -Recurse -File -Filter "*.key" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName))
   }
   throw (T "DecryptKey.PathNotFound" @($p))

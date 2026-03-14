@@ -5,7 +5,7 @@ Let's Encrypt 証明書を Docker で自動申請するスクリプト
 .DESCRIPTION
 このスクリプトは、Docker + certbot を使用して Let's Encrypt から
 無料の SSL 証明書を取得します。HTTP-01 チャレンジ方式を使用し、
-手動でチャレンジファイルをサーバーに配置する必要があります。
+ローカル challenge ファイルの生成とローカル webroot への反映を自動化します。
 
 主な機能:
 - Docker コンテナで certbot を実行
@@ -54,6 +54,7 @@ example.com の証明書を申請
 .NOTES
 - Docker Desktop がインストールされ、実行中である必要があります
 - HTTP-01 チャレンジのため、ドメインの80番ポートがアクセス可能である必要があります
+- Web サーバーが別ホストにある場合は、challenge ファイルの遠隔同期が別途必要です
 #>
 
 param(
