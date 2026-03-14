@@ -32,13 +32,7 @@ $ToolkitLastUpdated = "2026-03-13"
 
 . (Join-Path $PSScriptRoot "utils\lib\defaults.ps1")
 
-$__langFile = Join-Path $PSScriptRoot ".toolkit_lang"
-if ([string]::IsNullOrWhiteSpace($Lang)) {
-    if (Test-Path -LiteralPath $__langFile -PathType Leaf) {
-        $Lang = (Get-Content -LiteralPath $__langFile -Raw -ErrorAction SilentlyContinue).Trim()
-    }
-    if ([string]::IsNullOrWhiteSpace($Lang)) { $Lang = $__DefaultLang }
-}
+$Lang = Resolve-ToolkitLanguage -Lang $Lang -BaseDir $PSScriptRoot -DefaultLang $__DefaultLang
 
 Initialize-ToolkitConsoleEncoding
 
@@ -281,7 +275,7 @@ try {
                 if ($newLang -ne $Lang) {
                     $Lang = $newLang
                     $__i18n = Initialize-I18n -Lang $Lang -BaseDir $PSScriptRoot
-                    Set-Content -LiteralPath $__langFile -Value $Lang -Encoding UTF8 -NoNewline -ErrorAction SilentlyContinue
+                    Save-ToolkitLanguage -Lang $Lang -BaseDir $PSScriptRoot
                 }
             }
             continue
@@ -314,8 +308,7 @@ try {
                     Write-Host ""
                     Write-Host (T "Toolkit.Menu.ScriptNotFound" @($scriptPath)) -ForegroundColor Red
                     Write-Host ""
-                    Write-Host (T "Toolkit.Menu.PressAnyKey") -ForegroundColor DarkGray
-                    try { $null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") } catch { }
+                    Wait-ToolkitAnyKey -Message (T "Toolkit.Menu.PressAnyKey")
                     continue
                 }
 
@@ -325,18 +318,17 @@ try {
                 Write-Host ""
 
                 try {
-                    try { $host.UI.RawUI.FlushInputBuffer() } catch { }
+                    Clear-ToolkitInputBuffer
                     & $scriptPath -Lang $Lang
                 }
                 catch {
                     Write-Host ""
-                    Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red
+                    Write-ToolkitException -ErrorRecord $_
                 }
                 finally {
                     if ($selectedTool.Wait -and $LASTEXITCODE -ne 99) {
                         Write-Host ""
-                        Write-Host (T "Toolkit.Menu.PressAnyKey") -ForegroundColor DarkGray
-                        try { $null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") } catch { }
+                        Wait-ToolkitAnyKey -Message (T "Toolkit.Menu.PressAnyKey")
                     }
                 }
             }
@@ -351,8 +343,7 @@ try {
             Write-Host ""
             Write-Host (T "Toolkit.Menu.ScriptNotFound" @($scriptPath)) -ForegroundColor Red
             Write-Host ""
-            Write-Host (T "Toolkit.Menu.PressAnyKey") -ForegroundColor DarkGray
-            try { $null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") } catch { }
+            Wait-ToolkitAnyKey -Message (T "Toolkit.Menu.PressAnyKey")
             continue
         }
         
@@ -362,18 +353,17 @@ try {
         Write-Host ""
         
         try {
-            try { $host.UI.RawUI.FlushInputBuffer() } catch { }
+            Clear-ToolkitInputBuffer
             & $scriptPath -Lang $Lang
         }
         catch {
             Write-Host ""
-            Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red
+            Write-ToolkitException -ErrorRecord $_
         }
         finally {
             if ($selectedTool.Wait -and $LASTEXITCODE -ne 99) {
                 Write-Host ""
-                Write-Host (T "Toolkit.Menu.PressAnyKey") -ForegroundColor DarkGray
-                try { $null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") } catch { }
+                Wait-ToolkitAnyKey -Message (T "Toolkit.Menu.PressAnyKey")
             }
         }
     }

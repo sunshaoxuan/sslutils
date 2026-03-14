@@ -2,6 +2,8 @@
 # 共通メニュー選択モジュール
 # 上下キーで選択、Enter で確定、ESC でキャンセル
 
+. (Join-Path $PSScriptRoot "runtime.ps1")
+
 <#
 .SYNOPSIS
 反転表示メニューで項目を選択する
@@ -193,10 +195,7 @@ function Read-HostWithEsc {
 #>
 function Wait-AnyKey {
     param([string]$Message = "Press any key to continue...")
-    
-    Write-Host $Message -NoNewline
-    $host.UI.RawUI.FlushInputBuffer()
-    $null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-    Write-Host ""
+
+    Wait-ToolkitAnyKey -Message $Message
 }
 

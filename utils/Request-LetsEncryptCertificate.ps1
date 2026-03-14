@@ -93,9 +93,11 @@ param(
 
 
 $ToolkitRoot = Split-Path -Parent $PSScriptRoot
+$runtimeModule = Join-Path $PSScriptRoot "lib\runtime.ps1"
+if (Test-Path -LiteralPath $runtimeModule -PathType Leaf) { . $runtimeModule }
 
 # Ensure clean buffer on start
-try { $host.UI.RawUI.FlushInputBuffer() } catch { }
+Clear-ToolkitInputBuffer
 
 # i18n 初期化
 $i18nModule = Join-Path $PSScriptRoot "lib\i18n.ps1"
@@ -110,30 +112,6 @@ if (Test-Path -LiteralPath $pathsModule -PathType Leaf) {
   . $pathsModule
 }
 $ToolkitPaths = if (Get-Command Get-ToolkitPaths -ErrorAction SilentlyContinue) { Get-ToolkitPaths -BaseDir $ToolkitRoot } else { $null }
-
-# Exit with Pause helper
-function Wait-And-Exit([int]$ExitCode = 99) {
-  Write-Host ""
-  
-  # Flush input buffer (robust method for Console)
-  if ($Host.Name -eq 'ConsoleHost') {
-    while ([Console]::KeyAvailable) { $null = [Console]::ReadKey($true) }
-  }
-  else {
-    try { $host.UI.RawUI.FlushInputBuffer() } catch { }
-  }
-
-  Write-Host (T "LE.PressAnyKeyToReturn") -ForegroundColor Cyan -NoNewline
-  
-  # Wait for Any Key
-  if ($Host.Name -eq 'ConsoleHost') {
-    $null = [Console]::ReadKey($true)
-  }
-  else {
-    $null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-  }
-  exit $ExitCode
-}
 
 # Docker コマンドの存在確認
 function Assert-CommandExists([string]$cmd) {
@@ -259,30 +237,30 @@ try {
     if (Get-Command Read-HostWithEsc -ErrorAction SilentlyContinue) {
       Write-Host (T "LE.InputDomainPrompt")
       # 念のためバッファクリア
-      try { $host.UI.RawUI.FlushInputBuffer() } catch { }
+      Clear-ToolkitInputBuffer
       $Domain = Read-HostWithEsc (T "Common.Prompt.Domain")
-      if ($null -eq $Domain) { Wait-And-Exit 99 }
+      if ($null -eq $Domain) { Exit-ToolkitWithPause -Message (T "LE.PressAnyKeyToReturn") -ExitCode 99 }
     }
     else {
       $Domain = Read-Host (T "Common.Prompt.Domain")
     }
   }
-  if ([string]::IsNullOrWhiteSpace($Domain)) { Wait-And-Exit 99 }
+  if ([string]::IsNullOrWhiteSpace($Domain)) { Exit-ToolkitWithPause -Message (T "LE.PressAnyKeyToReturn") -ExitCode 99 }
 
   # Email 入力確報
   if ([string]::IsNullOrWhiteSpace($Email)) {
     if (Get-Command Read-HostWithEsc -ErrorAction SilentlyContinue) {
       Write-Host (T "LE.InputEmailPrompt")
       # 念のためバッファクリア
-      try { $host.UI.RawUI.FlushInputBuffer() } catch { }
+      Clear-ToolkitInputBuffer
       $Email = Read-HostWithEsc (T "Common.Prompt.Email")
-      if ($null -eq $Email) { Wait-And-Exit 99 }
+      if ($null -eq $Email) { Exit-ToolkitWithPause -Message (T "LE.PressAnyKeyToReturn") -ExitCode 99 }
     }
     else {
       $Email = Read-Host (T "Common.Prompt.Email")
     }
   }
-  if ([string]::IsNullOrWhiteSpace($Email)) { Wait-And-Exit 99 }
+  if ([string]::IsNullOrWhiteSpace($Email)) { Exit-ToolkitWithPause -Message (T "LE.PressAnyKeyToReturn") -ExitCode 99 }
 
 
 
@@ -655,10 +633,10 @@ exit 0
   catch { }
 
   Write-Host (T "LE.CompletedMsg")
-  Wait-And-Exit 99
+  Exit-ToolkitWithPause -Message (T "LE.PressAnyKeyToReturn") -ExitCode 99
 }
 catch {
   Write-Host ""
-  Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red
-  Wait-And-Exit 99
+  Write-ToolkitException -ErrorRecord $_
+  Exit-ToolkitWithPause -Message (T "LE.PressAnyKeyToReturn") -ExitCode 99
 }

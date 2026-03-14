@@ -37,13 +37,7 @@ Assert-ToolkitPowerShell
 
 . (Join-Path $PSScriptRoot "lib\defaults.ps1")
 
-$__langFile = Join-Path $ToolkitRoot ".toolkit_lang"
-if ([string]::IsNullOrWhiteSpace($Lang)) {
-  if (Test-Path -LiteralPath $__langFile -PathType Leaf) {
-    $Lang = (Get-Content -LiteralPath $__langFile -Raw -ErrorAction SilentlyContinue).Trim()
-  }
-  if ([string]::IsNullOrWhiteSpace($Lang)) { $Lang = $__DefaultLang }
-}
+$Lang = Resolve-ToolkitLanguage -Lang $Lang -BaseDir $ToolkitRoot -DefaultLang $__DefaultLang
 
 $i18nModule = Join-Path $PSScriptRoot "lib\i18n.ps1"
 if (Test-Path -LiteralPath $i18nModule -PathType Leaf) {
