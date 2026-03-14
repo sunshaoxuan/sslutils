@@ -35,17 +35,18 @@ $runtimeModule = Join-Path $PSScriptRoot "lib\runtime.ps1"
 if (Test-Path -LiteralPath $runtimeModule -PathType Leaf) { . $runtimeModule }
 Assert-ToolkitPowerShell
 
-. (Join-Path $PSScriptRoot "lib\defaults.ps1")
+$ModuleRoot = $PSScriptRoot
+$ToolkitRoot = Get-ToolkitBaseDir -ModuleRoot $ModuleRoot
+
+. (Join-Path $ModuleRoot "lib\defaults.ps1")
 
 $Lang = Resolve-ToolkitLanguage -Lang $Lang -BaseDir $ToolkitRoot -DefaultLang $__DefaultLang
 
-$i18nModule = Join-Path $PSScriptRoot "lib\i18n.ps1"
-if (Test-Path -LiteralPath $i18nModule -PathType Leaf) {
-  . $i18nModule
-  $__i18n = Initialize-I18n -Lang $Lang -BaseDir $ToolkitRoot
+if (Test-Path -LiteralPath (Join-Path $ModuleRoot "lib\i18n.ps1") -PathType Leaf) {
+  $__i18n = Initialize-ToolkitI18nContext -ModuleRoot $ModuleRoot -Lang $Lang -BaseDir $ToolkitRoot
 }
 function T([string]$Key, [object[]]$FormatArgs = @()) {
-  if ($null -ne $__i18n) { return Get-I18nText -I18n $__i18n -Key $Key -FormatArgs $FormatArgs }
+  if ($null -ne $__i18n) { return Get-ToolkitText -I18n $__i18n -Key $Key -FormatArgs $FormatArgs }
   return $Key
 }
 

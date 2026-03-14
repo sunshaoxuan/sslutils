@@ -30,27 +30,26 @@ $ErrorActionPreference = "Stop"
 $ToolkitVersion = "1.5.3"
 $ToolkitLastUpdated = "2026-03-13"
 
-. (Join-Path $PSScriptRoot "utils\lib\defaults.ps1")
+$ModuleRoot = Join-Path $PSScriptRoot "utils"
+$ToolkitRoot = Get-ToolkitBaseDir -ModuleRoot $ModuleRoot
+
+. (Join-Path $ModuleRoot "lib\defaults.ps1")
 
 $Lang = Resolve-ToolkitLanguage -Lang $Lang -BaseDir $PSScriptRoot -DefaultLang $__DefaultLang
 
 Initialize-ToolkitConsoleEncoding
 
 # 共通モジュール読み込み
-$ScriptsDir = Join-Path $PSScriptRoot "utils"
+$ScriptsDir = $ModuleRoot
 $LibDir = Join-Path $ScriptsDir "lib"
 
 $menuModule = Join-Path $LibDir "menu.ps1"
 if (Test-Path -LiteralPath $menuModule -PathType Leaf) { . $menuModule }
 
-$i18nModule = Join-Path $LibDir "i18n.ps1"
-if (Test-Path -LiteralPath $i18nModule -PathType Leaf) {
-    . $i18nModule
-    $__i18n = Initialize-I18n -Lang $Lang -BaseDir $PSScriptRoot
-}
+$__i18n = Initialize-ToolkitI18nContext -ModuleRoot $ModuleRoot -Lang $Lang -BaseDir $PSScriptRoot
 function T([string]$Key, [object[]]$FormatArgs = @()) {
     if ($null -ne $__i18n) {
-        return Get-I18nText -I18n $__i18n -Key $Key -FormatArgs $FormatArgs
+        return Get-ToolkitText -I18n $__i18n -Key $Key -FormatArgs $FormatArgs
     }
     return $Key
 }

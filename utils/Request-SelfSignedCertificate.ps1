@@ -41,24 +41,20 @@ param(
 )
 
 
-$ToolkitRoot = Split-Path -Parent $PSScriptRoot
-
 $runtimeModule = Join-Path $PSScriptRoot "lib\runtime.ps1"
 if (Test-Path -LiteralPath $runtimeModule -PathType Leaf) { . $runtimeModule }
+$ModuleRoot = $PSScriptRoot
+$ToolkitRoot = Get-ToolkitBaseDir -ModuleRoot $ModuleRoot
 Initialize-ToolkitConsoleEncoding
 
-$i18nModule = Join-Path $PSScriptRoot "lib\i18n.ps1"
-if (-not (Test-Path -LiteralPath $i18nModule -PathType Leaf)) { throw "i18n module not found: $i18nModule" }
-. $i18nModule
-$__i18n = Initialize-I18n -Lang $Lang -BaseDir $ToolkitRoot
-function T([string]$Key, [object[]]$FormatArgs = @()) { return Get-I18nText -I18n $__i18n -Key $Key -FormatArgs $FormatArgs }
+$__i18n = Initialize-ToolkitI18nContext -ModuleRoot $ModuleRoot -Lang $Lang -BaseDir $ToolkitRoot
+function T([string]$Key, [object[]]$FormatArgs = @()) { return Get-ToolkitText -I18n $__i18n -Key $Key -FormatArgs $FormatArgs }
 
 $menuModule = Join-Path $PSScriptRoot "lib\menu.ps1"
 if (Test-Path -LiteralPath $menuModule -PathType Leaf) { . $menuModule }
-$pathsModule = Join-Path $PSScriptRoot "lib\paths.ps1"
-if (Test-Path -LiteralPath $pathsModule -PathType Leaf) { . $pathsModule }
-$ToolkitPaths = if (Get-Command Get-ToolkitPaths -ErrorAction SilentlyContinue) { Get-ToolkitPaths -BaseDir $ToolkitRoot } else { $null }
-$OpenSsl = Resolve-OpenSsl -Explicit $OpenSsl -ToolkitPaths $ToolkitPaths
+$openSslContext = Resolve-ToolkitOpenSsl -ModuleRoot $ModuleRoot -Explicit $OpenSsl -BaseDir $ToolkitRoot
+$ToolkitPaths = $openSslContext.ToolkitPaths
+$OpenSsl = $openSslContext.OpenSsl
 
 $__ValidityPresets = @(
   @{ Days = 90;   LabelKey = "SS.Validity.90d"  },

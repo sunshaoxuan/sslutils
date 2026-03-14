@@ -57,6 +57,15 @@ function Save-ToolkitLanguage {
   Set-Content -LiteralPath $langFile -Value $Lang -Encoding UTF8 -NoNewline -ErrorAction SilentlyContinue
 }
 
+function Get-ToolkitBaseDir {
+  param(
+    [Parameter(Mandatory)]
+    [string]$ModuleRoot
+  )
+
+  return (Split-Path -Parent $ModuleRoot)
+}
+
 function Initialize-ToolkitConsoleEncoding {
   try {
     [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
@@ -139,4 +148,123 @@ function Write-ToolkitException {
   }
 
   Write-Host ("{0}: {1}" -f $Prefix, $message) -ForegroundColor Red
+}
+
+function Initialize-ToolkitI18nContext {
+  param(
+    [Parameter(Mandatory)]
+    [string]$ModuleRoot,
+
+    [Parameter(Mandatory = $false)]
+    [string]$Lang = "",
+
+    [Parameter(Mandatory = $false)]
+    [string]$BaseDir = ""
+  )
+
+  if ([string]::IsNullOrWhiteSpace($BaseDir)) {
+    $BaseDir = Get-ToolkitBaseDir -ModuleRoot $ModuleRoot
+  }
+
+  $i18nModule = Join-Path $ModuleRoot "lib\i18n.ps1"
+  if (-not (Test-Path -LiteralPath $i18nModule -PathType Leaf)) {
+    throw "i18n module not found: $i18nModule"
+  }
+
+  . $i18nModule
+  return (Initialize-I18n -Lang $Lang -BaseDir $BaseDir)
+}
+
+function Get-ToolkitPathsContext {
+  param(
+    [Parameter(Mandatory)]
+    [string]$ModuleRoot,
+
+    [Parameter(Mandatory = $false)]
+    [string]$BaseDir = ""
+  )
+
+  if ([string]::IsNullOrWhiteSpace($BaseDir)) {
+    $BaseDir = Get-ToolkitBaseDir -ModuleRoot $ModuleRoot
+  }
+
+  $pathsModule = Join-Path $ModuleRoot "lib\paths.ps1"
+  if (-not (Test-Path -LiteralPath $pathsModule -PathType Leaf)) {
+    return $null
+  }
+
+  . $pathsModule
+  if (-not (Get-Command Get-ToolkitPaths -ErrorAction SilentlyContinue)) {
+    return $null
+  }
+
+  return (Get-ToolkitPaths -BaseDir $BaseDir)
+}
+
+function Resolve-ToolkitOpenSsl {
+  param(
+    [Parameter(Mandatory)]
+    [string]$ModuleRoot,
+
+    [Parameter(Mandatory = $false)]
+    [string]$Explicit = "",
+
+    [Parameter(Mandatory = $false)]
+    [string]$BaseDir = ""
+  )
+
+  if ([string]::IsNullOrWhiteSpace($BaseDir)) {
+    $BaseDir = Get-ToolkitBaseDir -ModuleRoot $ModuleRoot
+  }
+
+  $toolkitPaths = Get-ToolkitPathsContext -ModuleRoot $ModuleRoot -BaseDir $BaseDir
+  $openSsl = $Explicit
+
+  if (Get-Command Resolve-OpenSsl -ErrorAction SilentlyContinue) {
+    $openSsl = Resolve-OpenSsl -Explicit $Explicit -ToolkitPaths $toolkitPaths
+  }
+
+  return [PSCustomObject]@{
+    ToolkitPaths = $toolkitPaths
+    OpenSsl      = $openSsl
+  }
+}
+
+function Get-ToolkitText {
+  param(
+    [Parameter(Mandatory)]
+    [object]$I18n,
+
+    [Parameter(Mandatory)]
+    [string]$Key,
+
+    [Parameter(Mandatory = $false)]
+    [object[]]$FormatArgs = @()
+  )
+
+  $s = $null
+  try {
+    if ($null -ne $I18n.LangTable -and $I18n.LangTable.ContainsKey($Key)) {
+      $s = $I18n.LangTable[$Key]
+    }
+    elseif ($null -ne $I18n.Ja -and $I18n.Ja.ContainsKey($Key)) {
+      $s = $I18n.Ja[$Key]
+    }
+  }
+  catch { }
+
+  if ([string]::IsNullOrWhiteSpace([string]$s)) { $s = $Key }
+
+  $fmt = @()
+  if ($null -ne $FormatArgs) { $fmt = @($FormatArgs) }
+  if ($fmt.Length -gt 0) {
+    try {
+      if ($null -ne $s) {
+        return ([string]$s -f $fmt)
+      }
+    }
+    catch { }
+  }
+
+  return [string]$s
 }

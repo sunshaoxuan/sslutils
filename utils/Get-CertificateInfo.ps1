@@ -89,32 +89,27 @@ param(
 )
 
 
-$ToolkitRoot = Split-Path -Parent $PSScriptRoot
-
 $runtimeModule = Join-Path $PSScriptRoot "lib\runtime.ps1"
 if (Test-Path -LiteralPath $runtimeModule -PathType Leaf) { . $runtimeModule }
+$ModuleRoot = $PSScriptRoot
+$ToolkitRoot = Get-ToolkitBaseDir -ModuleRoot $ModuleRoot
 Initialize-ToolkitConsoleEncoding
 
-$i18nModule = Join-Path $PSScriptRoot "lib\\i18n.ps1"
-. $i18nModule
-$__i18n = Initialize-I18n -Lang $Lang -BaseDir $ToolkitRoot
+$__i18n = Initialize-ToolkitI18nContext -ModuleRoot $ModuleRoot -Lang $Lang -BaseDir $ToolkitRoot
 $securityModule = Join-Path $PSScriptRoot "lib\security.ps1"
 if (Test-Path -LiteralPath $securityModule -PathType Leaf) { . $securityModule }
-$pathsModule = Join-Path $PSScriptRoot "lib\paths.ps1"
-if (Test-Path -LiteralPath $pathsModule -PathType Leaf) { . $pathsModule }
 
 function T([string]$Key, $ArgList = @()) {
   # 明示的に配列化して Get-I18nText に渡す
   $arr = if ($null -eq $ArgList) { @() } else { @($ArgList) }
-  $res = Get-I18nText -I18n $__i18n -Key $Key -FormatArgs $arr
+  $res = Get-ToolkitText -I18n $__i18n -Key $Key -FormatArgs $arr
   return [string]$res
 }
 
-if (-not (Test-Path -LiteralPath $i18nModule -PathType Leaf)) { throw (T "Common.I18nModuleNotFound" @($i18nModule)) }
-
 $FixedPassFileName = "passphrase.txt"
-$ToolkitPaths = if (Get-Command Get-ToolkitPaths -ErrorAction SilentlyContinue) { Get-ToolkitPaths -BaseDir $ToolkitRoot } else { $null }
-$OpenSsl = Resolve-OpenSsl -Explicit $OpenSsl -ToolkitPaths $ToolkitPaths
+$openSslContext = Resolve-ToolkitOpenSsl -ModuleRoot $ModuleRoot -Explicit $OpenSsl -BaseDir $ToolkitRoot
+$ToolkitPaths = $openSslContext.ToolkitPaths
+$OpenSsl = $openSslContext.OpenSsl
 $toolOldDir = if ($null -ne $ToolkitPaths -and -not [string]::IsNullOrWhiteSpace($ToolkitPaths.Old)) { $ToolkitPaths.Old } else { Join-Path $ToolkitRoot "old" }
 $toolNewDir = if ($null -ne $ToolkitPaths -and -not [string]::IsNullOrWhiteSpace($ToolkitPaths.New)) { $ToolkitPaths.New } else { Join-Path $ToolkitRoot "new" }
 $toolMergedDir = if ($null -ne $ToolkitPaths -and -not [string]::IsNullOrWhiteSpace($ToolkitPaths.Merged)) { $ToolkitPaths.Merged } else { Join-Path $ToolkitRoot "output\merged" }
