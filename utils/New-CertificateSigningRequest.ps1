@@ -119,19 +119,18 @@ param(
   [string]$Lang = ""
 )
 
+$runtimeModule = Join-Path $PSScriptRoot "lib\runtime.ps1"
+if (Test-Path -LiteralPath $runtimeModule -PathType Leaf) { . $runtimeModule }
+$ModuleRoot = $PSScriptRoot
+$ToolkitRoot = Get-ToolkitBaseDir -ModuleRoot $ModuleRoot
+Initialize-ToolkitConsoleEncoding
 
-$ToolkitRoot = Split-Path -Parent $PSScriptRoot
+$openSslContext = Resolve-ToolkitOpenSsl -ModuleRoot $ModuleRoot -Explicit $OpenSsl -BaseDir $ToolkitRoot
+$ToolkitPaths = $openSslContext.ToolkitPaths
+$OpenSsl = $openSslContext.OpenSsl
 
-$pathsModule = Join-Path $PSScriptRoot "lib\paths.ps1"
-if (Test-Path -LiteralPath $pathsModule -PathType Leaf) { . $pathsModule }
-$ToolkitPaths = if (Get-Command Get-ToolkitPaths -ErrorAction SilentlyContinue) { Get-ToolkitPaths -BaseDir $ToolkitRoot } else { $null }
-$OpenSsl = Resolve-OpenSsl -Explicit $OpenSsl -ToolkitPaths $ToolkitPaths
-
-$i18nModule = Join-Path $PSScriptRoot "lib\\i18n.ps1"
-if (-not (Test-Path -LiteralPath $i18nModule -PathType Leaf)) { throw (T "Common.I18nModuleNotFound" @($i18nModule)) }
-. $i18nModule
-$__i18n = Initialize-I18n -Lang $Lang -BaseDir $ToolkitRoot
-function T([string]$Key, [object[]]$FormatArgs = @()) { return Get-I18nText -I18n $__i18n -Key $Key -FormatArgs $FormatArgs }
+$__i18n = Initialize-ToolkitI18nContext -ModuleRoot $ModuleRoot -Lang $Lang -BaseDir $ToolkitRoot
+function T([string]$Key, [object[]]$FormatArgs = @()) { return Get-ToolkitText -I18n $__i18n -Key $Key -FormatArgs $FormatArgs }
 
 # メニューモジュールを読み込む
 $menuModule = Join-Path $PSScriptRoot "lib\\menu.ps1"
@@ -139,48 +138,23 @@ if (Test-Path -LiteralPath $menuModule -PathType Leaf) {
   . $menuModule
 }
 
-# CN が空の場合（メニューから起動された場合など）、ECSキャンセルのカスタムプロンプト表示
-# CN が空の場合（メニューから起動された場合など）、ECSキャンセルのカスタムプロンプト表示
+# CN が空の場合（メニューから起動された場合など）、ESC キャンセル対応の入力を表示
 if ([string]::IsNullOrWhiteSpace($CN)) {
-  # DEBUG
-  Write-Host "DEBUG: CN is empty, entering input block" -ForegroundColor Magenta
-  Write-Host "DEBUG: Checking for Read-HostWithEsc..." -ForegroundColor Magenta
-
-  # メニューモジュールの Read-HostWithEsc を利用
   if (Get-Command Read-HostWithEsc -ErrorAction SilentlyContinue) {
-    Write-Host "DEBUG: Read-HostWithEsc found." -ForegroundColor Magenta
     Write-Host (T "MakeCsr.InputCnPrompt")
     Write-Host (T "MakeCsr.InputCnHint") -ForegroundColor Gray
-    
-    # Force Flush again just in case
-    try { $host.UI.RawUI.FlushInputBuffer() } catch { }
-    
+
+    Clear-ToolkitInputBuffer
     $CN = Read-HostWithEsc "CN"
-    
-    Write-Host "DEBUG: Read-HostWithEsc returned: '$CN' ($($CN.GetType().Name))" -ForegroundColor Magenta
-        
-    # ESC 押下時は $null が返る -> 99 (キャンセル) で終了
-    if ($null -eq $CN) { 
-      Write-Host "DEBUG: CN was null (ESC detected). Exiting 99." -ForegroundColor Red
-      if ($env:DEBUG_MODE -eq 'true') { Read-Host "Press Enter to exit..." }
-      exit 99 
-    }
+    if ($null -eq $CN) { exit 99 }
     $CN = $CN.Trim()
   }
   else {
-    Write-Host "DEBUG: Read-HostWithEsc NOT found. Using fallback." -ForegroundColor Magenta
-    # フォールバック (通常入力)
     $CN = Read-Host "CN"
-    Write-Host "DEBUG: Read-Host returned: '$CN'" -ForegroundColor Magenta
   }
 }
 
 if ([string]::IsNullOrWhiteSpace($CN)) {
-  Write-Host "DEBUG: CN is still empty. Exiting 99." -ForegroundColor Red
-  # Pause to see output
-  Write-Host "Press Enter to exit..."
-  try { $host.UI.RawUI.FlushInputBuffer(); $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") } catch { Read-Host }
-  
   exit 99
 }
 
@@ -463,5 +437,4 @@ Write-Host ""
 Write-Host (T "MakeCsr.PreviewTitle")
 Invoke-OpenSsl @("req", "-in", $csrPath, "-noout", "-subject") | Write-Output
 Invoke-OpenSsl @("req", "-in", $csrPath, "-noout", "-text") | Select-String -Pattern "Subject Alternative Name" -Context 0, 2 | ForEach-Object { $_.ToString() } | Write-Output
-
 

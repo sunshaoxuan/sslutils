@@ -64,19 +64,18 @@ param(
   [string]$Lang = ""
 )
 
+$runtimeModule = Join-Path $PSScriptRoot "lib\runtime.ps1"
+if (Test-Path -LiteralPath $runtimeModule -PathType Leaf) { . $runtimeModule }
+$ModuleRoot = $PSScriptRoot
+$ToolkitRoot = Get-ToolkitBaseDir -ModuleRoot $ModuleRoot
+Initialize-ToolkitConsoleEncoding
 
-$ToolkitRoot = Split-Path -Parent $PSScriptRoot
+$openSslContext = Resolve-ToolkitOpenSsl -ModuleRoot $ModuleRoot -Explicit $OpenSsl -BaseDir $ToolkitRoot
+$ToolkitPaths = $openSslContext.ToolkitPaths
+$OpenSsl = $openSslContext.OpenSsl
 
-$pathsModule = Join-Path $PSScriptRoot "lib\paths.ps1"
-if (Test-Path -LiteralPath $pathsModule -PathType Leaf) { . $pathsModule }
-$ToolkitPaths = if (Get-Command Get-ToolkitPaths -ErrorAction SilentlyContinue) { Get-ToolkitPaths -BaseDir $ToolkitRoot } else { $null }
-$OpenSsl = Resolve-OpenSsl -Explicit $OpenSsl -ToolkitPaths $ToolkitPaths
-
-$i18nModule = Join-Path $PSScriptRoot "lib\\i18n.ps1"
-if (-not (Test-Path -LiteralPath $i18nModule -PathType Leaf)) { throw (T "Common.I18nModuleNotFound" @($i18nModule)) }
-. $i18nModule
-$__i18n = Initialize-I18n -Lang $Lang -BaseDir $ToolkitRoot
-function T([string]$Key, [object[]]$FormatArgs = @()) { return Get-I18nText -I18n $__i18n -Key $Key -FormatArgs $FormatArgs }
+$__i18n = Initialize-ToolkitI18nContext -ModuleRoot $ModuleRoot -Lang $Lang -BaseDir $ToolkitRoot
+function T([string]$Key, [object[]]$FormatArgs = @()) { return Get-ToolkitText -I18n $__i18n -Key $Key -FormatArgs $FormatArgs }
 
 $FixedPassFileName = "passphrase.txt"
 
@@ -266,7 +265,6 @@ Write-Host (T "ShowModulus.SummaryCertCount" @($certCount))
 Write-Host (T "ShowModulus.SummaryKeyCount" @($keyCount))
 Write-Host ""
 Write-Host (T "ShowModulus.SavedTo" @((Resolve-Path -LiteralPath $OutFile)))
-
 
 
 

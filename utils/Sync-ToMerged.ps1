@@ -29,16 +29,16 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
-$ToolkitRoot = Split-Path -Parent $PSScriptRoot
 
 $runtimeModule = Join-Path $PSScriptRoot "lib\runtime.ps1"
 if (Test-Path -LiteralPath $runtimeModule -PathType Leaf) { . $runtimeModule }
+$ModuleRoot = $PSScriptRoot
+$ToolkitRoot = Get-ToolkitBaseDir -ModuleRoot $ModuleRoot
 Initialize-ToolkitConsoleEncoding
 
-$pathsModule = Join-Path $PSScriptRoot "lib\paths.ps1"
-if (Test-Path -LiteralPath $pathsModule -PathType Leaf) { . $pathsModule }
-$ToolkitPaths = if (Get-Command Get-ToolkitPaths -ErrorAction SilentlyContinue) { Get-ToolkitPaths -BaseDir $ToolkitRoot } else { $null }
-$OpenSsl = Resolve-OpenSsl -Explicit $OpenSsl -ToolkitPaths $ToolkitPaths
+$openSslContext = Resolve-ToolkitOpenSsl -ModuleRoot $ModuleRoot -Explicit $OpenSsl -BaseDir $ToolkitRoot
+$ToolkitPaths = $openSslContext.ToolkitPaths
+$OpenSsl = $openSslContext.OpenSsl
 
 $newDir = if ($null -ne $ToolkitPaths -and -not [string]::IsNullOrWhiteSpace($ToolkitPaths.New)) { $ToolkitPaths.New } else { Join-Path $ToolkitRoot "new" }
 $mergedDir = if ($null -ne $ToolkitPaths -and -not [string]::IsNullOrWhiteSpace($ToolkitPaths.Merged)) { $ToolkitPaths.Merged } else { Join-Path $ToolkitRoot "output\merged" }
@@ -46,11 +46,7 @@ $legacyMergedNewDir = if ($null -ne $ToolkitPaths -and -not [string]::IsNullOrWh
 $legacyNewName = [IO.Path]::GetFileName($legacyMergedNewDir.TrimEnd('\', '/'))
 
 # i18n
-$i18nModule = Join-Path $PSScriptRoot "lib\i18n.ps1"
-if (Test-Path -LiteralPath $i18nModule -PathType Leaf) {
-    . $i18nModule
-    $__i18n = Initialize-I18n -Lang $Lang -BaseDir $ToolkitRoot
-}
+$__i18n = Initialize-ToolkitI18nContext -ModuleRoot $ModuleRoot -Lang $Lang -BaseDir $ToolkitRoot
 
 # Security helper (Find-PassFile, Get-Passphrases, Test-KeyEncrypted, Invoke-TempPassFile)
 $securityModule = Join-Path $PSScriptRoot "lib\security.ps1"
@@ -67,7 +63,7 @@ $FixedPassFileName = "passphrase.txt"
 function T([string]$Key, $ArgList = @()) {
     if ($null -ne $__i18n) {
         $arr = if ($null -eq $ArgList) { @() } else { @($ArgList) }
-        return Get-I18nText -I18n $__i18n -Key $Key -FormatArgs $arr
+        return Get-ToolkitText -I18n $__i18n -Key $Key -FormatArgs $arr
     }
     return $Key
 }
