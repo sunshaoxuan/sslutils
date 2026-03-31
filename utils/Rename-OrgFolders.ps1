@@ -6,7 +6,8 @@
 
 param(
     [switch]$AutoYes = $false, # 自動確認（注意して使用してください）
-    [switch]$DryRun = $false   # 試走のみ（変更は行いません）
+    [switch]$DryRun = $false,  # 試走のみ（変更は行いません）
+    [string]$Domain = ""
 )
 
 Set-StrictMode -Version Latest
@@ -365,7 +366,11 @@ Invoke-ToolkitMain -ScriptBlock {
             }
         }
     }
-    $uniqueDomains = $allDomains | Select-Object -Unique | Sort-Object
+    $uniqueDomains = @($allDomains | Select-Object -Unique | Sort-Object)
+
+    if (-not [string]::IsNullOrWhiteSpace($Domain)) {
+        $uniqueDomains = @($uniqueDomains | Where-Object { $_ -eq $Domain })
+    }
 
     if ($uniqueDomains.Count -eq 0) {
         Write-Host "No folders found." -ForegroundColor Yellow

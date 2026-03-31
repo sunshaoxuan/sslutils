@@ -24,6 +24,12 @@ $runtimeModule = Join-Path $PSScriptRoot "utils\lib\runtime.ps1"
 if (Test-Path -LiteralPath $runtimeModule -PathType Leaf) { . $runtimeModule }
 Assert-ToolkitPowerShell -CommandHint "pwsh -File .\Invoke-SSLToolkit.ps1"
 
+function Get-SafeLastExitCode {
+    $lastExitCodeVar = Get-Variable -Name LASTEXITCODE -Scope Global -ErrorAction SilentlyContinue
+    if ($null -eq $lastExitCodeVar) { return 0 }
+    return [int]$lastExitCodeVar.Value
+}
+
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
@@ -325,7 +331,8 @@ try {
                     Write-ToolkitException -ErrorRecord $_
                 }
                 finally {
-                    if ($selectedTool.Wait -and -not (Test-ToolkitCancelledExitCode -ExitCode $LASTEXITCODE)) {
+                    $exitCode = Get-SafeLastExitCode
+                    if ($selectedTool.Wait -and -not (Test-ToolkitCancelledExitCode -ExitCode $exitCode)) {
                         Write-Host ""
                         Wait-ToolkitAnyKey -Message (T "Toolkit.Menu.PressAnyKey")
                     }
@@ -360,7 +367,8 @@ try {
             Write-ToolkitException -ErrorRecord $_
         }
         finally {
-            if ($selectedTool.Wait -and -not (Test-ToolkitCancelledExitCode -ExitCode $LASTEXITCODE)) {
+            $exitCode = Get-SafeLastExitCode
+            if ($selectedTool.Wait -and -not (Test-ToolkitCancelledExitCode -ExitCode $exitCode)) {
                 Write-Host ""
                 Wait-ToolkitAnyKey -Message (T "Toolkit.Menu.PressAnyKey")
             }

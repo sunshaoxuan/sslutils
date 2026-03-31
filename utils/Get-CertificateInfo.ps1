@@ -1288,7 +1288,12 @@ function Show-OneFile {
           if ($line -match "^subject=(.*)") { $data["subject"] = $matches[1] }
         }
         $subjRaw = Invoke-OpenSsl @("req", "-in", $path, "-noout", "-subject", "-nameopt", "RFC2253")
-        if ($subjRaw -match "^subject=(.*)") { $data["subject"] = $matches[1] }
+        foreach ($line in @($subjRaw | ForEach-Object { $_ })) {
+          if ($line -match "^subject=(.*)") {
+            $data["subject"] = $matches[1]
+            break
+          }
+        }
 
         $hasSan = ($sanList.Count -gt 0)
         $isLastParams = -not $hasSan
@@ -1870,19 +1875,21 @@ function Show-Folder([string]$folderPath, [string]$label, [string]$oldRootForNew
       if ($ext -eq ".csr") {
         $subj = ""
         $cn = ""
-        $note = ""
         try {
-          $out = Invoke-OpenSsl @("req", "-in", $f.FullName, "-noout", "-subject")
-          $subj = (($out | Select-Object -First 1) -replace "^subject=", "").Trim()
+          $out = Invoke-OpenSsl @("req", "-in", $f.FullName, "-noout", "-subject", "-nameopt", "RFC2253")
+          $firstLine = @($out | ForEach-Object { $_ } | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } | Select-Object -First 1)
+          if ($firstLine.Count -gt 0) {
+            $subj = ([string]$firstLine[0] -replace "^subject=", "").Trim()
+          }
           if ($subj -match "(?:^|[,/\\s])CN\\s*=\\s*([^,\\/]+)") { $cn = $matches[1].Trim() }
         }
         catch { $subj = "" }
-        if (-not [string]::IsNullOrWhiteSpace($cn)) { $note = "CN=$cn" } else { $note = $subj }
         $csrRows.Add([PSCustomObject]@{
             File     = $name
             Dir      = Split-Path -Parent $f.FullName
             FileName = $f.Name
-            Subject  = $note
+            Subject  = $subj
+            CN       = $cn
           }) | Out-Null
         continue
       }

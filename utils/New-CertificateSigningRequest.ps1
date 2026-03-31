@@ -138,6 +138,8 @@ if (Test-Path -LiteralPath $menuModule -PathType Leaf) {
   . $menuModule
 }
 
+$interactiveInput = (-not $PSBoundParameters.ContainsKey("CN"))
+
 # CN が空の場合（メニューから起動された場合など）、ESC キャンセル対応の入力を表示
 if ([string]::IsNullOrWhiteSpace($CN)) {
   if (Get-Command Read-HostWithEsc -ErrorAction SilentlyContinue) {
@@ -145,12 +147,12 @@ if ([string]::IsNullOrWhiteSpace($CN)) {
     Write-Host (T "MakeCsr.InputCnHint") -ForegroundColor Gray
 
     Clear-ToolkitInputBuffer
-    $CN = Read-HostWithEsc "CN"
+    $CN = Read-HostWithEsc (T "MakeCsr.PromptCn")
     if ($null -eq $CN) { Exit-ToolkitCancelled }
     $CN = $CN.Trim()
   }
   else {
-    $CN = Read-Host "CN"
+    $CN = Read-Host (T "MakeCsr.PromptCn")
   }
 }
 
@@ -158,7 +160,8 @@ if ([string]::IsNullOrWhiteSpace($CN)) {
   Exit-ToolkitCancelled
 }
 
-if ([string]::IsNullOrWhiteSpace($OutDir)) {
+$useDefaultOutDir = [string]::IsNullOrWhiteSpace($OutDir)
+if ($useDefaultOutDir) {
   if ($null -ne $ToolkitPaths -and -not [string]::IsNullOrWhiteSpace($ToolkitPaths.New)) { $OutDir = $ToolkitPaths.New }
   else { $OutDir = Join-Path $ToolkitRoot "new" }
 }
@@ -255,6 +258,75 @@ function ConvertFrom-SanInput([string]$raw) {
   return @($raw -split "[,;\s]+" | Where-Object { $_ -ne "" })
 }
 
+function ConvertTo-SafeFolderName([string]$value) {
+  if ([string]::IsNullOrWhiteSpace($value)) { return "" }
+
+  $invalidChars = [IO.Path]::GetInvalidFileNameChars()
+  $safe = $value.Trim()
+  foreach ($char in $invalidChars) {
+    $safe = $safe.Replace([string]$char, "_")
+  }
+
+  return $safe.Trim().TrimEnd(".")
+}
+
+function Get-DefaultCsrOutputDirectory([string]$newRoot, [string]$cn) {
+  if ([string]::IsNullOrWhiteSpace($newRoot)) { return $newRoot }
+
+  $folderName = ConvertTo-SafeFolderName $cn
+  if ([string]::IsNullOrWhiteSpace($folderName)) { return $newRoot }
+  return (Join-Path $newRoot $folderName)
+}
+
+function Invoke-PostCreateFolderRename([string]$currentOutDir, [string]$cn) {
+  if ([string]::IsNullOrWhiteSpace($currentOutDir) -or [string]::IsNullOrWhiteSpace($cn)) { return $currentOutDir }
+
+  $renameScript = Join-Path $ToolkitRoot "utils\Rename-OrgFolders.ps1"
+  if (-not (Test-Path -LiteralPath $renameScript -PathType Leaf)) { return $currentOutDir }
+
+  $parentDir = Split-Path -Parent $currentOutDir
+  $originalLeaf = Split-Path -Leaf $currentOutDir
+
+  try {
+    & $renameScript -AutoYes -Domain $cn | Out-Null
+  }
+  catch {
+    return $currentOutDir
+  }
+
+  $resolvedOriginal = Join-Path $parentDir $originalLeaf
+  if (Test-Path -LiteralPath $resolvedOriginal -PathType Container) { return $resolvedOriginal }
+
+  $match = Get-ChildItem -LiteralPath $parentDir -Directory -ErrorAction SilentlyContinue |
+    Where-Object {
+      (Test-Path -LiteralPath (Join-Path $_.FullName ("{0}.csr" -f $cn)) -PathType Leaf) -or
+      (Test-Path -LiteralPath (Join-Path $_.FullName ("{0}.key" -f $cn)) -PathType Leaf)
+    } |
+    Select-Object -First 1
+
+  if ($null -ne $match) { return $match.FullName }
+  return $currentOutDir
+}
+
+function Read-SubjectComponent([string]$promptLabel, [string]$currentValue) {
+  $displayPrompt = $promptLabel
+  if (-not [string]::IsNullOrWhiteSpace($currentValue)) {
+    $displayPrompt = "{0} [{1}]" -f $promptLabel, $currentValue
+  }
+
+  if (Get-Command Read-HostWithEsc -ErrorAction SilentlyContinue) {
+    Clear-ToolkitInputBuffer
+    $inputValue = Read-HostWithEsc $displayPrompt
+    if ($null -eq $inputValue) { Exit-ToolkitCancelled }
+  }
+  else {
+    $inputValue = Read-Host $displayPrompt
+  }
+
+  if ([string]::IsNullOrWhiteSpace($inputValue)) { return $currentValue }
+  return $inputValue.Trim()
+}
+
 function Read-SanSelection([string]$cn) {
   # メニューモジュールが利用可能かチェック
   $useMenu = $false
@@ -332,15 +404,6 @@ function Read-SanSelection([string]$cn) {
 }
 
 Assert-ExistsFile $OpenSsl "OpenSSL"
-New-DirectoryIfMissing $OutDir
-
-# (CN check moved to top)
-
-$sanItems = @()
-if ($WithSAN) {
-  $sanItems = Read-SanSelection $CN
-}
-$sanOpt = Build-SanOpt $sanItems
 
 $subj = $Subject
 if ([string]::IsNullOrWhiteSpace($subj)) {
@@ -361,11 +424,31 @@ if ([string]::IsNullOrWhiteSpace($subj)) {
     }
   }
 
+  if ($interactiveInput) {
+    Write-Host ""
+    Write-Host (T "MakeCsr.SubjectInputPrompt")
+    $C = Read-SubjectComponent (T "MakeCsr.PromptC") $C
+    $ST = Read-SubjectComponent (T "MakeCsr.PromptST") $ST
+    $L = Read-SubjectComponent (T "MakeCsr.PromptL") $L
+    $O = Read-SubjectComponent (T "MakeCsr.PromptO") $O
+  }
+
   if ([string]::IsNullOrWhiteSpace($C) -or [string]::IsNullOrWhiteSpace($ST) -or [string]::IsNullOrWhiteSpace($L) -or [string]::IsNullOrWhiteSpace($O)) {
     throw (T "MakeCsr.SubjectMissing")
   }
   $subj = "/C=$C/ST=$ST/L=$L/O=$O/CN=$CN"
 }
+
+if ($useDefaultOutDir) {
+  $OutDir = Get-DefaultCsrOutputDirectory $OutDir $CN
+}
+New-DirectoryIfMissing $OutDir
+
+$sanItems = @()
+if ($WithSAN) {
+  $sanItems = Read-SanSelection $CN
+}
+$sanOpt = @(Build-SanOpt $sanItems)
 
 $keyPath = Join-Path $OutDir ($CN + ".key")
 $csrPath = Join-Path $OutDir ($CN + ".csr")
@@ -429,6 +512,15 @@ else {
   $args = @("req", "-new", "-newkey", ("rsa:{0}" -f $RsaBits), "-sha256", "-nodes", "-keyout", $keyPath, "-out", $csrPath, "-subj", $subj)
   if ($sanOpt.Count -gt 0) { $args += $sanOpt }
   Invoke-OpenSsl $args | Out-Null
+}
+
+if ($useDefaultOutDir) {
+  $resolvedOutDir = Invoke-PostCreateFolderRename $OutDir $CN
+  if (-not [string]::IsNullOrWhiteSpace($resolvedOutDir) -and $resolvedOutDir -ne $OutDir) {
+    $OutDir = $resolvedOutDir
+    $keyPath = Join-Path $OutDir ($CN + ".key")
+    $csrPath = Join-Path $OutDir ($CN + ".csr")
+  }
 }
 
 Write-Host (T "MakeCsr.DoneKey" @((Resolve-Path -LiteralPath $keyPath)))

@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Changed
+- **New CSR Interactive Flow**: `New-CertificateSigningRequest.ps1` now asks for complete Subject fields (`C/ST/L/O`) before SAN selection during interactive creation, instead of jumping from CN directly into SAN setup.
+- **New CSR Folder Workflow**: Fresh CSR creation again starts from `new/<CN>/`, matching the documented domain-folder workflow, and then immediately triggers the folder rename logic for that single domain after generation completes.
+- **Immediate Org Rename**: `Rename-OrgFolders.ps1` now accepts an optional `-Domain` filter so CSR creation can rename only the newly generated domain folder instead of waiting for the next toolkit launch.
+- **SAN Menu Wording**: Updated SAN menu labels and missing CSR prompt strings in all language resources so the UI explains that option 1 means “add CN to SAN” rather than “only CN exists”.
+
+### Fixed
+- **CSR Subject Display**: `Get-CertificateInfo.ps1` now preserves and renders the full CSR Subject in both list/detail views instead of collapsing it to `CN=...` or leaving the detail view blank.
+- **CSR Detail Parsing**: Fixed CSR Subject parsing in the OpenSSL detail view by flattening OpenSSL output correctly before regex extraction, so valid Subjects now display reliably.
+- **Launcher Exit Handling**: `Invoke-SSLToolkit.ps1` now guards `$LASTEXITCODE` access so menu returns no longer crash when a child script exits without setting it.
+
 ## [1.5.3] - 2026-03-13
 
 ### Changed

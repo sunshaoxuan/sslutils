@@ -102,6 +102,7 @@ Generate CSR and private key.
 ```powershell
 .\utils\New-CertificateSigningRequest.ps1 -CN example.com -C JP -ST Tokyo -L Tokyo -O "Example Corp"
 ```
+Interactive mode now asks for `CN` first, then confirms `C / ST / L / O`, and only after that shows the SAN menu. By default it creates `new/<CN>/`, writes the CSR/key there, and then immediately runs the organization rename logic for that single domain so the folder can become `Org Name (host)` without waiting for the next launcher start.
 
 5) `Export-CertificateModulus.ps1`
 Export modulus values.
@@ -159,6 +160,8 @@ On each launch, `Invoke-SSLToolkit.ps1` runs `Rename-OrgFolders.ps1 -AutoYes` wh
    - **Website probe**: Connects to `https://<domain>` to read the TLS certificate's organization or the page title
 3. If found, proposes renaming the folder from `example.co.jp` to `ExampleCorp (example)` (organization name + hostname in parentheses)
 4. Renames matching folders across all three directories (`old/`, `new/`, `output/merged/`) to keep them in sync
+
+Fresh CSR creation also reuses the same rename logic immediately after generation, but limits the run to the newly created domain folder so the new artifacts land in the final organization folder right away.
 
 **Example:**
 
