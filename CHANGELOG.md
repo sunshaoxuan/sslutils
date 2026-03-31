@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [1.5.4] - 2026-03-31
 
 ### Changed
 - **New CSR Interactive Flow**: `New-CertificateSigningRequest.ps1` now asks for complete Subject fields (`C/ST/L/O`) before SAN selection during interactive creation, instead of jumping from CN directly into SAN setup.

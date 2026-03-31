@@ -33,8 +33,8 @@ function Get-SafeLastExitCode {
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$ToolkitVersion = "1.5.3"
-$ToolkitLastUpdated = "2026-03-13"
+$ToolkitVersion = "1.5.4"
+$ToolkitLastUpdated = "2026-03-31"
 
 $ModuleRoot = Join-Path $PSScriptRoot "utils"
 $ToolkitRoot = Get-ToolkitBaseDir -ModuleRoot $ModuleRoot

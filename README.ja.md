@@ -8,7 +8,7 @@
 ## 概要
 証明書・秘密鍵・CSR を扱う PowerShell スクリプト集です。多機関対応と多言語対応を前提にしています。
 
-## バージョン (v1.5.3)
+## バージョン (v1.5.4)
 - **Let's Encrypt 出力整理**: 証明書は既定で `output/self-signed/lets-encrypt/<domain>` に出力され、一時作業は `temp/lets-encrypt/` に移動し、成功後に自動削除されます。
 - **PEM 自動正規化**: 出力される `fullchain.pem` / `privkey.pem` は自動で改行・ヘッダを正規化し、そのまま利用しやすくなりました。
 - **CAA SERVFAIL 自動再試行**: 一時的な DNS `CAA SERVFAIL` 失敗時に Let's Encrypt 申請を自動再試行します。

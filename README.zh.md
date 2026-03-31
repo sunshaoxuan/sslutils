@@ -5,14 +5,14 @@
 - 中文: README.zh.md (本文件)
 - 日本語: [README.ja.md](README.ja.md)
 
-**Ver 1.5.3**
+**Ver 1.5.4**
 https://github.com/sunshaoxuan
 
 这是一个功能强大的 PowerShell 脚本集合，用于自动化管理 SSL 证书、私钥和 CSR。支持多语言（可通过配置文件扩展）、多机构管理，并提供统一的菜单界面。
 
 ---
 
-## 📅 版本更新 (v1.5.3)
+## 📅 版本更新 (v1.5.4)
 - **Let's Encrypt 输出整理**: 默认导出到 `output/self-signed/lets-encrypt/<domain>`，临时工作目录移到 `temp/lets-encrypt/`，成功后自动清理。
 - **PEM 自动修复**: 导出的 `fullchain.pem` 和 `privkey.pem` 会自动规范化换行和头尾格式，生成后可直接使用。
 - **CAA SERVFAIL 自动重试**: 遇到临时性的 DNS `CAA SERVFAIL` 时，Let's Encrypt 申请会自动重试。

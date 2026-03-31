@@ -8,7 +8,7 @@ Languages:
 ## Overview
 PowerShell scripts to manage certificates, keys, and CSRs with multi-org and multi-language support.
 
-## What's New (v1.5.3)
+## What's New (v1.5.4)
 - **Let's Encrypt Output Cleanup**: Issued certificates now go to `output/self-signed/lets-encrypt/<domain>`, while temporary work data moves to `temp/lets-encrypt/` and is cleaned automatically after success.
 - **Automatic PEM Normalization**: Exported `fullchain.pem` and `privkey.pem` are normalized automatically, so they are usable without a separate repair step.
 - **CAA SERVFAIL Retry**: Let's Encrypt requests now auto-retry on transient `CAA SERVFAIL` DNS failures.
