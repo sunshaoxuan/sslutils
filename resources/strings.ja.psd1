@@ -429,8 +429,8 @@
 
   # File Matching Validation
   "Matching.Title"                           = "一致性検証"
-  "Matching.KeyCsr"                          = "KEY ⇔ CSR (モジュラス)"
-  "Matching.KeyCer"                          = "KEY ⇔ CER (モジュラス)"
+  "Matching.KeyCsr"                          = "KEY ⇔ CSR (公開鍵)"
+  "Matching.KeyCer"                          = "KEY ⇔ CER (公開鍵)"
   "Matching.CsrTsvCn"                        = "CSR ⇔ TSV (CN)"
   "Matching.CsrTsvContent"                   = "CSR ⇔ TSV (内容)"
 

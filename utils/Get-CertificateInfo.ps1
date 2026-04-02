@@ -643,8 +643,8 @@ function Invoke-KeyTextOutput([string]$keyPath, [string]$passFile = "") {
     @("ec",   "-in", $keyPath, "-noout", "-text")
   )
 
-  foreach ($args in $commands) {
-    $cmdArgs = @($args)
+  foreach ($cmdTemplate in $commands) {
+    $cmdArgs = @($cmdTemplate)
     if (-not [string]::IsNullOrWhiteSpace($passFile)) {
       $cmdArgs += @("-passin", ("file:{0}" -f $passFile))
     }
@@ -906,15 +906,26 @@ function Get-KeyBit([string]$keyPath, [string[]]$passphrases) {
   return $false
 }
 
-# === 暗号化対応キー Modulus 取得 ===
-function Get-KeyModulus([string]$keyPath, [string[]]$passphrases) {
+# === 暗号化対応キー 公開鍵PEM取得 (RSA/ECC 両対応) ===
+function Get-KeyPubPem([string]$keyPath, [string[]]$passphrases) {
   $isEnc = Test-KeyEncrypted $keyPath
   if (-not $isEnc) {
     try {
-      $out = (Invoke-OpenSsl @("rsa", "-in", $keyPath, "-noout", "-modulus") | Out-String) -replace "Modulus=", ""
-      return $out.Trim()
+      $out = (Invoke-OpenSsl @("pkey", "-in", $keyPath, "-pubout") | Out-String).Trim()
+      if (-not [string]::IsNullOrWhiteSpace($out)) { return $out }
     }
-    catch { return $null }
+    catch { }
+    try {
+      $out = (Invoke-OpenSsl @("rsa", "-in", $keyPath, "-pubout") | Out-String).Trim()
+      if (-not [string]::IsNullOrWhiteSpace($out)) { return $out }
+    }
+    catch { }
+    try {
+      $out = (Invoke-OpenSsl @("ec", "-in", $keyPath, "-pubout") | Out-String).Trim()
+      if (-not [string]::IsNullOrWhiteSpace($out)) { return $out }
+    }
+    catch { }
+    return $null
   }
 
   foreach ($p in @($passphrases)) {
@@ -922,8 +933,26 @@ function Get-KeyModulus([string]$keyPath, [string[]]$passphrases) {
     try {
       $result = Invoke-TempPassFile $p {
         param($tmpPass)
-        $out = (Invoke-OpenSsl @("rsa", "-in", $keyPath, "-noout", "-modulus", "-passin", ("file:{0}" -f $tmpPass)) | Out-String) -replace "Modulus=", ""
-        $out.Trim()
+        $out = (Invoke-OpenSsl @("pkey", "-in", $keyPath, "-pubout", "-passin", ("file:{0}" -f $tmpPass)) | Out-String).Trim()
+        $out
+      }
+      if (-not [string]::IsNullOrWhiteSpace($result)) { return $result }
+    }
+    catch { }
+    try {
+      $result = Invoke-TempPassFile $p {
+        param($tmpPass)
+        $out = (Invoke-OpenSsl @("rsa", "-in", $keyPath, "-pubout", "-passin", ("file:{0}" -f $tmpPass)) | Out-String).Trim()
+        $out
+      }
+      if (-not [string]::IsNullOrWhiteSpace($result)) { return $result }
+    }
+    catch { }
+    try {
+      $result = Invoke-TempPassFile $p {
+        param($tmpPass)
+        $out = (Invoke-OpenSsl @("ec", "-in", $keyPath, "-pubout", "-passin", ("file:{0}" -f $tmpPass)) | Out-String).Trim()
+        $out
       }
       if (-not [string]::IsNullOrWhiteSpace($result)) { return $result }
     }
@@ -968,27 +997,27 @@ function Show-FileMatching([string]$filePath, [string[]]$passphrases = @()) {
   
   $results = @()
   
-  # 1. KEY-CSR Modulus Check
+  # 1. KEY-CSR Public Key Check (RSA/ECC)
   if ($keyFile -and $csrFile) {
     try {
-      $keyMod = Get-KeyModulus $keyFile.FullName $passphrases
-      if ($null -eq $keyMod) { throw "Cannot read key modulus" }
-      $csrMod = (Invoke-OpenSsl @("req", "-in", $csrFile.FullName, "-noout", "-modulus") | Out-String) -replace "Modulus=", ""
-      $match = ($keyMod.Trim() -eq $csrMod.Trim())
+      $keyPub = Get-KeyPubPem $keyFile.FullName $passphrases
+      if ($null -eq $keyPub) { throw "Cannot extract public key from private key" }
+      $csrPub = (Invoke-OpenSsl @("req", "-in", $csrFile.FullName, "-noout", "-pubkey") | Out-String).Trim()
+      $match = ($keyPub -eq $csrPub)
       $label = "{0} [{1} / {2}]" -f (T "Matching.KeyCsr"), $keyFile.Name, $csrFile.Name
       $results += @{ Name = $label; Pass = $match }
     }
     catch { $results += @{ Name = (T "Matching.KeyCsr"); Pass = $false } }
   }
   
-  # 2. KEY-CER Modulus Check
+  # 2. KEY-CER Public Key Check (RSA/ECC)
   if ($keyFile -and $cerFile) {
     try {
-      $keyMod = Get-KeyModulus $keyFile.FullName $passphrases
-      if ($null -eq $keyMod) { throw "Cannot read key modulus" }
+      $keyPub = Get-KeyPubPem $keyFile.FullName $passphrases
+      if ($null -eq $keyPub) { throw "Cannot extract public key from private key" }
       $cerInform = Get-InformArgs $cerFile.FullName
-      $cerMod = (Invoke-OpenSsl (@("x509") + $cerInform + @("-in", $cerFile.FullName, "-noout", "-modulus")) | Out-String) -replace "Modulus=", ""
-      $match = ($keyMod.Trim() -eq $cerMod.Trim())
+      $cerPub = (Invoke-OpenSsl (@("x509") + $cerInform + @("-in", $cerFile.FullName, "-noout", "-pubkey")) | Out-String).Trim()
+      $match = ($keyPub -eq $cerPub)
       $label = "{0} [{1} / {2}]" -f (T "Matching.KeyCer"), $keyFile.Name, $cerFile.Name
       $results += @{ Name = $label; Pass = $match }
     }
@@ -1029,13 +1058,13 @@ function Show-FileMatching([string]$filePath, [string[]]$passphrases = @()) {
   }
 
 
-  # 4. KEY-PFX Modulus Check
+  # 4. KEY-PFX Public Key Check (RSA/ECC)
   if ($keyFile -and $pfxFile) {
     try {
-      $keyMod = Get-KeyModulus $keyFile.FullName $passphrases
-      if ($null -eq $keyMod) { throw "Cannot read key modulus" }
+      $keyPub = Get-KeyPubPem $keyFile.FullName $passphrases
+      if ($null -eq $keyPub) { throw "Cannot extract public key from private key" }
        
-      $pfxMod = ""
+      $pfxPub = ""
       foreach ($p in @("") + $passphrases) {
         $isPass = -not [string]::IsNullOrWhiteSpace($p)
         try {
@@ -1053,19 +1082,19 @@ function Show-FileMatching([string]$filePath, [string[]]$passphrases = @()) {
             $tmpCert = [IO.Path]::GetTempFileName()
             try {
               Set-Content -LiteralPath $tmpCert -Value $certOut -Encoding ASCII
-              $pfxMod = (Invoke-OpenSsl @("x509", "-in", $tmpCert, "-noout", "-modulus") | Out-String) -replace "Modulus=", ""
+              $pfxPub = (Invoke-OpenSsl @("x509", "-in", $tmpCert, "-noout", "-pubkey") | Out-String).Trim()
             }
             finally {
               Remove-Item $tmpCert -Force -ErrorAction SilentlyContinue
             }
-            if (-not [string]::IsNullOrWhiteSpace($pfxMod)) { break }
+            if (-not [string]::IsNullOrWhiteSpace($pfxPub)) { break }
           }
         }
         catch {}
       }
 
-      if (-not [string]::IsNullOrWhiteSpace($pfxMod)) {
-        $match = ($keyMod.Trim() -eq $pfxMod.Trim())
+      if (-not [string]::IsNullOrWhiteSpace($pfxPub)) {
+        $match = ($keyPub -eq $pfxPub)
         $label = "KEY ⇔ PFX [{0} / {1}]" -f $keyFile.Name, $pfxFile.Name
         $results += @{ Name = $label; Pass = $match }
       }

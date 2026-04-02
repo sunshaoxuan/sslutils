@@ -426,8 +426,8 @@
 
   # Matching keys
   "Matching.Title"                           = "Match Verification"
-  "Matching.KeyCsr"                          = "KEY ⇔ CSR (Modulus)"
-  "Matching.KeyCer"                          = "KEY ⇔ CER (Modulus)"
+  "Matching.KeyCsr"                          = "KEY ⇔ CSR (Public Key)"
+  "Matching.KeyCer"                          = "KEY ⇔ CER (Public Key)"
   "Matching.CsrTsvCn"                        = "CSR ⇔ TSV (CN)"
   "Matching.CsrTsvContent"                   = "CSR ⇔ TSV (Content)"
 

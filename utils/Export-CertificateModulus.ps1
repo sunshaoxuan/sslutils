@@ -172,12 +172,12 @@ foreach ($f in $keyFiles) {
     continue
   }
 
-  $args = @("rsa", "-in", $f.FullName, "-noout", "-modulus")
+  $sslArgs = @("rsa", "-in", $f.FullName, "-noout", "-modulus")
   if ($isEnc -and -not [string]::IsNullOrWhiteSpace($passFileToUse)) {
-    $args = @("rsa", "-in", $f.FullName, "-noout", "-modulus", "-passin", ("file:{0}" -f $passFileToUse))
+    $sslArgs = @("rsa", "-in", $f.FullName, "-noout", "-modulus", "-passin", ("file:{0}" -f $passFileToUse))
   }
 
-  $out = Invoke-OpenSsl $args
+  $out = Invoke-OpenSsl $sslArgs
   if ($out -and $out -match "Modulus=([A-Fa-f0-9]+)") {
     $mod = $matches[1].ToUpper()
     if (-not $modulusGroups.ContainsKey($mod)) {
