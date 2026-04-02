@@ -429,6 +429,7 @@
   "Matching.Title"                           = "一致性验证"
   "Matching.KeyCsr"                          = "KEY ⇔ CSR (公钥)"
   "Matching.KeyCer"                          = "KEY ⇔ CER (公钥)"
+  "Matching.CerPfx"                          = "CER ⇔ PFX (公钥)"
   "Matching.CsrTsvCn"                        = "CSR ⇔ TSV (CN)"
   "Matching.CsrTsvContent"                   = "CSR ⇔ TSV (内容)"
 

@@ -1058,41 +1058,43 @@ function Show-FileMatching([string]$filePath, [string[]]$passphrases = @()) {
   }
 
 
+  # Helper: extract public key PEM from PFX certificate
+  function Get-PfxCertPubPem([string]$pfxPath, [string[]]$passes) {
+    foreach ($p in @("") + $passes) {
+      $isPass = -not [string]::IsNullOrWhiteSpace($p)
+      try {
+        $certOut = ""
+        if ($isPass) {
+          $certOut = Invoke-TempPassFile $p { param($tmp)
+            Invoke-Pkcs12 @("-in", $pfxPath, "-nokeys", "-clcerts", "-passin", "file:$tmp")
+          }
+        }
+        else {
+          $certOut = Invoke-Pkcs12 @("-in", $pfxPath, "-nokeys", "-clcerts", "-passin", "pass:")
+        }
+        if (-not [string]::IsNullOrWhiteSpace($certOut)) {
+          $tmpCert = [IO.Path]::GetTempFileName()
+          try {
+            Set-Content -LiteralPath $tmpCert -Value $certOut -Encoding ASCII
+            $pub = (Invoke-OpenSsl @("x509", "-in", $tmpCert, "-noout", "-pubkey") | Out-String).Trim()
+            if (-not [string]::IsNullOrWhiteSpace($pub)) { return $pub }
+          }
+          finally {
+            Remove-Item $tmpCert -Force -ErrorAction SilentlyContinue
+          }
+        }
+      }
+      catch {}
+    }
+    return $null
+  }
+
   # 4. KEY-PFX Public Key Check (RSA/ECC)
   if ($keyFile -and $pfxFile) {
     try {
       $keyPub = Get-KeyPubPem $keyFile.FullName $passphrases
       if ($null -eq $keyPub) { throw "Cannot extract public key from private key" }
-       
-      $pfxPub = ""
-      foreach ($p in @("") + $passphrases) {
-        $isPass = -not [string]::IsNullOrWhiteSpace($p)
-        try {
-          $certOut = ""
-          if ($isPass) {
-            $certOut = Invoke-TempPassFile $p { param($tmp)
-              Invoke-Pkcs12 @("-in", $pfxFile.FullName, "-nokeys", "-clcerts", "-passin", "file:$tmp")
-            }
-          }
-          else {
-            $certOut = Invoke-Pkcs12 @("-in", $pfxFile.FullName, "-nokeys", "-clcerts", "-passin", "pass:")
-          }
-             
-          if (-not [string]::IsNullOrWhiteSpace($certOut)) {
-            $tmpCert = [IO.Path]::GetTempFileName()
-            try {
-              Set-Content -LiteralPath $tmpCert -Value $certOut -Encoding ASCII
-              $pfxPub = (Invoke-OpenSsl @("x509", "-in", $tmpCert, "-noout", "-pubkey") | Out-String).Trim()
-            }
-            finally {
-              Remove-Item $tmpCert -Force -ErrorAction SilentlyContinue
-            }
-            if (-not [string]::IsNullOrWhiteSpace($pfxPub)) { break }
-          }
-        }
-        catch {}
-      }
-
+      $pfxPub = Get-PfxCertPubPem $pfxFile.FullName $passphrases
       if (-not [string]::IsNullOrWhiteSpace($pfxPub)) {
         $match = ($keyPub -eq $pfxPub)
         $label = "KEY ⇔ PFX [{0} / {1}]" -f $keyFile.Name, $pfxFile.Name
@@ -1104,6 +1106,27 @@ function Show-FileMatching([string]$filePath, [string[]]$passphrases = @()) {
     }
     catch { 
       $results += @{ Name = "KEY ⇔ PFX (Error)"; Pass = $false } 
+    }
+  }
+
+  # 5. CER-PFX Public Key Check (works without .key file)
+  if ($cerFile -and $pfxFile) {
+    try {
+      $cerInform = Get-InformArgs $cerFile.FullName
+      $cerPub = (Invoke-OpenSsl (@("x509") + $cerInform + @("-in", $cerFile.FullName, "-noout", "-pubkey")) | Out-String).Trim()
+      if ([string]::IsNullOrWhiteSpace($cerPub)) { throw "Cannot extract public key from certificate" }
+      $pfxPub = Get-PfxCertPubPem $pfxFile.FullName $passphrases
+      if (-not [string]::IsNullOrWhiteSpace($pfxPub)) {
+        $match = ($cerPub -eq $pfxPub)
+        $label = "{0} [{1} / {2}]" -f (T "Matching.CerPfx"), $cerFile.Name, $pfxFile.Name
+        $results += @{ Name = $label; Pass = $match }
+      }
+      else {
+        $results += @{ Name = ("{0} (Locked)" -f (T "Matching.CerPfx")); Pass = $false }
+      }
+    }
+    catch {
+      $results += @{ Name = ("{0} (Error)" -f (T "Matching.CerPfx")); Pass = $false }
     }
   }
   

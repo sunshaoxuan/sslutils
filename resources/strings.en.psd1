@@ -428,6 +428,7 @@
   "Matching.Title"                           = "Match Verification"
   "Matching.KeyCsr"                          = "KEY ⇔ CSR (Public Key)"
   "Matching.KeyCer"                          = "KEY ⇔ CER (Public Key)"
+  "Matching.CerPfx"                          = "CER ⇔ PFX (Public Key)"
   "Matching.CsrTsvCn"                        = "CSR ⇔ TSV (CN)"
   "Matching.CsrTsvContent"                   = "CSR ⇔ TSV (Content)"
 
