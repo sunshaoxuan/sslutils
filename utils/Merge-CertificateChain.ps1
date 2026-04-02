@@ -589,7 +589,10 @@ function Merge-One([string]$clientCertPath, [string]$SelectedIntermediate = "", 
     }
 
     if ($rootFiles.Count -eq 0 -and -not $SkipAutoRoot -and -not [string]::IsNullOrWhiteSpace($selectedIntermediate)) {
-      $rootFiles = @(Select-RootCerts $selectedIntermediate)
+      $rootResult = Select-RootCerts $selectedIntermediate
+      if ($rootResult.Status -eq "ok" -and $rootResult.Files.Count -gt 0) {
+        $rootFiles = @($rootResult.Files)
+      }
     }
 
     if ($rootFiles.Count -gt 0) {

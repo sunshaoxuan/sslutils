@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.5] - 2026-04-02
+
+### Fixed
+- **3-Segment Chain Merge**: Fixed auto-merge of root certificates in `Merge-CertificateChain.ps1`. `Select-RootCerts` returns a `PSCustomObject` with `Status` and `Files` properties, but `Merge-One` was assigning the entire object to `$rootFiles` without unwrapping. This caused the root certificate to never be appended when auto-detected from `CertStore`. Both RSA (cross-root) and ECC (RootCA1) chains now correctly produce 3-segment merged output.
+
 ## [1.5.4] - 2026-03-31
 
 ### Changed

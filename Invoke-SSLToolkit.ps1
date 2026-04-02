@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
 SSL証明書管理ツールキット - 統合メニュー
 
@@ -33,8 +33,8 @@ function Get-SafeLastExitCode {
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$ToolkitVersion = "1.5.4"
-$ToolkitLastUpdated = "2026-03-31"
+$ToolkitVersion = "1.5.5"
+$ToolkitLastUpdated = "2026-04-02"
 
 $ModuleRoot = Join-Path $PSScriptRoot "utils"
 $ToolkitRoot = Get-ToolkitBaseDir -ModuleRoot $ModuleRoot
