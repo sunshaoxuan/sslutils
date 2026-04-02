@@ -1197,8 +1197,9 @@ function Show-OneFile {
           "emailAddress" { "Email" }
           default { $key }
         }
+        $displayVal = $val -replace '\\,', ','
         Write-Host ("{0}{1} {2}: " -f $prefix, $subMark, $keyName) -NoNewline -ForegroundColor DarkGray
-        Write-Host $val -ForegroundColor Gray
+        Write-Host $displayVal -ForegroundColor Gray
       }
       else {
         Write-Host ("{0}{1} {2}" -f $prefix, $subMark, $part) -ForegroundColor Gray
