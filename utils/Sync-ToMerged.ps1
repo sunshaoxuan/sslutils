@@ -132,8 +132,20 @@ function Get-OrgMapping {
 
 function Find-MatchingMergedFolder([string]$newOrgPath, [hashtable]$mapping) {
     $orgName = (Get-Item $newOrgPath).Name
+
+    # Exact folder name match first (avoids hostPart collision)
+    $exactPath = Join-Path $mergedDir $orgName
+    if (Test-Path -LiteralPath $exactPath -PathType Container) {
+        return $exactPath
+    }
+    if (-not [string]::IsNullOrWhiteSpace($legacyMergedNewDir)) {
+        $legacyExact = Join-Path $legacyMergedNewDir $orgName
+        if (Test-Path -LiteralPath $legacyExact -PathType Container) {
+            return $legacyExact
+        }
+    }
     
-    # "組織名 (ホスト名)" からホスト名を抽出
+    # Fallback: "組織名 (ホスト名)" からホスト名を抽出
     if ($orgName -match "^(.+)\s+\(([^)]+)\)$") {
         $hostPart = $Matches[2]
         if ($mapping.ContainsKey($hostPart)) {
