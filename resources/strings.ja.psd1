@@ -183,6 +183,8 @@
   "MergeCert.PfxFoundInSource"               = "顧客提供の PFX が見つかりました: {0}"
   "MergeCert.PfxRegenPrompt"                 = "新しい PFX を再生成しますか？(y/N)"
   "MergeCert.PfxRegenChosen"                 = "PFX を再生成します。"
+  "MergeCert.PfxGenPrompt"                   = "PFX ファイルを生成しますか？ (y/N)"
+  "MergeCert.PfxSkipped"                     = "PFX 生成をスキップしました。"
   "MergeCert.SyncPrompt"                     = "関連ファイル(.key/.csr/.tsv)もマージ先へ同期しますか？(y/N)"
   "MergeCert.Synced"                         = "同期完了: {0}"
   "MergeCert.SyncSkipped"                    = "同期をスキップしました。"

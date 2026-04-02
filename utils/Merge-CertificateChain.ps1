@@ -97,6 +97,10 @@ param(
   [Parameter(Mandatory = $false)]
   [switch]$Force,
 
+  # PFX 生成をスキップ
+  [Parameter(Mandatory = $false)]
+  [switch]$NoPfx,
+
   # 出力言語（既定: ja）
   [Parameter(Mandatory = $false)]
   [string]$Lang = ""
@@ -639,7 +643,7 @@ function Merge-One([string]$clientCertPath, [string]$SelectedIntermediate = "", 
 
   # PFX Generation / Copy
   $keyPath = [IO.Path]::ChangeExtension($clientCertPath, ".key")
-  if (Test-Path -LiteralPath $keyPath -PathType Leaf) {
+  if ((Test-Path -LiteralPath $keyPath -PathType Leaf) -and (-not $NoPfx)) {
     $pfxPath = [IO.Path]::ChangeExtension($outPath, ".pfx")
     
     # Passwords
@@ -684,30 +688,38 @@ function Merge-One([string]$clientCertPath, [string]$SelectedIntermediate = "", 
     }
     
     if (-not $pfxHandled) {
-      $isEnc = Test-KeyEncrypted $keyPath
-      $generated = $false
-      
-      if (-not $isEnc) {
-        Invoke-OpenSsl @("pkcs12", "-export", "-in", $outPath, "-inkey", $keyPath, "-out", $pfxPath, "-passout", "pass:") -AllowFail | Out-Null
-        if ($LASTEXITCODE -eq 0) { $generated = $true }
-      }
-      else {
-        foreach ($p in $phrases) {
-          Invoke-TempPassFile $p { param($tmp)
-            Invoke-OpenSsl @("pkcs12", "-export", "-in", $outPath, "-inkey", $keyPath, "-out", $pfxPath, "-passin", "file:$tmp", "-passout", "file:$tmp") -AllowFail | Out-Null
-          }
-          if ($LASTEXITCODE -eq 0) { 
-            $generated = $true
-            break 
+      Write-Host ""
+      Write-Host (T "MergeCert.PfxGenPrompt") -ForegroundColor Yellow -NoNewline
+      $pfxAns = Read-Host " "
+      if ($pfxAns -match "^[yY]") {
+        $isEnc = Test-KeyEncrypted $keyPath
+        $generated = $false
+        
+        if (-not $isEnc) {
+          Invoke-OpenSsl @("pkcs12", "-export", "-in", $outPath, "-inkey", $keyPath, "-out", $pfxPath, "-passout", "pass:") -AllowFail | Out-Null
+          if ($LASTEXITCODE -eq 0) { $generated = $true }
+        }
+        else {
+          foreach ($p in $phrases) {
+            Invoke-TempPassFile $p { param($tmp)
+              Invoke-OpenSsl @("pkcs12", "-export", "-in", $outPath, "-inkey", $keyPath, "-out", $pfxPath, "-passin", "file:$tmp", "-passout", "file:$tmp") -AllowFail | Out-Null
+            }
+            if ($LASTEXITCODE -eq 0) { 
+              $generated = $true
+              break 
+            }
           }
         }
-      }
-      
-      if ($generated) {
-        Write-Success (T "MergeCert.PfxGenerated") ([IO.Path]::GetFileName($pfxPath))
+        
+        if ($generated) {
+          Write-Success (T "MergeCert.PfxGenerated") ([IO.Path]::GetFileName($pfxPath))
+        }
+        else {
+          Write-Warn (T "Common.Warn" @("Failed to generate PFX"))
+        }
       }
       else {
-        Write-Warn (T "Common.Warn" @("Failed to generate PFX"))
+        Write-Info (T "MergeCert.PfxSkipped")
       }
     }
     

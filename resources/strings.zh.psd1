@@ -184,6 +184,8 @@
   "MergeCert.PfxFoundInSource"               = "发现客户提供的 PFX: {0}"
   "MergeCert.PfxRegenPrompt"                 = "是否重新生成 PFX？(y/N)"
   "MergeCert.PfxRegenChosen"                 = "将重新生成 PFX。"
+  "MergeCert.PfxGenPrompt"                   = "是否生成 PFX 文件？(y/N)"
+  "MergeCert.PfxSkipped"                     = "已跳过 PFX 生成。"
   "MergeCert.SyncPrompt"                     = "是否同步其他文件(.key/.csr/.tsv)到合并目录？(y/N)"
   "MergeCert.Synced"                         = "已同步: {0}"
   "MergeCert.SyncSkipped"                    = "已跳过同步。"

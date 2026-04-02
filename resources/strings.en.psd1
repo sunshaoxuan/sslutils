@@ -183,6 +183,8 @@
   "MergeCert.PfxFoundInSource"               = "Customer-provided PFX found: {0}"
   "MergeCert.PfxRegenPrompt"                 = "Regenerate PFX? (y/N)"
   "MergeCert.PfxRegenChosen"                 = "PFX will be regenerated."
+  "MergeCert.PfxGenPrompt"                   = "Generate PFX file? (y/N)"
+  "MergeCert.PfxSkipped"                     = "PFX generation skipped."
   "MergeCert.SyncPrompt"                     = "Sync related files (.key/.csr/.tsv) to merged directory? (y/N)"
   "MergeCert.Synced"                         = "Synced: {0}"
   "MergeCert.SyncSkipped"                    = "Sync skipped."
