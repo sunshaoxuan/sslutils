@@ -112,6 +112,14 @@ param(
   [int]$RsaBits = 2048,
 
   [Parameter(Mandatory = $false)]
+  [ValidateSet("RSA", "EC")]
+  [string]$KeyType = "RSA",
+
+  [Parameter(Mandatory = $false)]
+  [ValidateSet("prime256v1", "secp384r1", "secp521r1")]
+  [string]$EcCurve = "prime256v1",
+
+  [Parameter(Mandatory = $false)]
   [string]$OpenSsl = "",
 
   # 出力言語（既定: ja）
@@ -491,27 +499,43 @@ if (-not [string]::IsNullOrWhiteSpace($PassFile)) {
     throw (T "MakeCsr.PassFileUnreadable" @($PassFile))
   }
 
-  # OpenSSL 3.x の req は -aes256 を受け付けないため、genpkey + req で生成する
   Invoke-TempPassFile $passphrase {
     param($tmpPass)
-    Invoke-OpenSsl @(
-      "genpkey",
-      "-algorithm", "RSA",
-      "-pkeyopt", ("rsa_keygen_bits:{0}" -f $RsaBits),
-      "-out", $keyPath,
-      "-aes-256-cbc",
-      "-pass", ("file:{0}" -f $tmpPass)
-    ) | Out-Null
-
+    if ($KeyType -eq "EC") {
+      Invoke-OpenSsl @(
+        "genpkey", "-algorithm", "EC",
+        "-pkeyopt", ("ec_paramgen_curve:{0}" -f $EcCurve),
+        "-out", $keyPath, "-aes-256-cbc", "-pass", ("file:{0}" -f $tmpPass)
+      ) | Out-Null
+    }
+    else {
+      Invoke-OpenSsl @(
+        "genpkey", "-algorithm", "RSA",
+        "-pkeyopt", ("rsa_keygen_bits:{0}" -f $RsaBits),
+        "-out", $keyPath, "-aes-256-cbc", "-pass", ("file:{0}" -f $tmpPass)
+      ) | Out-Null
+    }
     $reqArgs = @("req", "-new", "-sha256", "-key", $keyPath, "-passin", ("file:{0}" -f $tmpPass), "-out", $csrPath, "-subj", $subj)
     if ($sanOpt.Count -gt 0) { $reqArgs += $sanOpt }
     Invoke-OpenSsl $reqArgs | Out-Null
   } | Out-Null
 }
 else {
-  $args = @("req", "-new", "-newkey", ("rsa:{0}" -f $RsaBits), "-sha256", "-nodes", "-keyout", $keyPath, "-out", $csrPath, "-subj", $subj)
-  if ($sanOpt.Count -gt 0) { $args += $sanOpt }
-  Invoke-OpenSsl $args | Out-Null
+  if ($KeyType -eq "EC") {
+    Invoke-OpenSsl @(
+      "genpkey", "-algorithm", "EC",
+      "-pkeyopt", ("ec_paramgen_curve:{0}" -f $EcCurve),
+      "-out", $keyPath
+    ) | Out-Null
+    $reqArgs = @("req", "-new", "-sha256", "-key", $keyPath, "-nodes", "-out", $csrPath, "-subj", $subj)
+    if ($sanOpt.Count -gt 0) { $reqArgs += $sanOpt }
+    Invoke-OpenSsl $reqArgs | Out-Null
+  }
+  else {
+    $sslArgs = @("req", "-new", "-newkey", ("rsa:{0}" -f $RsaBits), "-sha256", "-nodes", "-keyout", $keyPath, "-out", $csrPath, "-subj", $subj)
+    if ($sanOpt.Count -gt 0) { $sslArgs += $sanOpt }
+    Invoke-OpenSsl $sslArgs | Out-Null
+  }
 }
 
 if ($useDefaultOutDir) {

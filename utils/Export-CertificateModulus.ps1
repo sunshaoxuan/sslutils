@@ -144,46 +144,54 @@ function Get-StringHash([string]$str) {
 
 Write-Host (T "ShowModulus.Calculating") -ForegroundColor Cyan
 
-# データ収集用ハッシュ: Key = Modulus, Value = @{ Certs = @(); Keys = @() }
-$modulusGroups = @{}
+# データ収集用ハッシュ: Key = PublicKey hash, Value = @{ Certs = @(); Keys = @() }
+$pubkeyGroups = @{}
 
 $certFiles = Get-ChildItem -LiteralPath $root -Recurse -File -Include $__CertPatterns -ErrorAction SilentlyContinue
 $keyFiles = Get-ChildItem -LiteralPath $root -Recurse -File -Include *.key -ErrorAction SilentlyContinue
 
 $certCount = 0
 foreach ($f in $certFiles) {
-  $out = Invoke-OpenSsl @("x509", "-in", $f.FullName, "-noout", "-modulus")
-  if ($out -and $out -match "Modulus=([A-Fa-f0-9]+)") {
-    $mod = $matches[1].ToUpper()
-    if (-not $modulusGroups.ContainsKey($mod)) {
-      $modulusGroups[$mod] = @{ Certs = @(); Keys = @() }
+  $out = Invoke-OpenSsl @("x509", "-in", $f.FullName, "-noout", "-pubkey")
+  if ($null -eq $out) { $out = Invoke-OpenSsl @("x509", "-inform", "DER", "-in", $f.FullName, "-noout", "-pubkey") }
+  if ($out) {
+    $pub = (($out | Out-String).Trim())
+    if (-not [string]::IsNullOrWhiteSpace($pub)) {
+      $hash = Get-StringHash $pub
+      if (-not $pubkeyGroups.ContainsKey($hash)) {
+        $pubkeyGroups[$hash] = @{ Certs = @(); Keys = @() }
+      }
+      $pubkeyGroups[$hash].Certs += $f.FullName
+      $certCount++
     }
-    $modulusGroups[$mod].Certs += $f.FullName
-    $certCount++
   }
 }
 
 $keyCount = 0
 foreach ($f in $keyFiles) {
-  # OpenSSL の対話プロンプトを絶対に出さないため、暗号化鍵は必ず -passin で読む
   $isEnc = Test-KeyEncrypted $f.FullName
-  if ($isEnc -and [string]::IsNullOrWhiteSpace($passFileToUse)) {
-    # Skip encrypted key without passfile
-    continue
-  }
+  if ($isEnc -and [string]::IsNullOrWhiteSpace($passFileToUse)) { continue }
 
-  $sslArgs = @("rsa", "-in", $f.FullName, "-noout", "-modulus")
-  if ($isEnc -and -not [string]::IsNullOrWhiteSpace($passFileToUse)) {
-    $sslArgs = @("rsa", "-in", $f.FullName, "-noout", "-modulus", "-passin", ("file:{0}" -f $passFileToUse))
-  }
-
-  $out = Invoke-OpenSsl $sslArgs
-  if ($out -and $out -match "Modulus=([A-Fa-f0-9]+)") {
-    $mod = $matches[1].ToUpper()
-    if (-not $modulusGroups.ContainsKey($mod)) {
-      $modulusGroups[$mod] = @{ Certs = @(); Keys = @() }
+  $pub = $null
+  $commands = @("pkey", "rsa", "ec")
+  foreach ($cmd in $commands) {
+    $sslArgs = @($cmd, "-in", $f.FullName, "-pubout")
+    if ($isEnc -and -not [string]::IsNullOrWhiteSpace($passFileToUse)) {
+      $sslArgs += @("-passin", ("file:{0}" -f $passFileToUse))
     }
-    $modulusGroups[$mod].Keys += $f.FullName
+    $out = Invoke-OpenSsl $sslArgs
+    if ($out) {
+      $pub = (($out | Out-String).Trim())
+      if (-not [string]::IsNullOrWhiteSpace($pub)) { break }
+    }
+  }
+
+  if (-not [string]::IsNullOrWhiteSpace($pub)) {
+    $hash = Get-StringHash $pub
+    if (-not $pubkeyGroups.ContainsKey($hash)) {
+      $pubkeyGroups[$hash] = @{ Certs = @(); Keys = @() }
+    }
+    $pubkeyGroups[$hash].Keys += $f.FullName
     $keyCount++
   }
 }
@@ -200,11 +208,10 @@ $matched = @()
 $orphanCerts = @()
 $orphanKeys = @()
 
-foreach ($mod in $modulusGroups.Keys) {
-  $g = $modulusGroups[$mod]
+foreach ($hash in $pubkeyGroups.Keys) {
+  $g = $pubkeyGroups[$hash]
   $obj = [PSCustomObject]@{
-    Modulus     = $mod
-    DisplayHash = (Get-StringHash $mod)
+    DisplayHash = $hash
     Certs       = $g.Certs
     Keys        = $g.Keys
   }

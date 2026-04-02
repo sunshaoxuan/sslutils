@@ -277,26 +277,44 @@ function Get-CsrSubject([string]$csrPath) {
   return ([string]$line).Trim()
 }
 
-function Get-RsaBitsFromKey([string]$keyPath) {
+function Get-KeyTypeInfo([string]$keyPath, [string]$passFile = "") {
+  $result = @{ Algorithm = "RSA"; RsaBits = $null; EcCurve = $null }
   try {
-    # OpenSSL の対話プロンプトを避けるため、暗号化鍵はここでは解析しない（必要なら別ロジックで -passin 付きで試行する）
     $head = @(Get-Content -LiteralPath $keyPath -TotalCount 40 -ErrorAction SilentlyContinue)
     $text = ($head -join "`n")
-    if ($text -match "BEGIN ENCRYPTED PRIVATE KEY" -or $text -match "Proc-Type:\s*4,ENCRYPTED" -or $text -match "\bENCRYPTED\b") {
-      return $null
+    $isEnc = ($text -match "BEGIN ENCRYPTED PRIVATE KEY" -or $text -match "Proc-Type:\s*4,ENCRYPTED" -or $text -match "\bENCRYPTED\b")
+    if ($isEnc -and [string]::IsNullOrWhiteSpace($passFile)) { return $null }
+
+    $pkeyArgs = @("pkey", "-in", $keyPath, "-noout", "-text")
+    if ($isEnc -and -not [string]::IsNullOrWhiteSpace($passFile)) {
+      $pkeyArgs += @("-passin", ("file:{0}" -f $passFile))
+    }
+    $out = @(Invoke-OpenSsl $pkeyArgs)
+    $joined = ($out -join "`n")
+
+    if ($joined -match "ASN1 OID:\s*(\S+)") {
+      $result.Algorithm = "EC"
+      $result.EcCurve = $matches[1]
+    }
+    elseif ($joined -match "RSA") {
+      $result.Algorithm = "RSA"
     }
 
-    $out = Invoke-OpenSsl @("rsa", "-in", $keyPath, "-noout", "-text")
     foreach ($line in $out) {
       if ($line -match "\((\d+)\s+bit\)") {
-        return [int]$matches[1]
+        if ($result.Algorithm -eq "RSA") { $result.RsaBits = [int]$matches[1] }
+        break
       }
     }
-    return $null
+    return $result
   }
-  catch {
-    return $null
-  }
+  catch { return $null }
+}
+
+function Get-RsaBitsFromKey([string]$keyPath) {
+  $info = Get-KeyTypeInfo $keyPath
+  if ($null -eq $info -or $info.Algorithm -ne "RSA") { return $null }
+  return $info.RsaBits
 }
 
 function Format-SanItem([string]$s) {
@@ -954,25 +972,30 @@ while ($script:returnToOrgMenu) {
       }
       $setPassphrase = Get-Passphrase $setPassFile
 
+      $keyAlgorithm = "RSA"
       $rsaBits = $DefaultRsaBits
+      $ecCurve = "prime256v1"
       if (-not [string]::IsNullOrWhiteSpace($set.Key)) {
-        $bits = $null
-        # 暗号化鍵の場合、パスワードで読める可能性がある
+        $keyInfo = $null
         if (-not [string]::IsNullOrWhiteSpace($setPassphrase)) {
-          $bits = Invoke-TempPassFile $setPassphrase {
+          $keyInfo = Invoke-TempPassFile $setPassphrase {
             param($tmpPass)
-            try {
-              $out = Invoke-OpenSsl @("rsa", "-in", $set.Key, "-noout", "-text", "-passin", ("file:{0}" -f $tmpPass))
-              foreach ($line in $out) { if ($line -match "\((\d+)\s+bit\)") { return [int]$matches[1] } }
-              return $null
-            }
+            try { return Get-KeyTypeInfo $set.Key $tmpPass }
             catch { return $null }
           }
         }
-        if (-not $bits) {
-          $bits = Get-RsaBitsFromKey $set.Key
+        if ($null -eq $keyInfo) {
+          $keyInfo = Get-KeyTypeInfo $set.Key
         }
-        if ($bits) { $rsaBits = $bits }
+        if ($null -ne $keyInfo) {
+          $keyAlgorithm = $keyInfo.Algorithm
+          if ($keyInfo.Algorithm -eq "EC" -and -not [string]::IsNullOrWhiteSpace($keyInfo.EcCurve)) {
+            $ecCurve = $keyInfo.EcCurve
+          }
+          elseif ($keyInfo.Algorithm -eq "RSA" -and $null -ne $keyInfo.RsaBits) {
+            $rsaBits = $keyInfo.RsaBits
+          }
+        }
       }
 
       $subj = SubjectMapToSubj $subjectMap
@@ -1063,27 +1086,43 @@ while ($script:returnToOrgMenu) {
       }
 
       if (-not [string]::IsNullOrWhiteSpace($setPassphrase)) {
-        # OpenSSL 3.x の req は -aes256 を受け付けないため、genpkey + req で生成する
         Invoke-TempPassFile $setPassphrase {
           param($tmpPass)
-          Invoke-OpenSsl @(
-            "genpkey",
-            "-algorithm", "RSA",
-            "-pkeyopt", ("rsa_keygen_bits:{0}" -f $rsaBits),
-            "-out", $outKey,
-            "-aes-256-cbc",
-            "-pass", ("file:{0}" -f $tmpPass)
-          ) | Out-Null
-
+          if ($keyAlgorithm -eq "EC") {
+            Invoke-OpenSsl @(
+              "genpkey", "-algorithm", "EC",
+              "-pkeyopt", ("ec_paramgen_curve:{0}" -f $ecCurve),
+              "-out", $outKey, "-aes-256-cbc", "-pass", ("file:{0}" -f $tmpPass)
+            ) | Out-Null
+          }
+          else {
+            Invoke-OpenSsl @(
+              "genpkey", "-algorithm", "RSA",
+              "-pkeyopt", ("rsa_keygen_bits:{0}" -f $rsaBits),
+              "-out", $outKey, "-aes-256-cbc", "-pass", ("file:{0}" -f $tmpPass)
+            ) | Out-Null
+          }
           $reqArgs = @("req", "-new", "-sha256", "-key", $outKey, "-passin", ("file:{0}" -f $tmpPass), "-out", $outCsr, "-subj", $subj)
           if ($sanOpt.Count -gt 0) { $reqArgs += $sanOpt }
           Invoke-OpenSsl $reqArgs | Out-Null
         } | Out-Null
       }
       else {
-        $keyArgs = @("req", "-new", "-newkey", "rsa:$rsaBits", "-sha256", "-nodes", "-keyout", $outKey, "-out", $outCsr, "-subj", $subj)
-        if ($sanOpt.Count -gt 0) { $keyArgs += $sanOpt }
-        Invoke-OpenSsl $keyArgs | Out-Null
+        if ($keyAlgorithm -eq "EC") {
+          Invoke-OpenSsl @(
+            "genpkey", "-algorithm", "EC",
+            "-pkeyopt", ("ec_paramgen_curve:{0}" -f $ecCurve),
+            "-out", $outKey
+          ) | Out-Null
+          $reqArgs = @("req", "-new", "-sha256", "-key", $outKey, "-nodes", "-out", $outCsr, "-subj", $subj)
+          if ($sanOpt.Count -gt 0) { $reqArgs += $sanOpt }
+          Invoke-OpenSsl $reqArgs | Out-Null
+        }
+        else {
+          $keyArgs = @("req", "-new", "-newkey", "rsa:$rsaBits", "-sha256", "-nodes", "-keyout", $outKey, "-out", $outCsr, "-subj", $subj)
+          if ($sanOpt.Count -gt 0) { $keyArgs += $sanOpt }
+          Invoke-OpenSsl $keyArgs | Out-Null
+        }
       }
           
       # --- INTEGRATED TSV GENERATION START ---
@@ -1170,6 +1209,7 @@ while ($script:returnToOrgMenu) {
       }
       # --- INTEGRATED TSV GENERATION END ---
 
+      $keySpec = if ($keyAlgorithm -eq "EC") { "EC ($ecCurve)" } else { "RSA ($rsaBits)" }
       $generated.Add([PSCustomObject]@{
           Org      = $orgOut
           CN       = $cn
@@ -1177,7 +1217,7 @@ while ($script:returnToOrgMenu) {
           OutDir   = $outDir
           Key      = $outKey
           Csr      = $outCsr
-          RsaBits  = $rsaBits
+          KeySpec  = $keySpec
           SANs     = ($sans -join ", ")
           PassFile = $setPassFile
         }) | Out-Null
@@ -1195,7 +1235,7 @@ while ($script:returnToOrgMenu) {
   Select-Object `
   @{Name = (T "Renew.Table.Org"); Expression = { $_.Org } }, `
   @{Name = (T "Renew.Table.Cn"); Expression = { $_.CN } }, `
-  @{Name = (T "Renew.Table.RsaBits"); Expression = { $_.RsaBits } }, `
+  @{Name = (T "Renew.Table.KeySpec"); Expression = { $_.KeySpec } }, `
   @{Name = (T "Renew.Table.San"); Expression = { $_.SANs } }, `
   @{Name = (T "Renew.Table.OutDir"); Expression = { $_.OutDir } } |
   Format-Table -AutoSize
