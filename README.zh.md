@@ -5,21 +5,23 @@
 - 中文: README.zh.md (本文件)
 - 日本語: [README.ja.md](README.ja.md)
 
-**Ver 1.5.4**
+**Ver 1.5.5**
 https://github.com/sunshaoxuan
 
 这是一个功能强大的 PowerShell 脚本集合，用于自动化管理 SSL 证书、私钥和 CSR。支持多语言（可通过配置文件扩展）、多机构管理，并提供统一的菜单界面。
 
 ---
 
-## 📅 版本更新 (v1.5.4)
-- **Let's Encrypt 输出整理**: 默认导出到 `output/self-signed/lets-encrypt/<domain>`，临时工作目录移到 `temp/lets-encrypt/`，成功后自动清理。
-- **PEM 自动修复**: 导出的 `fullchain.pem` 和 `privkey.pem` 会自动规范化换行和头尾格式，生成后可直接使用。
-- **CAA SERVFAIL 自动重试**: 遇到临时性的 DNS `CAA SERVFAIL` 时，Let's Encrypt 申请会自动重试。
-- **私钥识别改进**: `Get-CertificateInfo.ps1` 现在能更准确识别 PEM 私钥，并兼容 PKCS#8 / EC 私钥读取。
+## 📅 版本更新 (v1.5.5)
+- **ECC 证书全面支持**: 椭圆曲线加密全面支持 — CSR 生成（`-KeyType EC`）、密钥匹配验证（公钥 PEM 比对替代 RSA-only modulus）、续期时自动检测旧密钥算法类型。
+- **3 段式合并修复**: 根证书现在能从 `CertStore` 正确自动追加。RSA 交叉根和 ECC RootCA1 链均能正确生成 3 段式输出。
+- **PFX 生成改为可选**: 证书合并后不再自动生成 PFX，改为询问"是否生成 PFX 文件？(y/N)"。CLI 可用 `-NoPfx` 跳过。
+- **CER ⇔ PFX 一致性校验**: 新增不依赖 `.key` 文件的证书与 PFX 公钥比对验证。
+- **同步文件夹映射修复**: 修复多个机构共用相同主机名部分时同步到错误文件夹的问题。
 - **完整历史**: 详见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 📅 历史更新
+- **v1.5.x**: ECC 全面支持、3 段式合并修复、PFX 可选、CER⇔PFX 校验、同步映射修复、Let's Encrypt 输出整理、PEM 自动修复。
 - **v1.4.x**: 术语统一、TSV 默认文件名调整、仓库清理。
 - **v1.3.x**: 输出目录统一到 `output/`，脚本重命名为 Verb-Noun 格式，新增自签证书生成。
 - **v1.2.x**: 统一菜单入口、PFX 生成、全面多语言支持。
@@ -80,15 +82,16 @@ ssl_maker/
 **脚本**: `Get-CertificateInfo.ps1`
 - 查看 .cer, .key, .csr, .pfx 的详细信息（Subject, Issuer, 有效期）。
 - 多段式证书链逐块显示（服务器/中间/根），含源证书文件名标注。
-- 自动校验 **证书 ⇔ 私钥** 是否匹配（Modulus Check）。
+- 自动校验 **证书 ⇔ 私钥** 是否匹配（公钥比对，支持 RSA 和 ECC）。
 - 支持解密 PFX 查看完整证书链。
 
 ### 2. 证书链合并 & PFX 生成
 **脚本**: `Merge-CertificateChain.ps1`
 - 自动识别服务器证书，寻找匹配的中间证书并合并为 fullchain。
 - 支持3段式（服务器+中间+交叉根）和4段式（+根CA）合并模式。
-- 自动查找对应的 `.key` 文件，生成 `.pfx` (PKCS#12) 文件。
+- 自动查找对应的 `.key` 文件，按需生成 `.pfx` (PKCS#12) 文件（交互询问或 `-NoPfx` 跳过）。
 - 检测客户提供的 PFX，提示用户选择沿用或重新生成。
+- 支持 RSA 和 ECC 证书链的自动合并。
 - 支持批量处理 `new/` 目录下的所有证书。
 
 ### 3. CSR (证书签名请求) 生成

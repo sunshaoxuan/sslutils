@@ -4,8 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ## [1.5.5] - 2026-04-02
 
+### Added
+- **ECC Certificate Support**: Full ECC (Elliptic Curve) support across the toolkit:
+  - `Get-CertificateInfo.ps1`: Public key PEM comparison replaces RSA-only modulus check, correctly verifying KEY ⇔ CER / CSR / PFX matches for both RSA and ECC certificates.
+  - `New-CertificateSigningRequest.ps1`: Added `-KeyType` (RSA/EC) and `-EcCurve` (prime256v1/secp384r1/secp521r1) parameters for ECC CSR generation.
+  - `New-CertificateSigningRequestFromOld.ps1`: Auto-detects existing key algorithm (RSA/ECC) and preserves it when generating new CSR/key pairs.
+  - `Export-CertificateModulus.ps1`: Rewritten to use universal public key PEM comparison instead of RSA-only modulus, supporting both RSA and ECC.
+- **CER ⇔ PFX Consistency Check**: New verification in `Get-CertificateInfo.ps1` that compares certificate and PFX public keys without requiring a `.key` file. Useful for merged output directories that only contain `.cer` and `.pfx`.
+- **ECC Certificate Store**: Added NII G7 ECC intermediate (`nii-odca4g7ecc.cer`) and SECOM ECC RootCA1 (`SCECCRoot1caPem.cer`) to `CertStore/` for ECC chain validation.
+
+### Changed
+- **Optional PFX Generation**: `Merge-CertificateChain.ps1` now asks "Generate PFX? (y/N)" instead of auto-generating. Added `-NoPfx` switch for CLI automation. Customer-provided PFX flow is unchanged.
+- **i18n Updates**: Added ECC-related strings (`Matching.CerPfx`, `Renew.Table.KeySpec`, updated `ShowModulus.*` and `Matching.*`) to all language files (en/ja/zh). Fixed Japanese `MergeCert.OutFile` / `ChainOutFile` that had unformatted `{0}` placeholders.
+
 ### Fixed
-- **3-Segment Chain Merge**: Fixed auto-merge of root certificates in `Merge-CertificateChain.ps1`. `Select-RootCerts` returns a `PSCustomObject` with `Status` and `Files` properties, but `Merge-One` was assigning the entire object to `$rootFiles` without unwrapping. This caused the root certificate to never be appended when auto-detected from `CertStore`. Both RSA (cross-root) and ECC (RootCA1) chains now correctly produce 3-segment merged output.
+- **3-Segment Chain Merge**: Fixed auto-merge of root certificates. `Select-RootCerts` returns a `PSCustomObject` but `Merge-One` was assigning it directly to `$rootFiles` without unwrapping `.Files`. Root certificates were never appended when auto-detected from `CertStore`.
+- **4-Segment Merge Guard**: `Select-FullChainRootCerts` now checks whether the 3rd-segment certificate is self-signed before searching for a 4th segment. Prevents ECC chains from incorrectly offering a 4-segment option where the root CA would appear twice.
+- **Sync Folder Mapping Collision**: `Sync-ToMerged.ps1` now checks for an exact folder name match before falling back to hostPart-based lookup. Fixes incorrect sync when multiple organizations share the same hostPart (e.g., two different orgs both named `(kyuyo)`).
+- **RFC2253 DN Display**: Unescaped `\,` to `,` in distinguished name display for improved readability.
 
 ## [1.5.4] - 2026-03-31
 

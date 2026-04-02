@@ -8,11 +8,12 @@ Languages:
 ## Overview
 PowerShell scripts to manage certificates, keys, and CSRs with multi-org and multi-language support.
 
-## What's New (v1.5.4)
-- **Let's Encrypt Output Cleanup**: Issued certificates now go to `output/self-signed/lets-encrypt/<domain>`, while temporary work data moves to `temp/lets-encrypt/` and is cleaned automatically after success.
-- **Automatic PEM Normalization**: Exported `fullchain.pem` and `privkey.pem` are normalized automatically, so they are usable without a separate repair step.
-- **CAA SERVFAIL Retry**: Let's Encrypt requests now auto-retry on transient `CAA SERVFAIL` DNS failures.
-- **Private Key Detection**: `Get-CertificateInfo.ps1` now recognizes PEM private keys more accurately, including PKCS#8 / EC keys.
+## What's New (v1.5.5)
+- **ECC Certificate Support**: Full Elliptic Curve support — CSR generation (`-KeyType EC`), key matching (public key PEM comparison replaces RSA-only modulus), and auto-detection of existing key algorithms when renewing from old certs.
+- **3-Segment Chain Merge Fix**: Root certificates are now correctly auto-appended when detected from `CertStore`. Both RSA cross-root and ECC RootCA1 chains produce correct 3-segment output.
+- **Optional PFX Generation**: Certificate merge now asks whether to generate PFX instead of doing it automatically. Added `-NoPfx` switch for CLI use.
+- **CER ⇔ PFX Verification**: New consistency check that works without a `.key` file, useful for merged output directories.
+- **Sync Collision Fix**: Fixed folder sync mapping when multiple orgs share the same hostPart name.
 - Full feature history: [CHANGELOG.md](CHANGELOG.md).
 
 ## Prerequisites
@@ -84,10 +85,11 @@ Show certificate/key/CSR info. Displays per-block details for multi-cert chains 
 ```
 
 2) `Merge-CertificateChain.ps1`
-Generate fullchain (server cert + intermediates). Supports 3-block (recommended) and 4-block (with root CA) modes.
+Generate fullchain (server cert + intermediates). Supports 2-block, 3-block (recommended), and 4-block (with cross-root + root CA) modes. PFX generation is optional (interactive prompt or `-NoPfx` switch).
 ```powershell
 .\utils\Merge-CertificateChain.ps1 -ClientCert .\client.cer -IntermediateCert .\intermediate.cer
 .\utils\Merge-CertificateChain.ps1 -ClientCert .\client.cer -IntermediateCert .\intermediate.cer -RootCert .\cross-root.cer
+.\utils\Merge-CertificateChain.ps1 -NoPfx   # Skip PFX generation entirely
 ```
 
 3) `Convert-KeyToPlaintext.ps1`

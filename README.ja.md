@@ -8,11 +8,12 @@
 ## 概要
 証明書・秘密鍵・CSR を扱う PowerShell スクリプト集です。多機関対応と多言語対応を前提にしています。
 
-## バージョン (v1.5.4)
-- **Let's Encrypt 出力整理**: 証明書は既定で `output/self-signed/lets-encrypt/<domain>` に出力され、一時作業は `temp/lets-encrypt/` に移動し、成功後に自動削除されます。
-- **PEM 自動正規化**: 出力される `fullchain.pem` / `privkey.pem` は自動で改行・ヘッダを正規化し、そのまま利用しやすくなりました。
-- **CAA SERVFAIL 自動再試行**: 一時的な DNS `CAA SERVFAIL` 失敗時に Let's Encrypt 申請を自動再試行します。
-- **秘密鍵判定改善**: `Get-CertificateInfo.ps1` が PEM 秘密鍵をより正確に判定し、PKCS#8 / EC 鍵も読み取りやすくなりました。
+## バージョン (v1.5.5)
+- **ECC 証明書対応**: 楕円曲線暗号を全面サポート — CSR 生成 (`-KeyType EC`)、鍵一致検証（公開鍵 PEM 比較で RSA/ECC 両対応）、旧証明書更新時の鍵タイプ自動検出。
+- **3枚結合の修正**: `CertStore` から検出されたルート証明書が正しく自動追加されるようになりました。RSA 交差ルートおよび ECC RootCA1 チェーンが正しく 3 枚結合されます。
+- **PFX 生成を選択式に**: 証明書結合時に PFX を自動生成せず「生成しますか？(y/N)」と確認するように変更。CLI 用に `-NoPfx` スイッチも追加。
+- **CER ⇔ PFX 一致検証**: `.key` ファイルがなくても証明書と PFX の公開鍵を比較する検証を追加。
+- **同期のフォルダ名衝突修正**: 同じホスト名部分を持つ複数機関がある場合の同期先マッピングを修正。
 - **詳細履歴**: [CHANGELOG.md](CHANGELOG.md) を参照。
 
 ## 事前準備
@@ -84,10 +85,11 @@ ssl_maker/
 ```
 
 2) `Merge-CertificateChain.ps1`
-fullchain を生成（証明書 + 中間）。3枚結合（推奨）または 4枚結合（ルートCA含む）に対応。
+fullchain を生成（証明書 + 中間）。2枚、3枚結合（推奨）、4枚結合（交差ルート + ルートCA）に対応。PFX 生成は任意（対話確認または `-NoPfx` スイッチで省略可）。
 ```powershell
 .\utils\Merge-CertificateChain.ps1 -ClientCert .\client.cer -IntermediateCert .\intermediate.cer
 .\utils\Merge-CertificateChain.ps1 -ClientCert .\client.cer -IntermediateCert .\intermediate.cer -RootCert .\cross-root.cer
+.\utils\Merge-CertificateChain.ps1 -NoPfx   # PFX 生成をスキップ
 ```
 
 3) `Convert-KeyToPlaintext.ps1`
