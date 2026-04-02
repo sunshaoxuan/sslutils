@@ -447,21 +447,29 @@ function Select-FullChainRootCerts([string]$intermediateCertPath) {
     return [PSCustomObject]@{ Status3 = $result3.Status; Files3 = @(); Status4 = "none"; Files4 = @() }
   }
   $crossRoot = $result3.Files[0]
-  $result4Parent = Select-RootCerts $crossRoot
+
   $files4 = @()
   $status4 = "none"
-  if ($result4Parent.Status -eq "ok" -and $result4Parent.Files.Count -gt 0) {
-    $parentSubj = ""
-    $parentLine = Invoke-OpenSsl @("x509", "-in", $result4Parent.Files[0], "-noout", "-subject", "-nameopt", "RFC2253") -AllowFail | Select-Object -First 1
-    if ($parentLine) { $parentSubj = ([string]$parentLine).Trim().Replace("subject=", "") }
-    $crossSubj = ""
-    $crossLine = Invoke-OpenSsl @("x509", "-in", $crossRoot, "-noout", "-issuer", "-nameopt", "RFC2253") -AllowFail | Select-Object -First 1
-    if ($crossLine) { $crossSubj = ([string]$crossLine).Trim().Replace("issuer=", "") }
-    if ($parentSubj -eq $crossSubj -and -not [string]::IsNullOrWhiteSpace($parentSubj)) {
-      $files4 = @($crossRoot, $result4Parent.Files[0])
-      $status4 = "ok"
+
+  $crossSubjLine = Invoke-OpenSsl @("x509", "-in", $crossRoot, "-noout", "-subject", "-nameopt", "RFC2253") -AllowFail | Select-Object -First 1
+  $crossIssLine  = Invoke-OpenSsl @("x509", "-in", $crossRoot, "-noout", "-issuer",  "-nameopt", "RFC2253") -AllowFail | Select-Object -First 1
+  $crossSubj = if ($crossSubjLine) { ([string]$crossSubjLine).Trim().Replace("subject=", "") } else { "" }
+  $crossIss  = if ($crossIssLine)  { ([string]$crossIssLine).Trim().Replace("issuer=", "")   } else { "" }
+
+  $isSelfSigned = (-not [string]::IsNullOrWhiteSpace($crossSubj)) -and ($crossSubj -eq $crossIss)
+
+  if (-not $isSelfSigned) {
+    $result4Parent = Select-RootCerts $crossRoot
+    if ($result4Parent.Status -eq "ok" -and $result4Parent.Files.Count -gt 0) {
+      $parentSubjLine = Invoke-OpenSsl @("x509", "-in", $result4Parent.Files[0], "-noout", "-subject", "-nameopt", "RFC2253") -AllowFail | Select-Object -First 1
+      $parentSubj = if ($parentSubjLine) { ([string]$parentSubjLine).Trim().Replace("subject=", "") } else { "" }
+      if ($parentSubj -eq $crossIss -and -not [string]::IsNullOrWhiteSpace($parentSubj)) {
+        $files4 = @($crossRoot, $result4Parent.Files[0])
+        $status4 = "ok"
+      }
     }
   }
+
   return [PSCustomObject]@{
     Status3 = $result3.Status; Files3 = @($result3.Files)
     Status4 = $status4;        Files4 = $files4
