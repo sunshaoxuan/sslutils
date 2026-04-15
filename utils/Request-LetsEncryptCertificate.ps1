@@ -277,8 +277,9 @@ try {
 
   # 作業ディレクトリ構築（既存ディレクトリを再利用、-Clean 指定時は削除）
   # 作業ディレクトリ構築
-  $domainList = $Domain -split "[\s,]+" | Where-Object { $_ -ne "" }
-  $primaryDomain = $domainList[0]
+  $domainList = @($Domain -split "[\s,]+" | Where-Object { $_ -ne "" })
+  if ($domainList.Count -eq 0) { Exit-ToolkitWithPause -Message (T "LE.PressAnyKeyToReturn") -ExitCode 99 }
+  $primaryDomain = [string]$domainList[0]
   $safeDomain = $primaryDomain.Replace('*', '_').Replace('\', '_').Replace('/', '_').Replace(':', '_')
   $tempRoot = if ($null -ne $ToolkitPaths -and -not [string]::IsNullOrWhiteSpace([string]$ToolkitPaths.Temp)) {
     [string]$ToolkitPaths.Temp
