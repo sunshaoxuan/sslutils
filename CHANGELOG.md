@@ -11,6 +11,12 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - **i18n Updates**: Added new instructional keys (`LE.HowItWorksTitle`, `LE.HowItWorksDesc`, `LE.UrlPattern`, etc.) to all language resources (en/ja/zh). Updated the domain input prompt to mention multi-domain support.
+- **Centralized Configuration**: Moved Let's Encrypt challenge path from hardcoded default to `config.json` (`AcmeWebRoot`). Added fail-safe fallback logic to the script.
+
+### Fixed
+- **Path Alignment**: Fixed a discrepancy between the instructional path hint and the actual path used by Docker hooks.
+- **PowerShell Array Unrolling**: Fixed a regression where a single domain input could cause a `System.Char` Replace method error.
+- **Corrupted Hook Scripts**: Fixed an issue where `cleanup.sh` and duplicate script definitions were incorrectly written.
 
 ## [1.5.5] - 2026-04-02
 
