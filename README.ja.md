@@ -8,12 +8,10 @@
 ## 概要
 証明書・秘密鍵・CSR を扱う PowerShell スクリプト集です。多機関対応と多言語対応を前提にしています。
 
-## バージョン (v1.5.5)
-- **ECC 証明書対応**: 楕円曲線暗号を全面サポート — CSR 生成 (`-KeyType EC`)、鍵一致検証（公開鍵 PEM 比較で RSA/ECC 両対応）、旧証明書更新時の鍵タイプ自動検出。
-- **3枚結合の修正**: `CertStore` から検出されたルート証明書が正しく自動追加されるようになりました。RSA 交差ルートおよび ECC RootCA1 チェーンが正しく 3 枚結合されます。
-- **PFX 生成を選択式に**: 証明書結合時に PFX を自動生成せず「生成しますか？(y/N)」と確認するように変更。CLI 用に `-NoPfx` スイッチも追加。
-- **CER ⇔ PFX 一致検証**: `.key` ファイルがなくても証明書と PFX の公開鍵を比較する検証を追加。
-- **同期のフォルダ名衝突修正**: 同じホスト名部分を持つ複数機関がある場合の同期先マッピングを修正。
+## バージョン (v1.6.0)
+- **Let's Encrypt マルチドメイン対応**: `Request-LetsEncryptCertificate.ps1` で 1 枚の証明書に複数のドメイン (SAN) を含めることが可能になりました。ドメイン入力時にスペースまたはカンマで区切るだけです。
+- **透明性の向上**: HTTP-01 チャレンジの開始前に、ガイドの表示と確認の一時停止を追加しました。これにより「スクリプトが止まっている」ように見えるのを防ぎ、Nginx の設定を確認する時間を確保できます。
+- **言語パック更新**: 日・中・英のすべての言語で、新しいワークフローの説明文とドメイン入力ガイドを補完しました。
 - **詳細履歴**: [CHANGELOG.md](CHANGELOG.md) を参照。
 
 ## 事前準備
@@ -120,11 +118,11 @@ CSR と秘密鍵を生成。
 ```
 
 7) `Request-LetsEncryptCertificate.ps1`
-Docker + certbot で Let's Encrypt を申請。
+Docker + certbot で Let's Encrypt を申請。マルチドメイン証明書に対応（スペースまたはカンマで区切って入力）。
 ```powershell
-.\utils\Request-LetsEncryptCertificate.ps1 -Domain example.com -Email admin@example.com
+.\utils\Request-LetsEncryptCertificate.ps1 -Domain "example.com web.example.com" -Email admin@example.com
 ```
-既定では証明書は `output/self-signed/lets-encrypt/<domain>` に出力されます。作業用ファイルは `temp/lets-encrypt/` に作成され、成功後に自動削除されます。現在の challenge 情報は作業ディレクトリ内の `current-challenge.txt` に保存されます。
+既定では証明書は `output/self-signed/lets-encrypt/<domain>` に出力されます。作業用ファイルは `temp/lets-encrypt/` に作成され、成功後に自動削除されます。スクリプトには、HTTP-01 チャレンジの仕組みの説明と、検証開始前の確認待ちステップが含まれます。
 
 8) `Request-SelfSignedCertificate.ps1`
 自己署名証明書を生成（有効期間を選択可能: 90日 / 1年 / 3年 / 10年）。

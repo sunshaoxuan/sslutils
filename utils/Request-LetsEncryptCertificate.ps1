@@ -265,7 +265,10 @@ try {
   Assert-CommandExists "docker"
 
   # 作業ディレクトリ構築（既存ディレクトリを再利用、-Clean 指定時は削除）
-  $safeDomain = $Domain.Replace('*', '_').Replace('\', '_').Replace('/', '_').Replace(':', '_')
+  # 作業ディレクトリ構築
+  $domainList = $Domain -split "[\s,]+" | Where-Object { $_ -ne "" }
+  $primaryDomain = $domainList[0]
+  $safeDomain = $primaryDomain.Replace('*', '_').Replace('\', '_').Replace('/', '_').Replace(':', '_')
   $tempRoot = if ($null -ne $ToolkitPaths -and -not [string]::IsNullOrWhiteSpace([string]$ToolkitPaths.Temp)) {
     [string]$ToolkitPaths.Temp
   }
@@ -444,6 +447,17 @@ exit 0
   Write-Host ("  " + $ExportDir) -ForegroundColor Yellow
   Write-Host ""
 
+  # 動作説明と確認
+  Write-Host ("=" * 60) -ForegroundColor Gray
+  Write-Host (T "LE.HowItWorksTitle") -ForegroundColor Magenta
+  Write-Host (T "LE.HowItWorksDesc")
+  Write-Host (T "LE.UrlPattern" @($Domain)) -ForegroundColor Gray
+  Write-Host ("=" * 60) -ForegroundColor Gray
+  Write-Host ""
+  Write-Host (T "LE.ConfirmStartPrompt") -ForegroundColor Yellow
+  $null = Read-Host (T "LE.PressEnterToProceed")
+  Write-Host ""
+
   # Docker マウント自己チェック
   Write-Host (T "LE.DockerMountCheck") -ForegroundColor Cyan
   docker run --rm -v "${workMount}:/work" -v "${serverChallengeMount}:/server-challenges" alpine:3.19 sh -c "ls -la /work && test -f /work/auth.sh && ls -la /server-challenges && echo OK_AUTH_SH"
@@ -468,8 +482,13 @@ exit 0
     "--manual",
     "--preferred-challenges", "http",
     "--manual-auth-hook", "sh /work/auth.sh",
-    "--manual-cleanup-hook", "sh /work/cleanup.sh",
-    "-d", $Domain,
+    "--manual-cleanup-hook", "sh /work/cleanup.sh"
+  )
+  foreach ($d in $domainList) {
+    $cmd += "-d"
+    $cmd += $d
+  }
+  $cmd += @(
     "--agree-tos",
     "--no-eff-email",
     "-m", $Email

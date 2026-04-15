@@ -459,7 +459,7 @@
 
   # Request-LetsEncryptCertificate.ps1
   # Request-LetsEncryptCertificate.ps1
-  "LE.InputDomainPrompt"                     = "请输入要签发证书的域名。"
+  "LE.InputDomainPrompt"                     = "请输入要签发证书的域名。如有多个，请用空格或逗号分隔（例如：example.com secondary.com）。"
   "LE.InputEmailPrompt"                      = "请输入 Let's Encrypt 注册用的电子邮件地址。"
   "LE.CommandNotFound"                       = "命令未找到: {0}"
   "LE.Ready"                                 = "== 准备就绪 =="
@@ -491,6 +491,11 @@
   "LE.ExportSuccess"                         = "[成功] {0} ({1} bytes)"
   "LE.CompletedMsg"                          = "Let's Encrypt 证书获取完成。"
   "LE.PressAnyKeyToReturn"                   = "按任意键返回菜单..."
+  "LE.HowItWorksTitle"                       = "== 操作指南 =="
+  "LE.HowItWorksDesc"                        = "接下来将执行 HTTP-01 验证：`n1. 这里的 certbot 会自动生成一个随机 Token 文件并复制到上述「服务器验证目录」下。`n2. 您的 Web 服务器（如 Nginx）必须能够通过外网访问该文件。`n3. 脚本将一直等待（Polling），直到 URL 验证通过或 15 分钟超时。"
+  "LE.UrlPattern"                            = "验证 URL 格式：http://{0}/.well-known/acme-challenge/<TOKEN>"
+  "LE.ConfirmStartPrompt"                    = "请检查您的 Nginx 配置是否正确指向了上述目录。"
+  "LE.PressEnterToProceed"                   = "准备好后请按回车开始验证..."
 
   # Request-SelfSignedCertificate.ps1
   "SS.Menu.Title"                            = "自签证书（{0} 天 / 约 {1} 年）"

@@ -490,6 +490,11 @@
   "LE.ExportSuccess"                         = "[OK] {0} ({1} bytes)"
   "LE.CompletedMsg"                          = "Let's Encrypt certificate acquisition completed."
   "LE.PressAnyKeyToReturn"                   = "Press any key to return to menu..."
+  "LE.HowItWorksTitle"                       = "== Instructions =="
+  "LE.HowItWorksDesc"                        = "Next, HTTP-01 challenge will be performed:`n1. Certbot will generate a random token file and copy it to the 'Server challenge directory' above.`n2. Your web server (e.g. Nginx) MUST serve this file publicly via HTTP.`n3. The script will poll the URL until verified or it times out after 15 minutes."
+  "LE.UrlPattern"                            = "Validation URL format: http://{0}/.well-known/acme-challenge/<TOKEN>"
+  "LE.ConfirmStartPrompt"                    = "Please ensure your Nginx configuration points to the directory above."
+  "LE.PressEnterToProceed"                   = "Press Enter to start validation when ready..."
 
   # Request-SelfSignedCertificate.ps1
   "SS.Menu.Title"                            = "Self-Signed Certificate ({0} days / ~{1} years)"

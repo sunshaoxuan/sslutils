@@ -5,19 +5,17 @@
 - 中文: README.zh.md (本文件)
 - 日本語: [README.ja.md](README.ja.md)
 
-**Ver 1.5.5**
+**Ver 1.6.0**
 https://github.com/sunshaoxuan
 
 这是一个功能强大的 PowerShell 脚本集合，用于自动化管理 SSL 证书、私钥和 CSR。支持多语言（可通过配置文件扩展）、多机构管理，并提供统一的菜单界面。
 
 ---
 
-## 📅 版本更新 (v1.5.5)
-- **ECC 证书全面支持**: 椭圆曲线加密全面支持 — CSR 生成（`-KeyType EC`）、密钥匹配验证（公钥 PEM 比对替代 RSA-only modulus）、续期时自动检测旧密钥算法类型。
-- **3 段式合并修复**: 根证书现在能从 `CertStore` 正确自动追加。RSA 交叉根和 ECC RootCA1 链均能正确生成 3 段式输出。
-- **PFX 生成改为可选**: 证书合并后不再自动生成 PFX，改为询问"是否生成 PFX 文件？(y/N)"。CLI 可用 `-NoPfx` 跳过。
-- **CER ⇔ PFX 一致性校验**: 新增不依赖 `.key` 文件的证书与 PFX 公钥比对验证。
-- **同步文件夹映射修复**: 修复多个机构共用相同主机名部分时同步到错误文件夹的问题。
+## 📅 版本更新 (v1.6.0)
+- **Let's Encrypt 多域名支持**: `Request-LetsEncryptCertificate.ps1` 现在支持为多个域名请求单张证书 (SAN)。在输入域名时用空格或逗号分隔即可。
+- **LE 流程透明度提升**: 在开始 HTTP-01 验证前增加了操作指南和强制暂停环节。这能有效防止用户因等待而产生“脚本卡死”的错觉，并预留时间检查 Nginx 配置。
+- **国际化补全**: 补全了中、英、日三语的流程指引文案和域名输入提示。
 - **完整历史**: 详见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 📅 历史更新
@@ -106,8 +104,8 @@ ssl_maker/
 ### 5. 自签证书
 通过主菜单的"自签证书"子菜单选择：
 - **自签证书**: `Request-SelfSignedCertificate.ps1` — 交互式选择有效期（90天 / 1年 / 3年 / 10年），支持 Quick 模式和 Custom 模式。CLI 可用 `-Days` 参数直接指定天数。
-- **Let's Encrypt**: `Request-LetsEncryptCertificate.ps1` (Docker + Certbot 封装)。
-  默认导出目录为 `output/self-signed/lets-encrypt/<domain>`；运行时工作文件位于 `temp/lets-encrypt/`，成功后自动删除。当前 challenge 信息会写入工作目录中的 `current-challenge.txt`。
+- **Let's Encrypt**: `Request-LetsEncryptCertificate.ps1` (Docker + Certbot 封装)。支持多域名证书（空格/逗号分隔输入）。
+  默认导出目录为 `output/self-signed/lets-encrypt/<domain>`；运行时工作文件位于 `temp/lets-encrypt/`，成功后自动删除。脚本包含 HTTP-01 验证原理说明及验证前的配置确认暂停。
 
 ### 6. 其他工具
 - **PEM 修复**: `Repair-PemFile.ps1` (修复换行符问题)。

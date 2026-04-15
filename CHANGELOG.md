@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.6.0] - 2026-04-15
+
+### Added
+- **Multi-Domain Let's Encrypt Support**: `Request-LetsEncryptCertificate.ps1` now supports requesting a single certificate for multiple domains. Input domains can be separated by spaces or commas.
+- **LE Workflow Transparency**: Added an instructional preamble before the Let's Encrypt HTTP-01 challenge begins. It displays the challenge file path, expected validation URL, and a brief explanation of the mechanism.
+- **User Confirmation Pause**: Added a mandatory "Press Enter to proceed" step before starting the certbot validation loop to ensure the user has time to verify their Nginx configuration.
+
+### Changed
+- **i18n Updates**: Added new instructional keys (`LE.HowItWorksTitle`, `LE.HowItWorksDesc`, `LE.UrlPattern`, etc.) to all language resources (en/ja/zh). Updated the domain input prompt to mention multi-domain support.
+
 ## [1.5.5] - 2026-04-02
 
 ### Added

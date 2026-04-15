@@ -492,7 +492,12 @@
   "LE.ExportFilesMissing"                    = "エクスポートされたファイルが見つかりません: {0} または {1}"
   "LE.ExportSuccess"                         = "[成功] {0} ({1} bytes)"
   "LE.CompletedMsg"                          = "Let's Encrypt 証明書の取得が完了しました。"
-  "LE.PressAnyKeyToReturn"                   = "何かキーを押してメニューに戻ります..."
+  "LE.PressAnyKeyToReturn"                   = "何かキーを押すとメニューに戻ります..."
+  "LE.HowItWorksTitle"                       = "== 操作ガイド =="
+  "LE.HowItWorksDesc"                        = "これから HTTP-01 チャレンジを実行します：`n1. certbot がランダムな Token ファイルを生成し、上記の「サーバー侧配置先」にコピーします。`n2. Web サーバー（Nginx等）が外網からそのファイルにアクセスできる必要があります。`n3. URL 認証が成功するか、15分経過するまでスクリプトは待機（ポーリング）します。"
+  "LE.UrlPattern"                            = "検証 URL 形式: http://{0}/.well-known/acme-challenge/<TOKEN>"
+  "LE.ConfirmStartPrompt"                    = "Nginx の配置設定が正しいことを確認してください。"
+  "LE.PressEnterToProceed"                   = "準備ができたら Enter を押して検証を開始します..."
 
   # Request-SelfSignedCertificate.ps1
   "SS.Menu.Title"                            = "自己署名証明書（{0} 日 / 約 {1} 年）"

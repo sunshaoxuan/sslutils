@@ -8,12 +8,10 @@ Languages:
 ## Overview
 PowerShell scripts to manage certificates, keys, and CSRs with multi-org and multi-language support.
 
-## What's New (v1.5.5)
-- **ECC Certificate Support**: Full Elliptic Curve support — CSR generation (`-KeyType EC`), key matching (public key PEM comparison replaces RSA-only modulus), and auto-detection of existing key algorithms when renewing from old certs.
-- **3-Segment Chain Merge Fix**: Root certificates are now correctly auto-appended when detected from `CertStore`. Both RSA cross-root and ECC RootCA1 chains produce correct 3-segment output.
-- **Optional PFX Generation**: Certificate merge now asks whether to generate PFX instead of doing it automatically. Added `-NoPfx` switch for CLI use.
-- **CER ⇔ PFX Verification**: New consistency check that works without a `.key` file, useful for merged output directories.
-- **Sync Collision Fix**: Fixed folder sync mapping when multiple orgs share the same hostPart name.
+## What's New (v1.6.0)
+- **Multi-Domain Let's Encrypt Support**: `Request-LetsEncryptCertificate.ps1` now supports requesting a single certificate for multiple domains (SAN). Simply separate domains with spaces or commas during input.
+- **Improved LE Transparency**: Added a detailed instructional guide and a mandatory pause before starting the HTTP-01 challenge. This prevents the process from appearing "stuck" and gives users time to verify their Nginx configuration.
+- **Enhanced i18n**: Updated Chinese, English, and Japanese language packs with new workflow instructions and domain input guidance.
 - Full feature history: [CHANGELOG.md](CHANGELOG.md).
 
 ## Prerequisites
@@ -119,11 +117,11 @@ Generate new CSR/key from existing cert info.
 ```
 
 7) `Request-LetsEncryptCertificate.ps1`
-Request Let's Encrypt cert using Docker + certbot.
+Request Let's Encrypt cert using Docker + certbot. Supports multi-domain certificates (separate domains with spaces or commas).
 ```powershell
-.\utils\Request-LetsEncryptCertificate.ps1 -Domain example.com -Email admin@example.com
+.\utils\Request-LetsEncryptCertificate.ps1 -Domain "example.com web.example.com" -Email admin@example.com
 ```
-By default, issued files are exported to `output/self-signed/lets-encrypt/<domain>`. Runtime files are created under `temp/lets-encrypt/` and removed automatically after a successful export. The current challenge metadata is also written to `current-challenge.txt` inside the working directory.
+By default, issued files are exported to `output/self-signed/lets-encrypt/<domain>`. Runtime files are created under `temp/lets-encrypt/` and removed automatically after a successful export. The script includes a preamble explaining the HTTP-01 challenge and a confirmation pause to allow manual Nginx configuration.
 
 8) `Request-SelfSignedCertificate.ps1`
 Generate a self-signed certificate with selectable validity period (90 days / 1 year / 3 years / 10 years).
