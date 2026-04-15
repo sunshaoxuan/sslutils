@@ -277,7 +277,7 @@ try {
   }
   $Base = Join-Path (Join-Path $tempRoot "lets-encrypt") ("le-work-" + $safeDomain)
   $Work = Join-Path $Base "work"
-  $Challenges = Join-Path $Work "challenges"
+  $Challenges = Join-Path $Base "challenges"
   $LetsEncrypt = Join-Path $Base "letsencrypt"
   $Logs = Join-Path $Base "logs"
 
@@ -286,24 +286,19 @@ try {
     if ($Clean) {
       Write-Host (T "LE.CleaningWorkDir" @($Base)) -ForegroundColor Yellow
       Remove-Item -LiteralPath $Base -Recurse -Force -ErrorAction Stop
-      New-Item -ItemType Directory -Force -Path $Challenges, $LetsEncrypt, $Logs | Out-Null
+      New-Item -ItemType Directory -Force -Path $Work, $Challenges, $LetsEncrypt, $Logs | Out-Null
     }
     else {
       Write-Host (T "LE.ReusingWorkDir" @($Base)) -ForegroundColor Cyan
-      # 既存ディレクトリを再利用（必要なサブディレクトリが無い場合は作成）
-      if (-not (Test-Path -LiteralPath $Challenges -PathType Container)) {
-        New-Item -ItemType Directory -Force -Path $Challenges | Out-Null
-      }
-      if (-not (Test-Path -LiteralPath $LetsEncrypt -PathType Container)) {
-        New-Item -ItemType Directory -Force -Path $LetsEncrypt | Out-Null
-      }
-      if (-not (Test-Path -LiteralPath $Logs -PathType Container)) {
-        New-Item -ItemType Directory -Force -Path $Logs | Out-Null
+      foreach ($p in ($Work, $Challenges, $LetsEncrypt, $Logs)) {
+        if (-not (Test-Path -LiteralPath $p -PathType Container)) {
+          New-Item -ItemType Directory -Force -Path $p | Out-Null
+        }
       }
     }
   }
   else {
-    New-Item -ItemType Directory -Force -Path $Challenges, $LetsEncrypt, $Logs | Out-Null
+    New-Item -ItemType Directory -Force -Path $Work, $Challenges, $LetsEncrypt, $Logs | Out-Null
   }
 
   # エクスポート先（存在しない場合は自動作成、失敗時はフォールバック）
@@ -345,7 +340,7 @@ DOMAIN="${CERTBOT_DOMAIN}"
 TOKEN="${CERTBOT_TOKEN}"
 VALIDATION="${CERTBOT_VALIDATION}"
 
-CHALL_DIR="/work/challenges"
+CHALL_DIR="/challenges"
 CHALL_FILE="${CHALL_DIR}/${TOKEN}"
 SERVER_CHALL_DIR="/server-challenges"
 SERVER_CHALL_FILE="${SERVER_CHALL_DIR}/${TOKEN}"
@@ -413,9 +408,8 @@ done
 
   $cleanupSh = @'
 #!/bin/sh
-set -eu
 TOKEN="${CERTBOT_TOKEN}"
-rm -f "/work/challenges/${TOKEN}" || true
+rm -f "/challenges/${TOKEN}" || true
 rm -f "/server-challenges/${TOKEN}" || true
 exit 0
 '@
@@ -432,6 +426,7 @@ exit 0
 
   # Docker マウントパス
   $workMount = ConvertTo-DockerPath $Work
+  $challengesMount = ConvertTo-DockerPath $Challenges
   $leMount = ConvertTo-DockerPath $LetsEncrypt
   $logsMount = ConvertTo-DockerPath $Logs
   $serverChallengeMount = ConvertTo-DockerPath $ServerChallengeDir
@@ -460,7 +455,7 @@ exit 0
 
   # Docker マウント自己チェック
   Write-Host (T "LE.DockerMountCheck") -ForegroundColor Cyan
-  docker run --rm -v "${workMount}:/work" -v "${serverChallengeMount}:/server-challenges" alpine:3.19 sh -c "ls -la /work && test -f /work/auth.sh && ls -la /server-challenges && echo OK_AUTH_SH"
+  docker run --rm -v "${workMount}:/work" -v "${challengesMount}:/challenges" -v "${serverChallengeMount}:/server-challenges" alpine:3.19 sh -c "ls -la /work && test -f /work/auth.sh && ls -la /challenges && echo OK_AUTH_SH"
   if ($LASTEXITCODE -ne 0) {
     throw (T "LE.DockerMountFailed")
   }
@@ -474,6 +469,7 @@ exit 0
     "-e", "WAIT_TIMEOUT_SEC=$WaitTimeoutSec",
     "-e", "POLL_INTERVAL_SEC=$PollIntervalSec",
     "-v", "${workMount}:/work",
+    "-v", "${challengesMount}:/challenges",
     "-v", "${serverChallengeMount}:/server-challenges",
     "-v", "${leMount}:/etc/letsencrypt",
     "-v", "${logsMount}:/var/log/letsencrypt",
