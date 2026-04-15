@@ -43,6 +43,7 @@ function Get-ToolkitPaths {
   $tempRel = Get-CfgPathValue $cfg "Temp" "temp"
   $resourcesRel = Get-CfgPathValue $cfg "Resources" "resources"
   $certConfigRel = Get-CfgPathValue $cfg "CertConfig" "CertConfig.psd1"
+  $acmeWebRoot   = Get-CfgPathValue $cfg "AcmeWebRoot" ""
 
   $oldAbs = Resolve-FromBase $BaseDir $oldRel
   $newAbs = Resolve-FromBase $BaseDir $newRel
@@ -89,6 +90,7 @@ function Get-ToolkitPaths {
     NewName         = [IO.Path]::GetFileName($newAbs.TrimEnd('\','/'))
     ToolsOpenSsl    = $toolsOpenSsl
     BinDir          = (Join-Path $BaseDir "utils\bin")
+    AcmeWebRoot     = $acmeWebRoot
   }
 }
 

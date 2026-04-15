@@ -65,7 +65,7 @@ param(
   [string]$Email = "",
 
   [Parameter(Mandatory = $false)]
-  [string]$ServerChallengeDir = "C:\acme-webroot\.well-known\acme-challenge",
+  [string]$ServerChallengeDir = "",
 
   [Parameter(Mandatory = $false)]
   [int]$WaitTimeoutSec = 900,
@@ -106,6 +106,17 @@ $__i18n = Initialize-ToolkitI18nContext -ModuleRoot $ModuleRoot -Lang $Lang -Bas
 function T([string]$Key, [object[]]$FormatArgs = @()) { return Get-ToolkitText -I18n $__i18n -Key $Key -FormatArgs $FormatArgs }
 
 $ToolkitPaths = Get-ToolkitPathsContext -ModuleRoot $ModuleRoot -BaseDir $ToolkitRoot
+
+# ServerChallengeDir の解決（優先順位: 参数 > 配置文件 > 既定)
+if ([string]::IsNullOrWhiteSpace($ServerChallengeDir)) {
+    if (-not [string]::IsNullOrWhiteSpace($ToolkitPaths.AcmeWebRoot)) {
+        $ServerChallengeDir = $ToolkitPaths.AcmeWebRoot
+    }
+    else {
+        # フォールバック既定値
+        $ServerChallengeDir = "C:\acme-webroot\.well-known\acme-challenge"
+    }
+}
 
 # Docker コマンドの存在確認
 function Assert-CommandExists([string]$cmd) {
