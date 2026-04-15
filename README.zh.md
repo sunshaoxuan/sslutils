@@ -230,7 +230,8 @@ SSLCertificateKeyFile   /path/to/new/server.key
   "SelfSigned": "output/self-signed",
   "Temp": "temp",
   "Resources": "resources",
-  "CertConfig": "CertConfig.psd1"
+  "CertConfig": "CertConfig.psd1",
+  "AcmeWebRoot": "C:\\acme-webroot\\.well-known\\acme-challenge"
 },
 "Tools": {
   "OpenSsl": ""
@@ -238,7 +239,9 @@ SSLCertificateKeyFile   /path/to/new/server.key
 ```
 
 默认会显示全球稳定的时区 ID（优先 IANA），避免受操作系统语言影响。
-可选配置：如需自定义 `Get-CertificateInfo.ps1` 中时区名称显示，可在 `config.json` 增加 `TimeZoneNames`（键使用 Windows/IANA 时区 ID）。
+可手动配置 `config.json` 增加 `TimeZoneNames`（键使用 Windows/IANA 时区 ID）。
+
+此外，Let's Encrypt 的 HTTP-01 挑战路径也可在 `config.json` 的 `Paths` 下通过 `AcmeWebRoot` 进行自定义。
 
 ---
 
